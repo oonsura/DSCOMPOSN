@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}จัดการห้องสอบ{% endblock %}
+{% block breadcrumb %}เวลาเรียน / คะแนน / จัดที่นั่งสอบ / จัดการห้องสอบ{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-building-gear me-2 text-primary"></i>จัดการห้องสอบและผังที่นั่ง</h4>
+    <small class="text-muted">สร้างห้องสอบใหม่ เปิด/ปิดการใช้งานห้อง และปรับแต่งตำแหน่งเครื่องคอมพิวเตอร์หรือโต๊ะสอบ</small>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#createRoomModal">
+      <i class="bi bi-plus-circle me-1"></i>สร้างห้องสอบใหม่
+    </button>
+    <a href="{% url 'food:exam_seating' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>กลับหน้าจัดที่นั่งสอบ
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-door-open me-2 text-success"></i>รายการห้องสอบทั้งหมด ({{ room_rows|length }} ห้อง)</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:0.9rem;">
+      <thead>
+        <tr>
+          <th style="width:65px;">ลำดับ</th>
+          <th>ชื่อห้องสอบ</th>
+          <th>ประเภทห้อง</th>
+          <th>หน้าห้อง/หน้าเวที</th>
+          <th>รูปแบบจัดเริ่มต้น</th>
+          <th class="text-center">จำนวนที่นั่ง</th>
+          <th class="text-center">สถานะ</th>
+          <th style="width:230px;">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in room_rows %}
+        {% with r=item.room %}
+        <tr class="{% if not r.is_active %}table-secondary{% endif %}">
+          <td class="text-center fw-bold">{{ r.sort_order }}</td>
+          <td>
+            <div class="fw-bold text-dark">{{ r.name }}</div>
+            {% if r.description %}<div class="small text-muted">{{ r.description }}</div>{% endif %}
+          </td>
+          <td>
+            {% if r.has_computer %}
+              <span class="badge bg-info bg-opacity-10 text-dark border border-info-subtle"><i class="bi bi-pc-display me-1"></i>ห้องปฏิบัติการ (มีคอมฯ)</span>
+            {% else %}
+              <span class="badge bg-warning bg-opacity-10 text-dark border border-warning-subtle"><i class="bi bi-grid me-1"></i>ห้องโต๊ะสอบ (ไม่มีคอมฯ)</span>
+            {% endif %}
+          </td>
+          <td>{{ r.get_front_position_display }} <span class="badge bg-success bg-opacity-10 text-success border">{{ r.front_label }}</span></td>
+          <td class="small">
+            <div>{{ r.get_default_fill_pattern_display }}</div>
+            {% if r.default_alternate %}<span class="badge bg-primary bg-opacity-10 text-primary">เว้นเครื่องเป็นค่าเริ่มต้น</span>{% endif %}
+          </td>
+          <td class="text-center">
+            <span class="fw-bold text-primary">{{ item.seat_count }}</span> ที่นั่ง
+            {% if item.reserve_count %}<div class="small text-danger">(สำรองเริ่มต้น {{ item.reserve_count }})</div>{% endif %}
+          </td>
+          <td class="text-center">
+            <form method="post" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_room_active">
+              <input type="hidden" name="room_id" value="{{ r.pk }}">
+              <button type="submit" class="btn btn-sm rounded-pill px-3 py-0 fw-semibold {% if r.is_active %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                {% if r.is_active %}เปิดใช้งาน{% else %}ปิดใช้งาน{% endif %}
+              </button>
+            </form>
+          </td>
+          <td class="text-nowrap">
+            <a href="{% url 'food:exam_room_layout' r.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2">
+              <i class="bi bi-grid-1x2 me-1"></i>ออกแบบผัง/ที่นั่ง
+            </a>
+            <form method="post" class="d-inline" onsubmit="return confirm('ยืนยันลบห้องสอบ {{ r.name|escapejs }} และข้อมูลการจัดที่นั่งของห้องนี้ทั้งหมด?')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_room">
+              <input type="hidden" name="room_id" value="{{ r.pk }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="ลบห้อง">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endwith %}
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">ยังไม่มีห้องสอบ</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal สร้างห้องสอบใหม่ -->
+<div class="modal fade" id="createRoomModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_room">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2 text-primary"></i>สร้างห้องสอบใหม่</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">ชื่อห้องสอบ <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" placeholder="เช่น ห้องปฏิบัติการคอมพิวเตอร์ 137 หรือ หอประชุม..." required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">ลำดับแสดงผล</label>
+            <input type="number" name="sort_order" class="form-control" value="{{ room_rows|length|add:1 }}" min="1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">ประเภทห้อง</label>
+            <select name="has_computer" class="form-select" id="cr-has-comp">
+              <option value="1">ห้องปฏิบัติการ (มีคอมพิวเตอร์ มีเลขเครื่อง)</option>
+              <option value="0">ห้องโต๊ะสอบ (ไม่มีคอมพิวเตอร์)</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">ตำแหน่งหน้าห้อง</label>
+            <select name="front_position" class="form-select">
+              {% for k, lbl in front_choices %}
+              <option value="{{ k }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">ป้ายหน้าห้อง</label>
+            <input type="text" name="front_label" class="form-control" value="หน้าห้อง" placeholder="หน้าห้อง / หน้าเวที">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label fw-semibold">รูปแบบการจัดที่นั่งเริ่มต้น</label>
+            <select name="default_fill_pattern" class="form-select">
+              {% for k, lbl in fill_pattern_choices %}
+              <option value="{{ k }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-5 d-flex align-items-end">
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" name="default_alternate" value="1" id="cr-alt" checked>
+              <label class="form-check-label fw-semibold" for="cr-alt">ค่าเริ่มต้นจัดแบบเครื่องเว้นเครื่อง</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">รายละเอียดเพิ่มเติม</label>
+            <input type="text" name="description" class="form-control" placeholder="เช่น ชั้น 1 อาคารคอมพิวเตอร์">
+          </div>
+
+          <div class="col-12"><hr class="my-1"></div>
+          <div class="col-12">
+            <div class="fw-bold text-primary mb-2"><i class="bi bi-grid-3x3 me-1"></i>สร้างที่นั่งเบื้องต้นอัตโนมัติ (สามารถปรับแก้เป็นรายแถว/รายเครื่องทีหลังได้)</div>
+            <div class="row g-2">
+              <div class="col-md-3">
+                <label class="form-label small fw-semibold">วิธีสร้างเริ่มต้น</label>
+                <select name="init_mode" class="form-select form-select-sm" id="cr-init-mode">
+                  <option value="grid">สร้างตารางแถว × คอลัมน์ทันที</option>
+                  <option value="empty">สร้างห้องเปล่า (ไปเพิ่มเองทีละแถว)</option>
+                </select>
+              </div>
+              <div class="col-md-2 cr-grid-field">
+                <label class="form-label small fw-semibold">จำนวนแถว</label>
+                <input type="number" name="init_rows" class="form-control form-control-sm" value="4" min="1" max="30">
+              </div>
+              <div class="col-md-2 cr-grid-field">
+                <label class="form-label small fw-semibold">ที่นั่ง/แถว</label>
+                <input type="number" name="init_cols" class="form-control form-control-sm" value="10" min="1" max="25">
+              </div>
+              <div class="col-md-2 cr-grid-field">
+                <label class="form-label small fw-semibold">เลขเริ่มต้น</label>
+                <input type="number" name="init_start_no" class="form-control form-control-sm" value="1" min="1">
+              </div>
+              <div class="col-md-3 cr-grid-field">
+                <label class="form-label small fw-semibold">ทิศทางเลขที่นั่ง</label>
+                <select name="init_direction" class="form-select form-select-sm">
+                  <option value="lr">ซ้าย → ขวา ทุกแถว</option>
+                  <option value="rl">ขวา → ซ้าย ทุกแถว</option>
+                  <option value="snake_lr">สลับฟันปลา (ซ้าย→ขวา, ขวา→ซ้าย)</option>
+                  <option value="snake_rl">สลับฟันปลา (ขวา→ซ้าย, ซ้าย→ขวา)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="submit" class="btn btn-primary fw-semibold"><i class="bi bi-check2-circle me-1"></i>สร้างห้องและไปตั้งค่าที่นั่ง</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+  var mode = document.getElementById('cr-init-mode');
+  var hasComp = document.getElementById('cr-has-comp');
+  var altChk = document.getElementById('cr-alt');
+  if (mode) {
+    function syncInit() {
+      var show = (mode.value === 'grid');
+      document.querySelectorAll('.cr-grid-field').forEach(function(el){ el.style.display = show ? '' : 'none'; });
+    }
+    mode.addEventListener('change', syncInit);
+    syncInit();
+  }
+  if (hasComp && altChk) {
+    hasComp.addEventListener('change', function(){
+      altChk.checked = (hasComp.value === '1');
+    });
+  }
+})();
+</script>
+{% endblock %}

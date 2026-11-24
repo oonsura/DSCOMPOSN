@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}พิมพ์ผังที่นั่งสอบรวมทุกห้อง (A4){% endblock %}
+{% block extra_head %}
+<style>
+  .exam-print-page {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .exam-chart-body-wrap { display: flex; align-items: stretch; }
+  .exam-chart-body-wrap.front-top, .exam-chart-body-wrap.front-bottom { flex-direction: column; }
+  .exam-chart-body-wrap.front-left, .exam-chart-body-wrap.front-right { flex-direction: row; }
+  .exam-front-bar {
+    background: #d9ead3;
+    border: 1px solid #93c47d;
+    color: #111;
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .exam-front-horiz { padding: 5px 12px; width: 100%; }
+  .exam-front-vert { width: 38px; flex: 0 0 38px; writing-mode: vertical-rl; padding: 12px 4px; }
+  .exam-front-left { transform: rotate(180deg); }
+  .exam-grid-scroll { overflow-x: auto; }
+  .exam-block-lab { margin-bottom: 12px; }
+  .exam-block-desk { margin-bottom: 5px; }
+  .exam-lab-row, .exam-desk-row { display: grid; align-items: stretch; }
+  .exam-desk-row { gap: 8px; }
+  .exam-desk-row-label { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .exam-seat-cell, .exam-desk-card {
+    display: flex; flex-direction: column; border: 1px solid #333; background: #fff; min-width: 0;
+  }
+  .exam-lab-row .exam-seat-cell + .exam-seat-cell { border-left: 0; }
+  .exam-lab-row + .exam-lab-row .exam-seat-cell { border-top: 0; }
+  .seat-num {
+    background: #fff2cc; border-bottom: 1px solid #555; text-align: center;
+    font-size: 0.76rem; padding: 1.5px 3px; line-height: 1.1; font-weight: 600;
+  }
+  .exam-seat-cell:has(.seat-body + .seat-num) .seat-num { border-bottom: 0; border-top: 1px solid #555; }
+  .seat-body {
+    flex: 1; min-height: 26px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 2px 3px; text-align: center;
+  }
+  .seat-code { color: #0000cc; font-weight: 700; font-size: 0.88rem; line-height: 1.15; }
+  .seat-code-current { color: #0000cc !important; }
+  .seat-code-rights { color: #1b5e20 !important; }
+  .seat-reserve { color: #cc0000; font-weight: 700; font-size: 0.84rem; }
+  .seat-blocked { color: #6c757d; font-size: 0.74rem; }
+  .seat-status-blocked .seat-body { background: #eeeeee; }
+  .exam-proctor-bar {
+    background: #fce5cd; border: 1px solid #e6b8af; padding: 6px 12px;
+    text-align: center; font-weight: 700; font-size: 0.98rem; color: #111;
+  }
+  @page { size: A4 landscape; margin: 6mm; }
+  @page a4-landscape { size: A4 landscape; margin: 6mm; }
+  @page a4-portrait { size: A4 portrait; margin: 6mm; }
+  @media print {
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .no-print, .sidebar, .topbar, .mobile-bottom-nav, .sidebar-overlay { display: none !important; }
+    .main-content { margin-left: 0 !important; max-width: 100% !important; }
+    .content-area { padding: 0 !important; overflow: visible !important; }
+    .exam-grid-scroll { overflow: visible !important; }
+    .exam-print-page {
+      border: 0 !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important;
+      break-inside: avoid; page-break-inside: avoid;
+      page-break-after: always; break-after: page;
+    }
+    .exam-print-page.print-landscape { page: a4-landscape; }
+    .exam-print-page.print-portrait { page: a4-portrait; }
+    .exam-print-page:last-of-type { page-break-after: auto; break-after: auto; }
+    .exam-chart-desk .exam-block-desk { margin-bottom: 3px; }
+    .exam-chart-desk .seat-num { font-size: 0.72rem; padding: 1px 2px; }
+    .exam-chart-desk .seat-body { min-height: 21px; padding: 1px 2px; }
+    .exam-chart-desk .seat-code { font-size: 0.84rem; }
+    .exam-chart-lab .seat-body { min-height: 28px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 no-print">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-printer me-2 text-primary"></i>พิมพ์ผังที่นั่งสอบรวมทุกห้อง ({{ pages|length }} แผ่น A4)</h4>
+    <small class="text-muted">วันสอบ: {{ plan.training_date.date|date_thai_long }} · {{ plan.effective_exam_type_display }} ({{ plan.effective_period_display }})</small>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="window.print()">
+      <i class="bi bi-printer me-1"></i>สั่งพิมพ์ทุกห้อง (ห้องละ 1 แผ่น A4)
+    </button>
+    <a href="{% url 'food:exam_seating_export_pdf' plan.pk %}" class="btn btn-danger btn-sm" target="_blank">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF รวมทุกห้อง (A4)
+    </a>
+    <a href="{% url 'food:exam_seating_export_xlsx' plan.pk %}" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel รวมทุกห้อง
+    </a>
+    <a href="{% url 'food:exam_seating' %}?year={{ plan.academic_year }}&date_id={{ plan.training_date_id }}&plan_id={{ plan.pk }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>กลับหน้าจัดที่นั่งสอบ
+    </a>
+  </div>
+</div>
+
+{% for pg in pages %}
+<div class="exam-print-page {% if pg.plan_room.room.has_computer or pg.layout.max_col > 6 %}print-landscape{% else %}print-portrait{% endif %}">
+  {% include "food/_exam_room_map.html" with plan=plan plan_room=pg.plan_room layout=pg.layout proctors=pg.proctors interactive=False %}
+</div>
+{% empty %}
+<div class="alert alert-warning">ไม่มีห้องสอบที่เปิดแสดงผลสำหรับการพิมพ์</div>
+{% endfor %}
+{% endblock %}

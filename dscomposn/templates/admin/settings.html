@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ตั้งค่าสี ข้อความ{% endblock %}
+{% block breadcrumb %}ตั้งค่าระบบ / ตั้งค่าสี ข้อความ{% endblock %}
+{% block content %}
+<form id="master-settings-form" method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="save_all_settings">
+</form>
+<form id="transparent-logos-form" method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="make_logos_transparent">
+</form>
+
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-palette me-2 text-primary"></i>ตั้งค่าสี ข้อความ
+      {% info_tip "กำหนดชื่อระบบ เวลาตัดการเชื่อมต่อ สีเตือนภัยการขาดเรียน โทนสีแถบข้าง (Staff / สมาชิก) รูปตราสัญลักษณ์ และหน้าเข้าสู่ระบบ" %}
+    </h4>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="submit" form="master-settings-form" class="btn btn-primary fw-semibold">
+      <i class="bi bi-floppy me-1"></i>บันทึกการตั้งค่าระบบทั้งหมด
+    </button>
+  </div>
+</div>
+
+<!-- ทางลัดไปยังหน้าตั้งค่าเฉพาะด้าน (ไม่ซ้ำซ้อน) -->
+<div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2 mb-3 small">
+  <span class="fw-semibold text-muted"><i class="bi bi-link-45deg me-1"></i>ตั้งค่าระบบหมวดอื่นๆ:</span>
+  <a href="{% url 'composn:admin_users_settings' %}" class="btn btn-outline-primary btn-sm py-0 px-2">ผู้ใช้</a>
+  <a href="{% url 'food:score_categories' %}" class="btn btn-outline-success btn-sm py-0 px-2">กำหนดปีการศึกษา</a>
+  <a href="{% url 'food:food_settings' %}" class="btn btn-outline-warning text-dark btn-sm py-0 px-2">รายการอาหาร</a>
+  <a href="{% url 'composn:admin_backups' %}" class="btn btn-outline-info text-dark btn-sm py-0 px-2">บันทึกสำรอง</a>
+</div>
+
+<div class="row g-3">
+  <!-- ฝั่งซ้าย: ตั้งค่าหลัก + สีเตือนภัยการขาดเรียน -->
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-sliders me-2 text-primary"></i>ข้อความชื่อระบบ &amp; ความปลอดภัย</div>
+      <div class="card-body">
+        {% for f in form %}
+          <div class="mb-3" data-master-field>
+            <label class="form-label fw-semibold">{{ f.label }}{% if f.help_text %} {% info_tip f.help_text %}{% endif %}</label>
+            {{ f }}
+            {% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- สีเตือนภัยการขาดเรียน -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-exclamation-triangle me-2 text-warning"></i>สีเตือนภัยการขาดเรียน (Color Picker)
+        {% info_tip "ระบบใช้สีของระดับที่ \"ขาดตั้งแต่\" สูงสุดที่ไม่เกินจำนวนครั้งที่ขาดจริง" %}
+      </div>
+      <div class="card-body">
+        <div class="table-responsive mb-2">
+          <table class="table table-sm mb-0 align-middle">
+            <thead><tr><th>ชื่อระดับ</th><th style="width:70px;">สี</th><th style="width:100px;">ขาดตั้งแต่</th><th style="width:55px;"></th></tr></thead>
+            <tbody>
+            {% for c in colors %}
+            <tr>
+              <td>
+                <form id="cf_del_{{ c.pk }}" method="post" action="{% url 'food:colors_manage' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ c.pk }}"></form>
+                <input form="master-settings-form" class="form-control form-control-sm" name="color_name_{{ c.pk }}" value="{{ c.name }}">
+              </td>
+              <td><input form="master-settings-form" type="color" class="form-control form-control-color form-control-sm w-100" name="color_code_{{ c.pk }}" value="{{ c.color }}"></td>
+              <td><input form="master-settings-form" type="number" min="1" class="form-control form-control-sm" name="color_min_{{ c.pk }}" value="{{ c.min_absences }}"></td>
+              <td class="text-end">
+                <button form="cf_del_{{ c.pk }}" name="action" value="delete" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('ลบสีนี้?')">ลบ</button>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <form method="post" action="{% url 'food:colors_manage' %}" class="row g-1">
+          {% csrf_token %}<input type="hidden" name="action" value="create">
+          <div class="col"><input class="form-control form-control-sm" name="name" placeholder="ชื่อระดับ"></div>
+          <div class="col-auto"><input type="color" class="form-control form-control-color form-control-sm" name="color" value="#ffc107"></div>
+          <div class="col-3"><input type="number" min="1" class="form-control form-control-sm" name="min_absences" value="1"></div>
+          <div class="col-auto"><button class="btn btn-sm btn-success">เพิ่ม</button></div>
+        </form>
+        <form method="post" action="{% url 'food:colors_manage' %}" class="mt-2" onsubmit="return confirm('คืนค่าสีเริ่มต้น?')">
+          {% csrf_token %}<input type="hidden" name="action" value="reset">
+          <button class="btn btn-sm btn-link p-0">คืนค่าเริ่มต้น (เหลือง/ส้ม/แดง)</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ฝั่งขวา: โทนสีแถบข้าง (Staff / สมาชิก) + ตราสัญลักษณ์ + หน้า Login -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-palette me-2 text-primary"></i>โทนสีแถบข้าง · ตราสัญลักษณ์ · หน้าเข้าสู่ระบบ</span>
+        <span class="badge bg-light text-dark border">UI Theme</span>
+      </div>
+      <div class="card-body">
+        <h6 class="fw-bold small text-info-emphasis mb-2"><i class="bi bi-layout-sidebar me-1"></i>1. สีแถบข้างสำหรับเจ้าหน้าที่ (Staff Sidebar)</h6>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small mb-1">สีหลัก Staff (ด้านบน)</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="staff_theme_primary" value="{{ setting.staff_theme_primary }}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">สีเฉดรอง Staff (ด้านล่าง)</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="staff_theme_gradient" value="{{ setting.staff_theme_gradient }}">
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="fw-bold small text-success mb-2"><i class="bi bi-layout-sidebar me-1"></i>2. สีแถบข้างสำหรับสมาชิก (Member Sidebar)</h6>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small mb-1">สีหลักสมาชิก (ด้านบน)</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="member_theme_primary" value="{{ setting.member_theme_primary }}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">สีเฉดรองสมาชิก (ด้านล่าง)</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="member_theme_gradient" value="{{ setting.member_theme_gradient }}">
+          </div>
+        </div>
+
+        <hr>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h6 class="fw-bold small text-primary mb-0">
+            <i class="bi bi-image me-1"></i>3. อัปโหลดรูปภาพตราสัญลักษณ์ (6 รูป)
+            {% info_tip "ระบบจะแปลงรูปตราที่อัปโหลดให้เป็นไฟล์ PNG พื้นหลังโปร่งใสอัตโนมัติ" %}
+          </h6>
+          <button type="submit" form="transparent-logos-form" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.75rem;">
+            <i class="bi bi-magic me-1"></i>ปรับพื้นหลังโปร่งใสทั้งหมด
+          </button>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">1) รูปตราโรงเรียน (ซ้ายมือใบลงชื่อ)</label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="logo_school" accept="image/*">
+            {% if setting.logo_school %}
+            <div class="mt-2 text-center border rounded p-2 bg-transparent">
+              <img src="{{ setting.logo_school.url }}" alt="ตราโรงเรียน" style="max-height:60px;max-width:100%;object-fit:contain;background:transparent;">
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_logo_school" value="1" id="clearLogoSchool">
+                <label class="form-check-label small text-danger" for="clearLogoSchool">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">2) รูปตรา สอวน. (ขวามือใบลงชื่อ)</label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="logo_posn" accept="image/*">
+            {% if setting.logo_posn %}
+            <div class="mt-2 text-center border rounded p-2 bg-transparent">
+              <img src="{{ setting.logo_posn.url }}" alt="ตรา สอวน." style="max-height:60px;max-width:100%;object-fit:contain;background:transparent;">
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_logo_posn" value="1" id="clearLogoPosn">
+                <label class="form-check-label small text-danger" for="clearLogoPosn">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">3) รูปตราศูนย์อบรม</label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="logo_center" accept="image/*">
+            {% if setting.logo_center %}
+            <div class="mt-2 text-center border rounded p-2 bg-transparent">
+              <img src="{{ setting.logo_center.url }}" alt="ตราศูนย์อบรม" style="max-height:60px;max-width:100%;object-fit:contain;background:transparent;">
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_logo_center" value="1" id="clearLogoCenter">
+                <label class="form-check-label small text-danger" for="clearLogoCenter">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">4) รูปสพฐ.</label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="logo_obec" accept="image/*">
+            {% if setting.logo_obec %}
+            <div class="mt-2 text-center border rounded p-2 bg-transparent">
+              <img src="{{ setting.logo_obec.url }}" alt="รูปสพฐ." style="max-height:60px;max-width:100%;object-fit:contain;background:transparent;">
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_logo_obec" value="1" id="clearLogoObec">
+                <label class="form-check-label small text-danger" for="clearLogoObec">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">5) รูปตราครุฑ (สำหรับประกาศราชการ)</label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="logo_garuda" accept="image/*">
+            {% if setting.logo_garuda %}
+            <div class="mt-2 text-center border rounded p-2 bg-transparent">
+              <img src="{{ setting.logo_garuda.url }}" alt="รูปตราครุฑ" style="max-height:60px;max-width:100%;object-fit:contain;background:transparent;">
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_logo_garuda" value="1" id="clearLogoGaruda">
+                <label class="form-check-label small text-danger" for="clearLogoGaruda">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">
+              6) ไอคอนหน้า Titlebar (Favicon)
+              {% info_tip "แนะนำขนาด 64×64 px, 128×128 px หรือ 256×256 px (สี่เหลี่ยมจัตุรัส 1:1) ไฟล์ PNG พื้นหลังโปร่งใส หรือ ICO" %}
+            </label>
+            <input form="master-settings-form" type="file" class="form-control form-control-sm" name="site_favicon" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/webp,image/*">
+            <div class="text-muted mt-1" style="font-size:0.72rem;">ขนาดแนะนำ: 64×64 / 128×128 / 256×256 px (อัตราส่วน 1:1, PNG โปร่งใส หรือ ICO)</div>
+            {% if setting.site_favicon %}
+            <div class="mt-2 border rounded p-2 bg-transparent">
+              <div class="d-flex align-items-center justify-content-center gap-3">
+                <img src="{{ setting.site_favicon.url }}" alt="ไอคอนหน้า Titlebar" style="width:44px;height:44px;object-fit:contain;background:transparent;">
+                <span class="d-inline-flex align-items-center gap-1 px-2 py-1 border rounded-pill bg-white text-dark" style="font-size:0.72rem;">
+                  <img src="{{ setting.site_favicon.url }}" alt="Tab" style="width:16px;height:16px;object-fit:contain;background:transparent;">
+                  <span class="text-truncate" style="max-width:95px;">{{ setting.site_title|default:"ระบบ DS-COMPOSN" }}</span>
+                </span>
+              </div>
+              <div class="form-check mt-1 text-start">
+                <input form="master-settings-form" class="form-check-input" type="checkbox" name="clear_site_favicon" value="1" id="clearSiteFavicon">
+                <label class="form-check-label small text-danger" for="clearSiteFavicon">ลบรูป</label>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="fw-bold small text-primary mb-2"><i class="bi bi-door-open me-1"></i>4. ปรับแต่งหน้าเข้าสู่ระบบ (Login Page)</h6>
+        <div class="mb-2">
+          <label class="form-label small mb-1">ข้อความรองหน้าเข้าสู่ระบบ</label>
+          <input form="master-settings-form" type="text" class="form-control form-control-sm" name="login_subtitle" value="{{ setting.login_subtitle }}">
+        </div>
+        <div class="row g-2">
+          <div class="col-4">
+            <label class="form-label small mb-1">พื้นหลัง 1</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="login_bg_color1" value="{{ setting.login_bg_color1 }}">
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-1">พื้นหลัง 2</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="login_bg_color2" value="{{ setting.login_bg_color2 }}">
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-1">พื้นหลัง 3</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="login_bg_color3" value="{{ setting.login_bg_color3 }}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">สีปุ่มล็อกอิน 1</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="login_btn_color1" value="{{ setting.login_btn_color1 }}">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">สีปุ่มล็อกอิน 2</label>
+            <input form="master-settings-form" type="color" class="form-control form-control-color w-100" name="login_btn_color2" value="{{ setting.login_btn_color2 }}">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  document.querySelectorAll('[data-master-field] input, [data-master-field] select, [data-master-field] textarea').forEach(function (el) {
+    el.setAttribute('form', 'master-settings-form');
+  });
+})();
+</script>
+{% endblock %}

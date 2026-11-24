@@ -1,0 +1,458 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ออกแบบผังห้องสอบ: {{ room.name }}{% endblock %}
+{% block breadcrumb %}เวลาเรียน / คะแนน / จัดที่นั่งสอบ / ออกแบบผังห้องสอบ{% endblock %}
+{% block extra_head %}
+<style>
+  .layout-preview-wrap { background: #fff; border: 1px solid #dee2e6; border-radius: 10px; padding: 14px; }
+  .exam-chart-body-wrap { display: flex; align-items: stretch; }
+  .exam-chart-body-wrap.front-top, .exam-chart-body-wrap.front-bottom { flex-direction: column; }
+  .exam-chart-body-wrap.front-left, .exam-chart-body-wrap.front-right { flex-direction: row; }
+  .exam-front-bar {
+    background: #d9ead3; border: 1px solid #93c47d; color: #1b5e20;
+    font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .exam-front-horiz { padding: 5px 12px; width: 100%; }
+  .exam-front-vert { width: 34px; flex: 0 0 34px; writing-mode: vertical-rl; padding: 10px 4px; }
+  .exam-front-left { transform: rotate(180deg); }
+  .exam-grid-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .exam-block-lab { margin-bottom: 12px; }
+  .exam-block-desk { margin-bottom: 6px; }
+  .exam-lab-row, .exam-desk-row { display: grid; align-items: stretch; }
+  .exam-desk-row { gap: 8px; }
+  .exam-desk-row-label { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .layout-seat-btn {
+    display: flex; flex-direction: column; border: 1px solid #495057; background: #fff;
+    cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; min-width: 0; padding: 0; text-align: center;
+  }
+  .layout-seat-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(13,110,253,0.28); z-index: 2; }
+  .exam-lab-row .layout-seat-btn + .layout-seat-btn { border-left: 0; }
+  .exam-lab-row + .exam-lab-row .layout-seat-btn { border-top: 0; }
+  .seat-num {
+    background: #fff2cc; border-bottom: 1px solid #555; font-size: 0.78rem; padding: 2px 4px; font-weight: 700;
+  }
+  .layout-seat-btn:has(.seat-body + .seat-num) .seat-num { border-bottom: 0; border-top: 1px solid #555; }
+  .seat-body {
+    flex: 1; min-height: 28px; display: flex; align-items: center; justify-content: center;
+    padding: 2px 4px; font-size: 0.72rem;
+  }
+  .def-reserve .seat-body { color: #cc0000; font-weight: 700; background: #fff5f5; }
+  .def-disabled .seat-body { color: #6c757d; background: #eeeeee; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-grid-1x2-fill me-2 text-primary"></i>ออกแบบผังที่นั่ง: {{ room.name }}</h4>
+    <small class="text-muted">จำนวนที่นั่งทั้งหมด {{ layout.total_seats }} ที่นั่ง · คลิกที่ช่องที่นั่งเพื่อแก้ไขเลขที่นั่ง/สถานะสำรองเริ่มต้น หรือลบ</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'food:exam_rooms_manage' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-building me-1"></i>รายการห้องสอบทั้งหมด
+    </a>
+    <a href="{% url 'food:exam_seating' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-grid-3x3-gap me-1"></i>ไปหน้าจัดที่นั่งสอบ
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- ซ้าย: ตัวอย่างผังที่นั่งในห้อง -->
+  <div class="col-lg-8">
+    <div class="layout-preview-wrap mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div class="fw-bold text-dark"><i class="bi bi-eye me-1 text-primary"></i>ผังที่นั่งปัจจุบัน (คลิกที่นั่งเพื่อแก้ไข / ลบ)</div>
+        <span class="badge bg-light text-dark border">รวม {{ seats|length }} ตำแหน่ง</span>
+      </div>
+
+      <div class="exam-chart-body-wrap front-{{ room.front_position }}">
+        {% if room.front_position == 'top' %}
+          <div class="exam-front-bar exam-front-horiz mb-2">{{ room.front_label|default:"หน้าเวที" }}</div>
+        {% elif room.front_position == 'left' %}
+          <div class="exam-front-bar exam-front-vert exam-front-left me-2">{{ room.front_label|default:"หน้าห้อง" }}</div>
+        {% endif %}
+
+        <div class="exam-grid-scroll flex-grow-1">
+          {% for blk in layout.blocks %}
+            <div class="position-relative border rounded p-2 mb-2 bg-light bg-opacity-50">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge bg-secondary bg-opacity-75" style="font-size:0.7rem;">กลุ่มแถว (Block) {{ blk.block_index }}</span>
+                <form method="post" class="d-inline" onsubmit="return confirm('ลบกลุ่มแถวที่ {{ blk.block_index }} ทั้งกลุ่ม?')">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_block">
+                  <input type="hidden" name="block_index" value="{{ blk.block_index }}">
+                  <button type="submit" class="btn btn-link btn-sm text-danger p-0 text-decoration-none" style="font-size:0.75rem;">
+                    <i class="bi bi-trash"></i> ลบกลุ่มนี้
+                  </button>
+                </form>
+              </div>
+              {% for r in blk.rows %}
+                {% if room.has_computer %}
+                <div class="exam-lab-row" style="grid-template-columns: repeat({{ layout.max_col }}, minmax(58px, 1fr));">
+                  {% for cell in r.cells %}
+                    {% if cell %}
+                      <button type="button"
+                              class="layout-seat-btn def-{{ cell.seat.default_status }}"
+                              data-seat-id="{{ cell.seat.pk }}"
+                              data-seat-label="{{ cell.seat.seat_label }}"
+                              data-seat-number="{{ cell.seat.seat_number }}"
+                              data-default-status="{{ cell.seat.default_status }}"
+                              data-label-pos="{{ cell.seat.label_position }}"
+                              data-pos-info="กลุ่ม {{ cell.seat.block_index }} · แถว {{ cell.seat.row_index }} · คอลัมน์ {{ cell.seat.col_index }}"
+                              onclick="openEditSeatModal(this)">
+                        {% if cell.seat.label_position == 'above' %}
+                          <div class="seat-body">
+                            {% if cell.seat.default_status == 'reserve' %}สำรอง{% elif cell.seat.default_status == 'disabled' %}งดใช้{% else %}ปกติ{% endif %}
+                          </div>
+                          <div class="seat-num">{{ cell.seat.seat_label }}</div>
+                        {% else %}
+                          <div class="seat-num">{{ cell.seat.seat_label }}</div>
+                          <div class="seat-body">
+                            {% if cell.seat.default_status == 'reserve' %}สำรอง{% elif cell.seat.default_status == 'disabled' %}งดใช้{% else %}ปกติ{% endif %}
+                          </div>
+                        {% endif %}
+                      </button>
+                    {% else %}
+                      <div></div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="exam-desk-row" style="grid-template-columns: 52px repeat({{ layout.max_col }}, minmax(64px, 1fr));">
+                  <div class="exam-desk-row-label small fw-bold text-primary">แถว {{ r.row_index }}</div>
+                  {% for cell in r.cells %}
+                    {% if cell %}
+                      <button type="button"
+                              class="layout-seat-btn def-{{ cell.seat.default_status }}"
+                              data-seat-id="{{ cell.seat.pk }}"
+                              data-seat-label="{{ cell.seat.seat_label }}"
+                              data-seat-number="{{ cell.seat.seat_number }}"
+                              data-default-status="{{ cell.seat.default_status }}"
+                              data-label-pos="{{ cell.seat.label_position }}"
+                              data-pos-info="กลุ่ม {{ cell.seat.block_index }} · แถว {{ cell.seat.row_index }} · คอลัมน์ {{ cell.seat.col_index }}"
+                              onclick="openEditSeatModal(this)">
+                        <div class="seat-num">{{ cell.seat.seat_label }}</div>
+                        <div class="seat-body">
+                          {% if cell.seat.default_status == 'reserve' %}สำรอง{% elif cell.seat.default_status == 'disabled' %}งดใช้{% else %}ปกติ{% endif %}
+                        </div>
+                      </button>
+                    {% else %}
+                      <div></div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% empty %}
+            <div class="text-center text-muted py-5">ยังไม่มีที่นั่งในห้องนี้ กรุณาเพิ่มกลุ่มที่นั่งหรือสร้างตารางที่นั่งจากแถบด้านขวา</div>
+          {% endfor %}
+        </div>
+
+        {% if room.front_position == 'right' %}
+          <div class="exam-front-bar exam-front-vert exam-front-right ms-2">{{ room.front_label|default:"หน้าห้อง" }}</div>
+        {% elif room.front_position == 'bottom' %}
+          <div class="exam-front-bar exam-front-horiz mt-2">{{ room.front_label|default:"หน้าเวที" }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ขวา: เครื่องมือจัดการห้องและที่นั่ง -->
+  <div class="col-lg-4">
+    <!-- 1. แก้ไขข้อมูลห้อง -->
+    <div class="card mb-3">
+      <div class="card-header py-2"><i class="bi bi-sliders me-1 text-primary"></i>ตั้งค่าข้อมูลห้องสอบ</div>
+      <form method="post" class="card-body py-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_room">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold mb-1">ชื่อห้องสอบ</label>
+          <input type="text" name="name" class="form-control form-control-sm" value="{{ room.name }}" required>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <label class="form-label small fw-semibold mb-1">ประเภทห้อง</label>
+            <select name="has_computer" class="form-select form-select-sm">
+              <option value="1" {% if room.has_computer %}selected{% endif %}>มีคอมพิวเตอร์</option>
+              <option value="0" {% if not room.has_computer %}selected{% endif %}>ไม่มีคอมพิวเตอร์ (โต๊ะ)</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small fw-semibold mb-1">ลำดับ</label>
+            <input type="number" name="sort_order" class="form-control form-control-sm" value="{{ room.sort_order }}" min="1">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <label class="form-label small fw-semibold mb-1">ตำแหน่งหน้าห้อง</label>
+            <select name="front_position" class="form-select form-select-sm">
+              {% for k, lbl in front_choices %}
+              <option value="{{ k }}" {% if room.front_position == k %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small fw-semibold mb-1">ข้อความป้าย</label>
+            <input type="text" name="front_label" class="form-control form-control-sm" value="{{ room.front_label }}">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold mb-1">รูปแบบการจัดเริ่มต้น</label>
+          <select name="default_fill_pattern" class="form-select form-select-sm">
+            {% for k, lbl in fill_pattern_choices %}
+            <option value="{{ k }}" {% if room.default_fill_pattern == k %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="d-flex flex-wrap gap-3 mb-2 small">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="default_alternate" value="1" id="ed-alt" {% if room.default_alternate %}checked{% endif %}>
+            <label class="form-check-label" for="ed-alt">เว้นเครื่องเริ่มต้น</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_active" value="1" id="ed-act" {% if room.is_active %}checked{% endif %}>
+            <label class="form-check-label" for="ed-act">เปิดใช้งานห้อง</label>
+          </div>
+        </div>
+        <div class="mb-2">
+          <input type="text" name="description" class="form-control form-control-sm" value="{{ room.description }}" placeholder="หมายเหตุเพิ่มเติม">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm w-100 fw-semibold"><i class="bi bi-floppy me-1"></i>บันทึกข้อมูลห้อง</button>
+      </form>
+    </div>
+
+    <!-- 2. เพิ่มกลุ่มแถว / เครื่องคอมฯ -->
+    <div class="card mb-3">
+      <div class="card-header py-2"><i class="bi bi-plus-square me-1 text-success"></i>เพิ่มแถวที่นั่ง / แถวเครื่องคอมฯ</div>
+      <form method="post" class="card-body py-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_block">
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <label class="form-label small fw-semibold mb-1">ลักษณะแถว</label>
+            <select name="bench_type" class="form-select form-select-sm" id="ab-type">
+              <option value="single">แถวเดี่ยว (1 แถว)</option>
+              <option value="double">แถวคู่หันหลังชนกัน (2 แถวติดกัน)</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small fw-semibold mb-1">เว้นซ้าย (คอลัมน์)</label>
+            <input type="number" name="col_offset" class="form-control form-control-sm" value="0" min="0" max="15">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">จำนวน (แถวบน)</label>
+            <input type="number" name="count" class="form-control form-control-sm" value="10" min="1" max="30">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">เลขเริ่มต้น</label>
+            <input type="number" name="start_no" class="form-control form-control-sm" value="{{ next_seat_no }}" min="1">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">ทิศเลขแถวบน</label>
+            <select name="dir_top" class="form-select form-select-sm">
+              <option value="lr">น้อย→มาก</option>
+              <option value="rl">มาก→น้อย</option>
+            </select>
+          </div>
+        </div>
+        <div id="ab-double-opts" class="row g-2 mb-2" style="display:none;">
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">จำนวน (แถวล่าง)</label>
+            <input type="number" name="bottom_count" class="form-control form-control-sm" placeholder="เท่าแถวบน">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">เลขเริ่มต้น</label>
+            <input type="number" name="bottom_start_no" class="form-control form-control-sm" placeholder="ต่ออัตโนมัติ">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">ทิศเลขแถวล่าง</label>
+            <select name="dir_bottom" class="form-select form-select-sm">
+              <option value="rl">มาก→น้อย</option>
+              <option value="lr">น้อย→มาก</option>
+            </select>
+          </div>
+        </div>
+        <div id="ab-single-pos" class="mb-2">
+          <label class="form-label small fw-semibold mb-1">ตำแหน่งช่องรหัสผู้สอบ</label>
+          <select name="label_pos" class="form-select form-select-sm">
+            {% for k, lbl in label_pos_choices %}
+            <option value="{{ k }}">{{ lbl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold"><i class="bi bi-plus-circle me-1"></i>เพิ่มกลุ่มแถว</button>
+      </form>
+    </div>
+
+    <!-- 3. เพิ่มที่นั่งเดี่ยว 1 ตำแหน่ง -->
+    <div class="card mb-3">
+      <div class="card-header py-2"><i class="bi bi-pc-display me-1 text-info"></i>เพิ่มที่นั่งเดี่ยว 1 ตำแหน่ง</div>
+      <form method="post" class="card-body py-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_seat">
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">กลุ่ม (Block)</label>
+            <input type="number" name="block_index" class="form-control form-control-sm" value="{{ next_block }}" min="1">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">แถว (Row)</label>
+            <input type="number" name="row_index" class="form-control form-control-sm" value="{{ next_row }}" min="1">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">คอลัมน์ (Col)</label>
+            <input type="number" name="col_index" class="form-control form-control-sm" value="1" min="1">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold mb-1">เลขที่นั่ง/เครื่อง</label>
+            <input type="text" name="seat_label" class="form-control form-control-sm" value="{{ next_seat_no }}" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold mb-1">สถานะเริ่มต้น</label>
+            <select name="default_status" class="form-select form-select-sm">
+              {% for k, lbl in default_status_choices %}
+              <option value="{{ k }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="bi bi-plus me-1"></i>เพิ่มที่นั่งนี้</button>
+      </form>
+    </div>
+
+    <!-- 4. สร้างผังตารางใหม่ทั้งหมด (แถว × คอลัมน์) -->
+    <div class="card border-warning">
+      <div class="card-header py-2 bg-warning bg-opacity-10"><i class="bi bi-arrow-repeat me-1 text-warning"></i>สร้างผังตารางใหม่ทั้งหมด (แทนที่เดิม)</div>
+      <form method="post" class="card-body py-2" onsubmit="return confirm('การสร้างผังใหม่จะลบตำแหน่งที่นั่งเดิมทั้งหมดในห้องนี้ ยืนยันหรือไม่?')">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="generate_grid">
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">จำนวนแถว</label>
+            <input type="number" name="rows" class="form-control form-control-sm" value="10" min="1" max="40">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">จำนวน/แถว</label>
+            <input type="number" name="cols" class="form-control form-control-sm" value="5" min="1" max="30">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold mb-1">เลขเริ่ม</label>
+            <input type="number" name="start_no" class="form-control form-control-sm" value="1" min="1">
+          </div>
+        </div>
+        <div class="mb-2">
+          <select name="direction" class="form-select form-select-sm">
+            <option value="lr">เรียงเลขโต๊ะ ซ้าย → ขวา ทุกแถว</option>
+            <option value="rl">เรียงเลขโต๊ะ ขวา → ซ้าย ทุกแถว</option>
+            <option value="snake_lr">เรียงเลขโต๊ะ สลับฟันปลา (ซ้าย→ขวา, ขวา→ซ้าย)</option>
+            <option value="snake_rl">เรียงเลขโต๊ะ สลับฟันปลา (ขวา→ซ้าย, ซ้าย→ขวา)</option>
+          </select>
+        </div>
+        <div class="form-check small mb-2">
+          <input class="form-check-input" type="checkbox" name="confirm_reset" value="1" id="cf-reset">
+          <label class="form-check-label text-danger" for="cf-reset">ยืนยันแทนที่ผังเดิม (กรณีมีการจัดผู้สอบแล้ว)</label>
+        </div>
+        <button type="submit" class="btn btn-outline-warning text-dark btn-sm w-100 fw-semibold">สร้างตารางที่นั่งใหม่</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal แก้ไข/ลบที่นั่งรายตัว -->
+<div class="modal fade" id="editSeatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold">แก้ไขที่นั่ง <span id="es-title-lbl"></span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_seat">
+        <input type="hidden" name="seat_id" id="es-seat-id">
+        <div class="modal-body">
+          <div class="small text-muted mb-2" id="es-pos-info"></div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">เลขที่นั่ง / เลขเครื่อง</label>
+            <input type="text" name="seat_label" id="es-label" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">เลขลำดับ (ใช้จัดเรียงน้อย→มาก)</label>
+            <input type="number" name="seat_number" id="es-number" class="form-control form-control-sm">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">สถานะเริ่มต้น</label>
+            <select name="default_status" id="es-status" class="form-select form-select-sm">
+              {% for k, lbl in default_status_choices %}
+              <option value="{{ k }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-1">
+            <label class="form-label small fw-semibold mb-1">ตำแหน่งช่องผู้สอบ</label>
+            <select name="label_position" id="es-lpos" class="form-select form-select-sm">
+              {% for k, lbl in label_pos_choices %}
+              <option value="{{ k }}">{{ lbl }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer py-2 justify-content-between">
+          <button type="submit" form="es-delete-form" class="btn btn-outline-danger btn-sm" onclick="return confirm('ยืนยันลบที่นั่งนี้?')">
+            <i class="bi bi-trash"></i> ลบ
+          </button>
+          <div>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+            <button type="submit" class="btn btn-primary btn-sm fw-semibold">บันทึก</button>
+          </div>
+        </div>
+      </form>
+      <form method="post" id="es-delete-form" class="d-none">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_seat">
+        <input type="hidden" name="seat_id" id="es-del-seat-id">
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function(){
+  var abType = document.getElementById('ab-type');
+  var dblOpts = document.getElementById('ab-double-opts');
+  var sglPos = document.getElementById('ab-single-pos');
+  if (abType) {
+    function syncAb() {
+      var isDbl = (abType.value === 'double');
+      if (dblOpts) dblOpts.style.display = isDbl ? '' : 'none';
+      if (sglPos) sglPos.style.display = isDbl ? 'none' : '';
+    }
+    abType.addEventListener('change', syncAb);
+    syncAb();
+  }
+})();
+function openEditSeatModal(btn) {
+  var sid = btn.getAttribute('data-seat-id');
+  var lbl = btn.getAttribute('data-seat-label');
+  var num = btn.getAttribute('data-seat-number');
+  var st = btn.getAttribute('data-default-status');
+  var lp = btn.getAttribute('data-label-pos');
+  var pos = btn.getAttribute('data-pos-info');
+  document.getElementById('es-seat-id').value = sid;
+  document.getElementById('es-del-seat-id').value = sid;
+  document.getElementById('es-title-lbl').textContent = lbl;
+  document.getElementById('es-pos-info').textContent = pos;
+  document.getElementById('es-label').value = lbl;
+  document.getElementById('es-number').value = num;
+  document.getElementById('es-status').value = st;
+  document.getElementById('es-lpos').value = lp;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('editSeatModal')).show();
+}
+</script>
+{% endblock %}

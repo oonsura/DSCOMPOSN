@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Export{% endblock %}
+{% block content %}
+{% include "admin/_backup_tabs.html" %}
+<h4>Export ข้อมูล</h4>
+<div class="row g-3">
+  <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body"><h6>รายชื่อนักเรียนทั้งหมด</h6><a class="btn btn-primary btn-sm" href="?kind=students">ดาวน์โหลด</a></div></div></div>
+  <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body"><h6>ประวัติการใช้สิทธิ์ทั้งหมด</h6><a class="btn btn-primary btn-sm" href="?kind=all_history">ดาวน์โหลด</a></div></div></div>
+  <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body"><h6>ประวัติรายบุคคล</h6>
+    <form method="get" class="input-group input-group-sm"><input type="hidden" name="kind" value="history"><input class="form-control" name="code" placeholder="รหัสค่าย เช่น 69DS01" required><button class="btn btn-primary">ดาวน์โหลด</button></form></div></div></div>
+  <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body"><h6>สรุปการขาดเรียนรายเดือน</h6>
+    <form method="get" class="input-group input-group-sm"><input type="hidden" name="kind" value="absence_monthly"><input type="month" class="form-control" name="month" value="{{ month }}"><button class="btn btn-primary">ดาวน์โหลด</button></form></div></div></div>
+  <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body"><h6>รายงานใช้สิทธิ์ตามปีการศึกษา</h6>
+    <form method="get" action="{% url 'composn:admin_year_report' %}" class="input-group input-group-sm">
+      <select class="form-select" name="year">
+        {% for y in academic_year_choices %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-primary">โหลด</button>
+    </form>
+  </div></div></div>
+</div>
+{% endblock %}

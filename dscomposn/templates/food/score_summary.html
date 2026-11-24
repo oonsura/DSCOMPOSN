@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}สรุปคะแนนรวม{% endblock %}
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link fw-semibold" href="{% url 'food:staff_scores' %}?year={{ year }}">
+      <i class="bi bi-pencil-square me-1 text-primary"></i>บันทึกคะแนน
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold active" href="{% url 'food:score_summary' %}?year={{ year }}">
+      <i class="bi bi-bar-chart-line me-1 text-info"></i>สรุปคะแนนรวม
+    </a>
+  </li>
+</ul>
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    สรุปคะแนนรวม ปีการศึกษา {{ year }}
+    {% info_tip "คะแนนรวม = ผลรวมของ (score/max_score × weight) ของแต่ละหมวด · คะแนนรวมทั้งหมด (รวมจากสัดส่วนคะแนน): " total_weight|floatformat:2 %}
+  </h4>
+  <a class="btn btn-sm btn-success fw-semibold" href="?year={{ year }}&center={{ center|urlencode }}&q={{ q|urlencode }}&export=xlsx">
+    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export คะแนนทั้งหมด (หัวข้อใหญ่+ย่อย .xlsx)
+  </a>
+</div>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <select name="year" class="form-select" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+      {% for y in academic_year_choices %}
+        <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4"><input class="form-control" name="q" value="{{ q }}" placeholder="ค้นหารหัส/ชื่อ"></div>
+  <div class="col-md-2 col-lg-1"><button class="btn btn-primary w-100">แสดง</button></div>
+</form>
+<div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm table-hover mb-0">
+  <thead class="table-light"><tr><th>#</th><th>รหัส</th><th>ชื่อ-นามสกุล</th>{% for c in categories %}<th>{{ forloop.counter }}. {{ c.name }} {% if not c.is_visible %}<span class="badge bg-secondary" style="font-size:0.65rem;">ซ่อน</span>{% endif %}<br><small>({{ c.weight|floatformat:2 }})</small></th>{% endfor %}<th>รวม ({{ total_weight|floatformat:2 }})</th></tr></thead>
+  {% for r in rows %}<tr><td>{{ r.rank }}</td><td class="code">{{ r.user.camp1_code }}</td><td>{{ r.user.get_full_name }}</td>
+    {% for b in r.breakdown %}<td><div><b>{% if b.weighted is not None %}{{ b.weighted|floatformat:2 }}{% else %}-{% endif %}</b></div>{% if b.sub_breakdown %}<div class="text-muted" style="font-size:0.75rem;">{% for sb in b.sub_breakdown %}{{ sb.category.name }}: {% if sb.weighted is not None %}{{ sb.weighted|floatformat:2 }}{% else %}-{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}</td>{% endfor %}<td><b>{{ r.total|floatformat:2 }}</b></td></tr>
+  {% empty %}<tr><td colspan="20" class="text-center text-muted py-3">ไม่มีข้อมูล</td></tr>{% endfor %}
+</table></div></div></div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}สรุปการใช้สิทธิ์ สอวน.คอมพิวเตอร์ ศูนย์อบรมโรงเรียนเทพศิรินทร์{% endblock %}
+{% block extra_head %}<style>body{background:#0f2540;color:#fff}.card{background:#173a63;color:#fff}.table{--bs-table-bg:transparent;--bs-table-color:#fff;--bs-table-striped-bg:rgba(255,255,255,.05);--bs-table-striped-color:#fff}@media (max-width:767.98px){.display-title{font-size:1.25rem !important;}.display-stat{font-size:1.1rem !important;}.display-round-badge{font-size:0.9rem !important;white-space:normal !important;}}</style>{% endblock %}
+{% block content %}
+<div class="container py-3 py-md-4">
+  <h2 class="text-center fw-bold mb-3 display-title">สรุปการใช้สิทธิ์ สอวน.คอมพิวเตอร์ ศูนย์อบรมโรงเรียนเทพศิรินทร์</h2>
+
+  <div class="card p-3 mb-3 shadow-sm">
+    <div class="d-flex flex-wrap justify-content-center align-items-center gap-2 gap-md-3 text-center">
+      <form method="get" class="d-inline-flex align-items-center">
+        {% if center %}<input type="hidden" name="center" value="{{ center }}">{% endif %}
+        <select name="year" class="form-select form-select-sm fw-bold border-0 text-white"
+                style="background:rgba(255,255,255,0.22); font-size:1.05rem; width:auto; cursor:pointer;"
+                onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" class="text-dark" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+      <span class="fs-4 fw-bold px-3 py-1 rounded display-stat" style="background:rgba(255,255,255,0.12);">
+        ใช้สิทธิ์แล้ว <span class="text-warning fs-3">{{ stats.total }}</span> คน
+      </span>
+
+      {% for r in open_rounds %}
+      <span class="badge bg-success fs-5 px-3 py-2 fw-semibold display-round-badge">
+        <i class="bi bi-broadcast me-1"></i>กำลังเปิดรอบใช้สิทธิ์ค่าย {{ r.camp_level }} ปีการศึกษา {{ r.academic_year }}
+      </span>
+      {% endfor %}
+
+      {% if user.is_authenticated and user.role == 'admin' %}
+      <a class="btn btn-warning fw-bold px-3 py-2" href="{% url 'composn:display_download' %}?year={{ year }}{% if center %}&center={{ center }}{% endif %}">
+        <i class="bi bi-download me-1"></i>ดาวน์โหลด Excel
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card"><div class="card-body">
+    <div class="table-responsive">
+    <table class="table table-striped mb-0">
+      <thead><tr><th>รหัสใช้สิทธิ์</th><th>ชื่อ</th><th>ค่าย</th><th>ระดับชั้น</th><th>เวลา</th></tr></thead>
+      {% for r in rows %}<tr><td class="code">{{ r.rights_code }}</td><td>{{ r.name }}</td><td>{{ r.camp_level }}</td><td>{{ r.grade_level }}</td><td>{{ r.confirmed_at|date:"d/m H:i" }}</td></tr>
+      {% empty %}<tr><td colspan="5" class="text-center text-white-50">ยังไม่มีผู้ใช้สิทธิ์</td></tr>{% endfor %}
+    </table>
+    </div>
+  </div></div>
+  <p class="text-center small text-white-50 mt-3">อัปเดตล่าสุด {{ updated_at|date:"d/m/Y H:i:s" }} · หน้านี้รีเฟรชอัตโนมัติ</p>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+// รีเฟรชอัตโนมัติเมื่อกลับมาที่หน้านี้ และทุก 60 วินาที
+document.addEventListener('visibilitychange', function () { if (!document.hidden) location.reload(); });
+window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload(); });
+setTimeout(function () { location.reload(); }, 60000);
+</script>
+{% endblock %}

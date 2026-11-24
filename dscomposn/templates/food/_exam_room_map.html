@@ -1,0 +1,162 @@
+{% load composn_tags %}
+{% with room_obj=plan_room.room %}
+<div class="exam-chart-sheet {% if not room_obj.has_computer %}exam-chart-desk{% else %}exam-chart-lab{% endif %}">
+  <!-- หัวผังที่นั่งสอบ + คำอธิบายสี -->
+  <div class="exam-chart-header d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+    <div class="fw-bold fs-5 text-dark">{{ room_obj.name }}</div>
+    <div class="fw-bold fs-6 text-dark">
+      {{ plan_room.effective_subtitle }}
+      {% if plan and plan.training_date %}
+        <span class="fw-normal text-muted ms-1">({{ plan.training_date.date|date_thai_long }})</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="exam-color-legend d-flex flex-wrap align-items-center justify-content-end gap-3 mb-2 small" style="font-size:0.75rem;">
+    <span><strong style="color:#0000cc;">&#9632; สีน้ำเงิน</strong> = นักเรียนปัจจุบัน</span>
+    <span><strong style="color:#1b5e20;">&#9632; สีเขียวเข้ม</strong> = นักเรียนใช้สิทธิ์</span>
+    <span><strong style="color:#cc0000;">&#9632; สีแดง</strong> = สำรอง</span>
+  </div>
+
+  <!-- พื้นที่ผังที่นั่ง + ป้ายหน้าห้อง / หน้าเวที -->
+  <div class="exam-chart-body-wrap front-{{ room_obj.front_position }}">
+    {% if room_obj.front_position == 'top' %}
+      <div class="exam-front-bar exam-front-horiz mb-2">{{ room_obj.front_label|default:"หน้าเวที" }}</div>
+    {% elif room_obj.front_position == 'left' %}
+      <div class="exam-front-bar exam-front-vert exam-front-left me-2">{{ room_obj.front_label|default:"หน้าห้อง" }}</div>
+    {% endif %}
+
+    <div class="exam-grid-scroll flex-grow-1">
+      {% if layout.blocks %}
+        {% for blk in layout.blocks %}
+          <div class="exam-block {% if room_obj.has_computer %}exam-block-lab{% else %}exam-block-desk{% endif %}">
+            {% for r in blk.rows %}
+              {% if room_obj.has_computer %}
+              <div class="exam-lab-row" style="grid-template-columns: repeat({{ layout.max_col }}, minmax(62px, 1fr));">
+                {% for cell in r.cells %}
+                  {% if cell %}
+                    <div class="exam-seat-cell {% if interactive %}exam-seat-interactive{% endif %} seat-status-{{ cell.status }} {% if highlight_user_id and cell.user_id == highlight_user_id %}seat-highlight-me{% endif %} {% if start_seat_id and cell.seat.pk == start_seat_id %}seat-is-start{% endif %}"
+                         {% if interactive %}
+                         tabindex="0" role="button"
+                         data-seat-id="{{ cell.seat.pk }}"
+                         data-seat-label="{{ cell.seat.seat_label }}"
+                         data-seat-status="{{ cell.status }}"
+                         data-assignment-id="{% if cell.assignment %}{{ cell.assignment.pk }}{% endif %}"
+                         data-user-id="{% if cell.user_id %}{{ cell.user_id }}{% endif %}"
+                         data-user-code="{{ cell.display_code }}"
+                         data-user-name="{{ cell.full_name }}"
+                         title="เครื่อง {{ cell.seat.seat_label }}{% if cell.display_code %} : {{ cell.display_code }} {{ cell.full_name }}{% elif cell.status == 'reserve' %} : สำรอง{% elif cell.status == 'blocked' %} : งดใช้งาน{% else %} : ว่าง{% endif %}"
+                         {% endif %}>
+                      {% if cell.seat.label_position == 'above' %}
+                        <div class="seat-body">
+                          {% if cell.status == 'assigned' %}
+                            <div class="seat-code {% if cell.is_rights %}seat-code-rights{% else %}seat-code-current{% endif %}">{{ cell.display_code }}</div>
+                          {% elif cell.status == 'reserve' %}
+                            <div class="seat-reserve">สำรอง</div>
+                          {% elif cell.status == 'blocked' %}
+                            <div class="seat-blocked">งดใช้</div>
+                          {% else %}
+                            <div class="seat-empty">&nbsp;</div>
+                          {% endif %}
+                        </div>
+                        <div class="seat-num">
+                          {{ cell.seat.seat_label }}
+                          {% if start_seat_id and cell.seat.pk == start_seat_id %}<span class="start-badge" title="จุดเริ่มต้นจัดที่นั่ง">★</span>{% endif %}
+                        </div>
+                      {% else %}
+                        <div class="seat-num">
+                          {{ cell.seat.seat_label }}
+                          {% if start_seat_id and cell.seat.pk == start_seat_id %}<span class="start-badge" title="จุดเริ่มต้นจัดที่นั่ง">★</span>{% endif %}
+                        </div>
+                        <div class="seat-body">
+                          {% if cell.status == 'assigned' %}
+                            <div class="seat-code {% if cell.is_rights %}seat-code-rights{% else %}seat-code-current{% endif %}">{{ cell.display_code }}</div>
+                          {% elif cell.status == 'reserve' %}
+                            <div class="seat-reserve">สำรอง</div>
+                          {% elif cell.status == 'blocked' %}
+                            <div class="seat-blocked">งดใช้</div>
+                          {% else %}
+                            <div class="seat-empty">&nbsp;</div>
+                          {% endif %}
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <div class="exam-seat-spacer"></div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              {% else %}
+              <!-- รูปแบบห้องประชุม / โต๊ะสอบ (มีป้าย แถวที่ X และเว้นช่องไฟระหว่างโต๊ะ) -->
+              <div class="exam-desk-row" style="grid-template-columns: 56px repeat({{ layout.max_col }}, minmax(78px, 1fr));">
+                <div class="exam-desk-row-label">
+                  <div class="small text-dark" style="font-size:0.72rem; line-height:1;">แถวที่</div>
+                  <div class="fw-bold" style="color:#0000cc; font-size:0.95rem; line-height:1.1;">{{ r.row_index }}</div>
+                </div>
+                {% for cell in r.cells %}
+                  {% if cell %}
+                    <div class="exam-desk-card {% if interactive %}exam-seat-interactive{% endif %} seat-status-{{ cell.status }} {% if highlight_user_id and cell.user_id == highlight_user_id %}seat-highlight-me{% endif %} {% if start_seat_id and cell.seat.pk == start_seat_id %}seat-is-start{% endif %}"
+                         {% if interactive %}
+                         tabindex="0" role="button"
+                         data-seat-id="{{ cell.seat.pk }}"
+                         data-seat-label="{{ cell.seat.seat_label }}"
+                         data-seat-status="{{ cell.status }}"
+                         data-assignment-id="{% if cell.assignment %}{{ cell.assignment.pk }}{% endif %}"
+                         data-user-id="{% if cell.user_id %}{{ cell.user_id }}{% endif %}"
+                         data-user-code="{{ cell.display_code }}"
+                         data-user-name="{{ cell.full_name }}"
+                         title="ที่นั่ง {{ cell.seat.seat_label }}{% if cell.display_code %} : {{ cell.display_code }} {{ cell.full_name }}{% elif cell.status == 'reserve' %} : สำรอง{% elif cell.status == 'blocked' %} : งดใช้งาน{% else %} : ว่าง{% endif %}"
+                         {% endif %}>
+                      <div class="seat-num">
+                        {{ cell.seat.seat_label }}
+                        {% if start_seat_id and cell.seat.pk == start_seat_id %}<span class="start-badge" title="จุดเริ่มต้นจัดที่นั่ง">★</span>{% endif %}
+                      </div>
+                      <div class="seat-body">
+                        {% if cell.status == 'assigned' %}
+                          <div class="seat-code {% if cell.is_rights %}seat-code-rights{% else %}seat-code-current{% endif %}">{{ cell.display_code }}</div>
+                        {% elif cell.status == 'reserve' %}
+                          <div class="seat-reserve">สำรอง</div>
+                        {% elif cell.status == 'blocked' %}
+                          <div class="seat-blocked">งดใช้</div>
+                        {% else %}
+                          <div class="seat-empty">&nbsp;</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="exam-seat-spacer"></div>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-center text-muted py-5 border rounded bg-light">
+          <i class="bi bi-grid-3x3-gap fs-2 d-block mb-2"></i>
+          ยังไม่มีข้อมูลที่นั่งในห้องสอบนี้
+        </div>
+      {% endif %}
+    </div>
+
+    {% if room_obj.front_position == 'right' %}
+      <div class="exam-front-bar exam-front-vert exam-front-right ms-2">{{ room_obj.front_label|default:"หน้าห้อง" }}</div>
+    {% elif room_obj.front_position == 'bottom' %}
+      <div class="exam-front-bar exam-front-horiz mt-2">{{ room_obj.front_label|default:"หน้าเวที" }}</div>
+    {% endif %}
+  </div>
+
+  <!-- แถบวิทยากรคุมสอบด้านล่าง -->
+  {% if proctors or interactive %}
+  <div class="exam-proctor-bar mt-3 {% if not proctors %}exam-proctor-empty{% endif %}">
+    {% if proctors %}
+      {% for p in proctors %}
+        <span class="mx-2">{{ p.display_name }}</span>
+      {% endfor %}
+    {% else %}
+      <span class="text-muted small"><i class="bi bi-person-badge me-1"></i>ยังไม่ได้กำหนดวิทยากรคุมสอบประจำห้องนี้</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endwith %}

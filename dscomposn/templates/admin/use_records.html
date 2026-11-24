@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}แสดงรายชื่อผู้ใช้สิทธิ์{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-list-check me-2 text-primary"></i>แสดงรายชื่อผู้ใช้สิทธิ์</h4>
+    <small class="text-muted">สรุปการใช้สิทธิ์ สอวน.คอมพิวเตอร์ ศูนย์อบรมโรงเรียนเทพศิรินทร์</small>
+  </div>
+  <a href="{% url 'composn:admin_import_rights' %}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-person-check-fill me-1"></i>นำเข้าผู้ใช้สิทธิ์
+  </a>
+</div>
+
+<!-- แถวสรุปรวมบรรทัดเดียวกัน: ปีการศึกษา + จำนวนผู้ใช้สิทธิ์ + สถานะรอบที่เปิดอยู่ + ปุ่มดาวน์โหลด Excel -->
+<div class="card mb-3 border-start border-4 border-primary">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <span class="fs-4 fw-bold text-primary">
+          ปีการศึกษา {{ year }}
+        </span>
+        <span class="fs-4 fw-bold px-3 py-1 rounded bg-success bg-opacity-10 text-success border border-success">
+          ใช้สิทธิ์แล้ว <span class="fs-3">{{ stats.total|default:0 }}</span> คน
+        </span>
+        {% for r in open_rounds %}
+        <span class="badge bg-success fs-6 px-3 py-2">
+          <i class="bi bi-broadcast me-1"></i>กำลังเปิดรอบใช้สิทธิ์ค่าย {{ r.camp_level }} ปีการศึกษา {{ r.academic_year }}
+        </span>
+        {% endfor %}
+      </div>
+      <div>
+        <a href="?year={{ year }}&status={{ status }}&q={{ q }}&export=xlsx" class="btn btn-warning fw-bold">
+          <i class="bi bi-download me-1"></i>ดาวน์โหลด Excel
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="all" {% if status == 'all' %}selected{% endif %}>ทุกสถานะ</option>
+          <option value="used" {% if status == 'used' %}selected{% endif %}>ใช้สิทธิ์</option>
+          <option value="waived" {% if status == 'waived' %}selected{% endif %}>สละสิทธิ์</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหารหัส/ชื่อ/โรงเรียน">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>รายการบันทึกการใช้สิทธิ์ทั้งหมด <span class="badge bg-primary ms-1">{{ page.paginator.count }}</span></span>
+    <span class="text-muted small">หน้า {{ page.number }}/{{ page.paginator.num_pages }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:0.88rem;">
+      <thead>
+        <tr>
+          <th>รหัสใช้สิทธิ์</th>
+          <th>ปีการศึกษา</th>
+          <th>ค่าย</th>
+          <th>สถานะ</th>
+          <th>รหัสค่าย 1</th>
+          <th>รหัสที่ใช้</th>
+          <th>ชื่อ-นามสกุล</th>
+          <th>โรงเรียน</th>
+          <th>ชั้น</th>
+          <th>ยืนยันเมื่อ</th>
+          <th>ลบ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in page %}
+        <tr class="{% if not r.is_used %}table-secondary{% endif %}">
+          <td class="code text-primary">{{ r.rights_code|default:"-" }}</td>
+          <td>{{ r.academic_year }}</td>
+          <td>ค่าย {{ r.camp_level }}</td>
+          <td>
+            {% if r.is_used %}<span class="badge bg-success">ใช้สิทธิ์</span>
+            {% else %}<span class="badge bg-secondary">สละสิทธิ์</span>{% endif %}
+          </td>
+          <td class="code"><a href="{% url 'composn:admin_user_detail' r.user.pk %}">{{ r.user.camp1_code }}</a></td>
+          <td class="code">{{ r.camp_code_snapshot }}</td>
+          <td class="fw-semibold">{{ r.full_name_snapshot|default:r.user.get_full_name }}</td>
+          <td>{{ r.school_snapshot|truncatechars:28 }}</td>
+          <td>{{ r.grade_level }}</td>
+          <td class="small">{{ r.confirmed_at|datetime_thai|default:"-" }}</td>
+          <td>
+            <form method="post" action="{% url 'composn:admin_use_record_delete' r.pk %}"
+                  onsubmit="return confirm('ลบข้อมูลการใช้สิทธิ์ {{ r.rights_code|default:r.user.camp1_code }} ปี {{ r.academic_year }} ?')">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="btn btn-sm btn-outline-danger py-0 px-2" title="ลบรายการใช้สิทธิ์นี้">
+                <i class="bi bi-trash"></i> ลบ
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="11" class="text-center text-muted py-4">ไม่พบรายการใช้สิทธิ์</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,961 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}แดชบอร์ด - {{ site_setting.site_title_inline|default:"DS-COMPOSN" }}{% endblock %}
+{% block breadcrumb %}แดชบอร์ด{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <h4 class="mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>แดชบอร์ด</h4>
+      <form method="get" class="d-inline-flex align-items-center">
+        <select name="year" class="form-select form-select-sm fw-bold border-primary" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% info_tip "เลือกปรับส่วนที่ต้องการแสดงและจัดลำดับขึ้น-ลงได้จากปุ่ม ปรับแต่งแดชบอร์ด" %}
+    </div>
+    <small class="text-muted">ปีการศึกษา {{ year }} · ยินดีต้อนรับ {{ user.get_full_name|default:user.camp1_code }}</small>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-primary btn-sm fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#dashCustomizePanel">
+      <i class="bi bi-sliders me-1"></i>ปรับแต่งแดชบอร์ด
+    </button>
+    <a href="{% url 'food:staff_scores' %}?year={{ year }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-pencil-square me-1"></i>บันทึกคะแนน
+    </a>
+    <a href="{% url 'food:staff_attendance' %}?year={{ year }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-calendar2-check me-1"></i>บันทึกเวลาเรียน
+    </a>
+    <a href="{% url 'food:orders' %}?year={{ year }}" class="btn btn-outline-dark btn-sm">
+      <i class="bi bi-bowl-hot me-1"></i>รายการอาหาร
+    </a>
+    <a href="{% url 'food:surveys_manage' %}?year={{ year }}" class="btn btn-warning text-dark btn-sm fw-semibold">
+      <i class="bi bi-clipboard2-pulse me-1"></i>แบบสอบถาม
+    </a>
+  </div>
+</div>
+
+<!-- แผงปรับแต่งแดชบอร์ด: เลือกเปิด/ปิดส่วนแสดงผล, จัดลำดับ, และเลือกข้อมูลนักเรียนที่ต้องการสรุป -->
+<div class="collapse mb-4" id="dashCustomizePanel">
+  <div class="card border-primary shadow-sm">
+    <div class="card-header bg-primary bg-opacity-10 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-bold text-primary">
+        <i class="bi bi-layout-wtf me-2"></i>ตั้งค่าการแสดงผลแดชบอร์ด (เลือกหัวข้อ · จัดลำดับ · ข้อมูลนักเรียน)
+      </span>
+      <form method="post" class="d-inline" onsubmit="return confirm('ต้องการคืนค่าเริ่มต้นการแสดงผลแดชบอร์ด?')">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reset_dashboard_config">
+        <input type="hidden" name="year" value="{{ year }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>คืนค่าเริ่มต้น
+        </button>
+      </form>
+    </div>
+    <div class="card-body">
+      <form method="post" id="dashConfigForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_dashboard_config">
+        <input type="hidden" name="year" value="{{ year }}">
+        <div class="row g-3">
+          <div class="col-lg-7">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-dark">
+                1. ส่วนข้อมูลที่แสดงบนแดชบอร์ด (ติ๊กเลือกและกด ▲/▼ เพื่อจัดลำดับ)
+              </span>
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary py-0 px-2"
+                        onclick="document.querySelectorAll('.dw-chk').forEach(c=>c.checked=true)">เลือกทั้งหมด</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2"
+                        onclick="document.querySelectorAll('.dw-chk').forEach(c=>c.checked=false)">ไม่เลือกทั้งหมด</button>
+              </div>
+            </div>
+            <div class="list-group list-group-sm border rounded" id="dashWidgetOrderList">
+              {% for w in dashboard_widget_config %}
+              <div class="list-group-item d-flex align-items-center justify-content-between py-2 px-3 dash-widget-row">
+                <div class="form-check mb-0">
+                  <input class="form-check-input dw-chk" type="checkbox" name="dashboard_widgets"
+                         value="{{ w.key }}" id="dw_{{ w.key }}" {% if w.enabled %}checked{% endif %}>
+                  <label class="form-check-label small fw-semibold" for="dw_{{ w.key }}">{{ w.label }}</label>
+                </div>
+                <div class="btn-group btn-group-sm">
+                  <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="moveDashWidgetRow(this, -1)" title="เลื่อนขึ้น">▲</button>
+                  <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="moveDashWidgetRow(this, 1)" title="เลื่อนลง">▼</button>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="col-lg-5">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-bold text-dark">2. หัวข้อข้อมูลนักเรียนที่สรุปยอด</span>
+              <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary py-0 px-2"
+                        onclick="document.querySelectorAll('.ds-chk').forEach(c=>c.checked=true)">เลือกทั้งหมด</button>
+                <button type="button" class="btn btn-outline-secondary py-0 px-2"
+                        onclick="document.querySelectorAll('.ds-chk').forEach(c=>c.checked=false)">ล้าง</button>
+              </div>
+            </div>
+            <div class="p-3 border rounded bg-light">
+              {% for key, label in dashboard_summary_choices %}
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input ds-chk" type="checkbox" name="dashboard_summary_fields"
+                       value="{{ key }}" id="ds_{{ key }}" {% if key in selected_summary_keys %}checked{% endif %}>
+                <label class="form-check-label small fw-semibold" for="ds_{{ key }}">{{ label }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-3 pt-2 border-top">
+          <button type="submit" class="btn btn-primary btn-sm px-4 fw-semibold">
+            <i class="bi bi-check2-circle me-1"></i>บันทึกการตั้งค่าแดชบอร์ด
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- แสดงผลทุกส่วนตามรายการและลำดับที่ Admin เลือก -->
+{% for w_key in active_dashboard_widgets %}
+
+  {% if w_key == 'quick_toggles' %}
+  <!-- ส่วน: ศูนย์ควบคุมเปิด / ปิดระบบอย่างรวดเร็ว -->
+  <div class="card mb-4 border-primary-subtle shadow-sm" id="widget-quick_toggles">
+    <div class="card-header bg-light d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span>
+        <i class="bi bi-toggles me-2 text-primary"></i>ศูนย์ควบคุมเปิด / ปิดระบบ (ปีการศึกษา {{ year }})
+        {% info_tip "สั่งเปิด/ปิดระบบหลักและรายการสำคัญสำหรับนักเรียนได้โดยตรงจากหน้าแดชบอร์ด" %}
+      </span>
+      <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">ควบคุมสถานะสำหรับสมาชิก</span>
+    </div>
+    <div class="card-body">
+      <!-- แถว 1: สวิตช์หลัก 4 ระบบสำคัญ -->
+      <div class="row g-2 mb-3">
+        <!-- 1. เกียรติบัตร -->
+        <div class="col-6 col-xl-3">
+          <div class="p-3 rounded border bg-light h-100 d-flex flex-column justify-content-between gap-2">
+            <div>
+              <div class="d-flex justify-content-between align-items-start gap-1">
+                <span class="fw-bold small"><i class="bi bi-award-fill me-1 text-warning"></i>เกียรติบัตร</span>
+                {% if quick_toggles.cert_published %}
+                  <span class="badge bg-success">เปิดแสดงอยู่</span>
+                {% else %}
+                  <span class="badge bg-secondary">ปิดอยู่</span>
+                {% endif %}
+              </div>
+              <div class="text-muted mt-1" style="font-size:0.76rem;">แสดงให้นักเรียนดาวน์โหลดในโปรไฟล์</div>
+            </div>
+            <div class="d-flex gap-1 align-items-center">
+              <form method="post" class="flex-grow-1 m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="dash_toggle_cert_publish">
+                <input type="hidden" name="year" value="{{ year }}">
+                <button type="submit" class="btn btn-sm w-100 fw-semibold {% if quick_toggles.cert_published %}btn-outline-danger{% else %}btn-success{% endif %}">
+                  {% if quick_toggles.cert_published %}
+                    <i class="bi bi-eye-slash me-1"></i>ปิดเกียรติบัตร
+                  {% else %}
+                    <i class="bi bi-eye me-1"></i>เปิดเกียรติบัตร
+                  {% endif %}
+                </button>
+              </form>
+              <a href="{% url 'food:admin_certificates' %}?year={{ year }}" class="btn btn-sm btn-outline-secondary" title="ไปหน้าเกียรติบัตร">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. การประกาศผล -->
+        <div class="col-6 col-xl-3">
+          <div class="p-3 rounded border bg-light h-100 d-flex flex-column justify-content-between gap-2">
+            <div>
+              <div class="d-flex justify-content-between align-items-start gap-1">
+                <span class="fw-bold small"><i class="bi bi-megaphone-fill me-1 text-primary"></i>การประกาศผล</span>
+                {% if quick_toggles.is_approved %}
+                  <span class="badge bg-success">อนุมัติประกาศผลแล้ว</span>
+                {% else %}
+                  <span class="badge bg-danger">ยังไม่อนุมัติ</span>
+                {% endif %}
+              </div>
+              <div class="text-muted mt-1" style="font-size:0.76rem;">อนุมัติเพื่อเผยแพร่ผลและล็อกคะแนนปี {{ year }}</div>
+            </div>
+            <div class="d-flex gap-1 align-items-center">
+              {% if quick_toggles.is_approved %}
+                <button type="button" class="btn btn-sm btn-outline-danger flex-grow-1 fw-semibold"
+                        data-bs-toggle="modal" data-bs-target="#dashUnapproveScoresModal">
+                  <i class="bi bi-unlock me-1"></i>ยกเลิกประกาศผล
+                </button>
+              {% else %}
+                <form method="post" class="flex-grow-1 m-0"
+                      onsubmit="return confirm('ยืนยันอนุมัติประกาศผลคะแนนปีการศึกษา {{ year }} ?')">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="dash_approve_scores">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <button type="submit" class="btn btn-sm btn-success w-100 fw-semibold">
+                    <i class="bi bi-check-circle me-1"></i>อนุมัติประกาศผล
+                  </button>
+                </form>
+              {% endif %}
+              <a href="{% url 'food:score_announcement' %}?year={{ year }}&tab=qualification" class="btn btn-sm btn-outline-secondary" title="ไปหน้าการประกาศผล">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. ระบบเลือกอาหาร -->
+        <div class="col-6 col-xl-3">
+          <div class="p-3 rounded border bg-light h-100 d-flex flex-column justify-content-between gap-2">
+            <div>
+              <div class="d-flex justify-content-between align-items-start gap-1">
+                <span class="fw-bold small"><i class="bi bi-cup-hot-fill me-1 text-success"></i>ระบบเลือกอาหาร</span>
+                {% if quick_toggles.food_system_open %}
+                  <span class="badge bg-success">เปิดระบบ</span>
+                {% else %}
+                  <span class="badge bg-danger">ปิดระบบ</span>
+                {% endif %}
+              </div>
+              <div class="text-muted mt-1" style="font-size:0.76rem;">เปิด/ปิดการสั่งอาหารฝั่งสมาชิกทั้งหมด</div>
+            </div>
+            <div class="d-flex gap-1 align-items-center">
+              <form method="post" class="flex-grow-1 m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="dash_toggle_food_system">
+                <input type="hidden" name="year" value="{{ year }}">
+                <button type="submit" class="btn btn-sm w-100 fw-semibold {% if quick_toggles.food_system_open %}btn-outline-danger{% else %}btn-success{% endif %}">
+                  {% if quick_toggles.food_system_open %}
+                    <i class="bi bi-power me-1"></i>ปิดระบบอาหาร
+                  {% else %}
+                    <i class="bi bi-power me-1"></i>เปิดระบบอาหาร
+                  {% endif %}
+                </button>
+              </form>
+              <a href="{% url 'food:food_settings' %}" class="btn btn-sm btn-outline-secondary" title="ตั้งค่าอาหาร">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. แก้ไขข้อมูลส่วนตัวสมาชิก -->
+        <div class="col-6 col-xl-3">
+          <div class="p-3 rounded border bg-light h-100 d-flex flex-column justify-content-between gap-2">
+            <div>
+              <div class="d-flex justify-content-between align-items-start gap-1">
+                <span class="fw-bold small"><i class="bi bi-person-lines-fill me-1 text-info"></i>แก้ไขข้อมูลส่วนตัว</span>
+                {% if quick_toggles.editable_fields_count > 0 %}
+                  <span class="badge bg-success">เปิดอยู่ {{ quick_toggles.editable_fields_count }}/{{ quick_toggles.total_editable_fields_count }} ฟิลด์</span>
+                {% else %}
+                  <span class="badge bg-secondary">ปิดทั้งหมด</span>
+                {% endif %}
+              </div>
+              <div class="text-muted mt-1" style="font-size:0.76rem;">อนุญาตให้นักเรียนแก้ไขโปรไฟล์ด้วยตนเอง</div>
+            </div>
+            <div class="d-flex gap-1 align-items-center">
+              <form method="post" class="flex-grow-1 m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="dash_toggle_profile_edit_all">
+                <input type="hidden" name="year" value="{{ year }}">
+                <button type="submit" class="btn btn-sm w-100 fw-semibold {% if quick_toggles.editable_fields_count > 0 %}btn-outline-danger{% else %}btn-success{% endif %}">
+                  {% if quick_toggles.editable_fields_count > 0 %}
+                    <i class="bi bi-lock me-1"></i>ปิดแก้ไขทั้งหมด
+                  {% else %}
+                    <i class="bi bi-unlock me-1"></i>เปิดแก้ไขพื้นฐาน
+                  {% endif %}
+                </button>
+              </form>
+              <a href="{% url 'composn:admin_users_settings' %}" class="btn btn-sm btn-outline-secondary" title="ตั้งค่าฟิลด์รายข้อ">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- แถว 2: ที่นั่งสอบ และ รอบการใช้สิทธิ์ -->
+      <div class="row g-3 mb-3">
+        <!-- ที่นั่งสอบ (แยกตามวันสอบ) -->
+        <div class="col-lg-7">
+          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-exam-seating-toggles">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-grid-3x3-gap-fill me-1 text-info"></i>ที่นั่งสอบ (แยกตามวันสอบ)</span>
+              <a href="{% url 'food:exam_seating' %}?year={{ year }}" class="small text-decoration-none">จัดการทั้งหมด &rarr;</a>
+            </div>
+            {% for item in quick_toggles.exam_plan_items %}
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                <div>
+                  <div class="small fw-semibold">
+                    {{ item.training_date.date|date_thai_short }}
+                    {% if item.training_date.title %}· {{ item.training_date.title }}{% endif %}
+                    {% if item.plan %}
+                      <span class="badge bg-info text-dark ms-1">{{ item.plan.effective_exam_type_display }}</span>
+                      <span class="badge bg-light text-dark border ms-1">{{ item.plan.effective_period_display }}</span>
+                    {% endif %}
+                  </div>
+                  {% if item.plan %}
+                    <div class="text-muted" style="font-size:0.75rem;">
+                      จัดที่นั่งแล้ว {{ item.readiness.seated_count }}/{{ item.readiness.total_examinees }} คน
+                      {% if item.plan.is_open %}
+                        · <span class="badge bg-success">เปิดให้ผู้เข้าสอบดูแล้ว</span>
+                      {% elif item.readiness.is_ready %}
+                        · <span class="badge bg-secondary">ปิดอยู่ (พร้อมเปิด)</span>
+                      {% else %}
+                        · <span class="badge bg-warning text-dark">ปิดอยู่ (จัดห้องยังไม่ครบ)</span>
+                      {% endif %}
+                    </div>
+                    {% if not item.plan.is_open and not item.readiness.is_ready %}
+                      <div class="text-danger" style="font-size:0.73rem;">{{ item.readiness.reason_text }}</div>
+                    {% endif %}
+                  {% else %}
+                    <div class="text-muted" style="font-size:0.75rem;">
+                      <span class="badge bg-light text-secondary border">ยังไม่สร้างแผน</span>
+                    </div>
+                  {% endif %}
+                </div>
+                <div>
+                  {% if item.plan %}
+                    {% if item.plan.is_open %}
+                      <form method="post" class="m-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="dash_toggle_exam_plan">
+                        <input type="hidden" name="year" value="{{ year }}">
+                        <input type="hidden" name="plan_id" value="{{ item.plan.pk }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 fw-semibold">ปิดการแสดงผล</button>
+                      </form>
+                    {% else %}
+                      <div class="d-flex gap-1 align-items-center">
+                        <form method="post" class="m-0">
+                          {% csrf_token %}
+                          <input type="hidden" name="action" value="dash_toggle_exam_plan">
+                          <input type="hidden" name="year" value="{{ year }}">
+                          <input type="hidden" name="plan_id" value="{{ item.plan.pk }}">
+                          <button type="submit" class="btn btn-sm btn-success py-1 px-2 fw-semibold"
+                                  {% if not item.readiness.is_ready %}disabled title="{{ item.readiness.reason_text }}"{% endif %}>
+                            เปิดให้ผู้เข้าสอบดู
+                          </button>
+                        </form>
+                        {% if not item.readiness.is_ready %}
+                          <a href="{% url 'food:exam_seating' %}?year={{ year }}&date_id={{ item.training_date.pk }}" class="btn btn-sm btn-outline-primary py-1 px-2">ไปจัดห้อง</a>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  {% else %}
+                    <a href="{% url 'food:exam_seating' %}?year={{ year }}&date_id={{ item.training_date.pk }}" class="btn btn-sm btn-outline-primary py-1 px-2">ไปจัดที่นั่งสอบ</a>
+                  {% endif %}
+                </div>
+              </div>
+            {% empty %}
+              <div class="text-center py-3 text-muted small">
+                ยังไม่มีวันสอบในปีการศึกษา {{ year }} ·
+                <a href="{% url 'food:score_categories' %}?year={{ year }}&tab=dates">เพิ่มวันสอบ</a>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- รอบการใช้สิทธิ์ (ค่าย 1 / ค่าย 2) -->
+        <div class="col-lg-5">
+          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-rights-toggles">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-toggle-on me-1 text-success"></i>รอบการใช้สิทธิ์ (ค่าย 1 / ค่าย 2)</span>
+              <a href="{% url 'composn:admin_rounds' %}" class="small text-decoration-none">ตั้งค่ารอบ &rarr;</a>
+            </div>
+            {% for item in quick_toggles.rights_camp_items %}
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                <div>
+                  <span class="badge {% if item.camp_level == 1 %}bg-primary{% else %}bg-warning text-dark{% endif %} me-1">ค่าย {{ item.camp_level }}</span>
+                  {% if item.round %}
+                    {% if item.round.is_open %}
+                      <span class="badge bg-success">กำลังเปิด</span>
+                    {% else %}
+                      <span class="badge bg-secondary">ปิดแล้ว</span>
+                    {% endif %}
+                    <span class="small text-muted ms-1">ยืนยัน {{ item.confirmed }} คน</span>
+                  {% else %}
+                    <span class="badge bg-light text-secondary border">ยังไม่เปิด</span>
+                  {% endif %}
+                </div>
+                <form method="post" class="m-0"
+                      {% if item.round and item.round.is_open %}onsubmit="return confirm('ยืนยันปิดรอบใช้สิทธิ์ค่าย {{ item.camp_level }} ปี {{ year }} ?')"{% endif %}>
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="dash_toggle_rights_round">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  {% if item.round %}
+                    <input type="hidden" name="round_id" value="{{ item.round.pk }}">
+                    {% if item.round.is_open %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 fw-semibold">ปิดรอบ</button>
+                    {% else %}
+                      <button type="submit" class="btn btn-sm btn-success py-1 px-2 fw-semibold"
+                              {% if quick_toggles.is_approved %}disabled title="ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว"{% endif %}>
+                        เปิดรอบใหม่
+                      </button>
+                    {% endif %}
+                  {% else %}
+                    <input type="hidden" name="camp_level" value="{{ item.camp_level }}">
+                    <button type="submit" class="btn btn-sm btn-success py-1 px-2 fw-semibold"
+                            {% if quick_toggles.is_approved %}disabled title="ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว"{% endif %}>
+                      เปิดรอบ
+                    </button>
+                  {% endif %}
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- แถว 3: รายการอาหาร · แบบสอบถาม · หัวข้อคะแนน -->
+      <div class="row g-3">
+        <!-- รายการอาหาร -->
+        <div class="col-lg-4">
+          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-food-order-toggles">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-bowl-hot me-1 text-primary"></i>รายการอาหาร</span>
+              <a href="{% url 'food:orders' %}?year={{ year }}" class="small text-decoration-none">ดูทั้งหมด &rarr;</a>
+            </div>
+            {% for o in quick_toggles.food_order_items %}
+              <div class="d-flex justify-content-between align-items-center gap-2 py-1 {% if not forloop.last %}border-bottom{% endif %}">
+                <div class="small text-truncate">
+                  <span class="text-muted">{{ o.food_date|date_thai_short }}</span> ·
+                  <span class="fw-semibold">{{ o.restaurant_name }}</span>
+                  {% if o.edit_toggle_open %}
+                    <span class="badge bg-success ms-1">เปิดเลือก</span>
+                  {% else %}
+                    <span class="badge bg-secondary ms-1">ปิดเลือก</span>
+                  {% endif %}
+                </div>
+                <form method="post" class="m-0 flex-shrink-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="dash_toggle_food_order">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <input type="hidden" name="order_id" value="{{ o.pk }}">
+                  <button type="submit" class="btn btn-sm py-0 px-2 {% if o.edit_toggle_open %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                    {% if o.edit_toggle_open %}ปิด{% else %}เปิด{% endif %}
+                  </button>
+                </form>
+              </div>
+            {% empty %}
+              <div class="text-center py-2 text-muted small">ยังไม่มีรายการอาหาร</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- แบบสอบถาม -->
+        <div class="col-lg-4">
+          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-survey-toggles">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-clipboard2-pulse me-1 text-danger"></i>แบบสอบถาม</span>
+              <a href="{% url 'food:surveys_manage' %}?year={{ year }}" class="small text-decoration-none">จัดการ &rarr;</a>
+            </div>
+            {% for s in quick_toggles.survey_items %}
+              <div class="d-flex justify-content-between align-items-center gap-2 py-1 {% if not forloop.last %}border-bottom{% endif %}">
+                <div class="small text-truncate">
+                  <span class="fw-semibold">{{ s.title }}</span>
+                  {% if s.is_open %}
+                    <span class="badge bg-success ms-1">เปิดรับคำตอบ</span>
+                  {% else %}
+                    <span class="badge bg-secondary ms-1">ปิดแล้ว</span>
+                  {% endif %}
+                </div>
+                <form method="post" class="m-0 flex-shrink-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="dash_toggle_survey">
+                  <input type="hidden" name="year" value="{{ year }}">
+                  <input type="hidden" name="survey_id" value="{{ s.pk }}">
+                  <button type="submit" class="btn btn-sm py-0 px-2 {% if s.is_open %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                    {% if s.is_open %}ปิด{% else %}เปิด{% endif %}
+                  </button>
+                </form>
+              </div>
+            {% empty %}
+              <div class="text-center py-2 text-muted small">ยังไม่มีแบบสอบถาม</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- หัวข้อคะแนน -->
+        <div class="col-lg-4">
+          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-score-cat-toggles">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-sliders me-1 text-warning"></i>หัวข้อคะแนน</span>
+              <a href="{% url 'food:score_categories' %}?year={{ year }}" class="small text-decoration-none">ตั้งค่า &rarr;</a>
+            </div>
+            {% for c in quick_toggles.score_cat_items %}
+              <div class="d-flex justify-content-between align-items-center gap-1 py-1 {% if not forloop.last %}border-bottom{% endif %}">
+                <div class="small text-truncate fw-semibold">{{ c.name }}</div>
+                <div class="d-flex gap-1 flex-shrink-0">
+                  <form method="post" class="m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="dash_toggle_score_category">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="cat_id" value="{{ c.pk }}">
+                    <input type="hidden" name="field" value="is_open">
+                    <button type="submit" class="btn btn-sm py-0 px-2 {% if c.is_open %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                            {% if quick_toggles.is_approved %}disabled title="ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว"{% endif %}>
+                      กรอก: {% if c.is_open %}เปิด{% else %}ปิด{% endif %}
+                    </button>
+                  </form>
+                  <form method="post" class="m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="dash_toggle_score_category">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="cat_id" value="{{ c.pk }}">
+                    <input type="hidden" name="field" value="is_visible">
+                    <button type="submit" class="btn btn-sm py-0 px-2 {% if c.is_visible %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                            {% if quick_toggles.is_approved %}disabled title="ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว"{% endif %}>
+                      แสดง: {% if c.is_visible %}เปิด{% else %}ปิด{% endif %}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            {% empty %}
+              <div class="text-center py-2 text-muted small">ยังไม่มีหัวข้อคะแนน</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% elif w_key == 'kpi_overview' %}
+  <!-- ส่วน: การ์ดตัวเลขภาพรวม (KPI) -->
+  <div class="row g-3 mb-4" id="widget-kpi_overview">
+    <div class="col-6 col-md-3">
+      <a href="{% url 'composn:admin_users' %}?year={{ year }}" class="text-decoration-none">
+        <div class="stat-card" style="background:linear-gradient(135deg,#1a73e8,#0d47a1);">
+          <div class="stat-value">{{ member_count }}</div>
+          <div class="stat-label">สมาชิกปี {{ year }} ({{ member_active }} ใช้งาน)</div>
+          <div class="small opacity-75 mt-1">ค่าย 2: {{ camp2_count }} คน · DS {{ ds_count }} / KM {{ km_count }}</div>
+          <i class="bi bi-people stat-icon"></i>
+        </div>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="{% url 'composn:admin_use_records' %}?year={{ year }}" class="text-decoration-none">
+        <div class="stat-card" style="background:linear-gradient(135deg,#34a853,#1b5e20);">
+          <div class="stat-value">{{ used_this_year }}</div>
+          <div class="stat-label">ใช้สิทธิ์ปีการศึกษา {{ year }}</div>
+          <div class="small opacity-75 mt-1">สละสิทธิ์ {{ waived_this_year }} คน</div>
+          <i class="bi bi-award stat-icon"></i>
+        </div>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="{% url 'food:staff_attendance' %}?year={{ year }}" class="text-decoration-none">
+        <div class="stat-card" style="background:linear-gradient(135deg,#f57c00,#e65100);">
+          <div class="stat-value">{{ absent_this_year }}</div>
+          <div class="stat-label">บันทึกขาดเรียนปีนี้</div>
+          <div class="small opacity-75 mt-1">อาหารเปิดอยู่ {{ food_active }} รายการ</div>
+          <i class="bi bi-calendar2-x stat-icon"></i>
+        </div>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="{% url 'composn:admin_school_requests' %}" class="text-decoration-none">
+        <div class="stat-card" style="background:linear-gradient(135deg,#7b1fa2,#4a148c);">
+          <div class="stat-value">{{ pending_requests }}</div>
+          <div class="stat-label">คำขอโรงเรียนรออนุมัติ</div>
+          <div class="small opacity-75 mt-1">คลิกเพื่อตรวจสอบ</div>
+          <i class="bi bi-building-check stat-icon"></i>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  {% elif w_key == 'student_summary' %}
+  <!-- ส่วน: สรุปข้อมูลนักเรียน -->
+  <div class="card mb-4" id="widget-student_summary">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span><i class="bi bi-pie-chart-fill me-2 text-success"></i>สรุปข้อมูลนักเรียน (ปีการศึกษา {{ year }})</span>
+      <div class="d-flex gap-2">
+        <a href="{% url 'composn:admin_users' %}?year={{ year }}" class="btn btn-sm btn-outline-primary">ผู้ใช้ (นักเรียน/สมาชิก)</a>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dashCustomizePanel">เลือกหัวข้อ</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for item in dashboard_summary_items %}
+        <div class="col-6 col-md-4 col-lg-3">
+          <div class="p-3 rounded border border-{{ item.color }} bg-light h-100 text-center">
+            <div class="text-{{ item.color }} fs-5"><i class="bi {{ item.icon }}"></i></div>
+            <div class="stat text-{{ item.color }}">{{ item.count }}</div>
+            <div class="small fw-semibold">{{ item.label }}</div>
+            {% if item.details %}
+            <a class="small text-decoration-none d-inline-block mt-1" data-bs-toggle="collapse" href="#detail_{{ item.key }}">
+              ดูรายชื่อ ({{ item.count }})
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center text-muted small">ยังไม่ได้เลือกหัวข้อข้อมูลนักเรียนที่สรุปยอด</div>
+        {% endfor %}
+      </div>
+      {% for item in dashboard_summary_items %}
+        {% if item.details %}
+        <div class="collapse mt-2" id="detail_{{ item.key }}">
+          <div class="p-2 rounded border bg-white small">
+            <strong class="text-{{ item.color }}">{{ item.label }} ({{ item.count }} คน):</strong>
+            <ul class="mb-0 mt-1 ps-3">
+              {% for d in item.details %}
+                <li><span class="code">{{ d.code }}</span> {{ d.name }}{% if d.detail %} — <span class="text-danger fw-semibold">{{ d.detail }}</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif w_key == 'attendance_summary' %}
+  <!-- ส่วน: สรุปเวลาเรียนและการเข้าอบรม -->
+  <div class="card mb-4" id="widget-attendance_summary">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span><i class="bi bi-calendar2-check-fill me-2 text-primary"></i>สรุปเวลาเรียนและการเข้าอบรม (ปีการศึกษา {{ year }})</span>
+      <div class="d-flex gap-2">
+        <a href="{% url 'food:attendance_summary' %}?year={{ year }}" class="btn btn-sm btn-outline-primary">สรุปเวลาเรียน</a>
+        <a href="{% url 'food:signin_sheet' %}?year={{ year }}" class="btn btn-sm btn-outline-danger">แบบลงชื่อ</a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-2 text-center mb-2">
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-light"><div class="fw-bold fs-5 text-primary">{{ att_stats.training_days|default:0 }}</div><div class="small text-muted">วันอบรม</div></div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-light"><div class="fw-bold fs-5 text-danger">{{ att_stats.exam_days|default:0 }}</div><div class="small text-muted">วันสอบ</div></div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-light"><div class="fw-bold fs-5 text-dark">{{ att_stats.holiday_days|default:0 }}</div><div class="small text-muted">วันหยุด</div></div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-success bg-opacity-10"><div class="fw-bold fs-5 text-success">{{ att_stats.present|default:0 }}</div><div class="small text-success">เข้าอบรม (คาบ)</div></div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-danger bg-opacity-10"><div class="fw-bold fs-5 text-danger">{{ att_stats.absent|default:0 }}</div><div class="small text-danger">ขาดอบรม (คาบ)</div></div>
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="p-2 rounded border bg-warning bg-opacity-10"><div class="fw-bold fs-5 text-warning-emphasis">{{ att_stats.sick|default:0 }} / {{ att_stats.personal|default:0 }}</div><div class="small text-muted">ลาป่วย / ลากิจ</div></div>
+        </div>
+      </div>
+      {% if att_stats.over_absence_list %}
+      <div class="alert alert-danger py-2 px-3 small mb-0 mt-2">
+        <strong><i class="bi bi-exclamation-circle me-1"></i>นักเรียนที่ขาดอบรมเกินเกณฑ์ ({{ att_stats.max_absences }} ภาคเวลา):</strong>
+        {% for ov in att_stats.over_absence_list %}
+          <span class="badge bg-danger ms-1">{{ ov.user.camp1_code }} ({{ ov.count }} ครั้ง)</span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="small text-muted text-center mt-2">ยังไม่มีนักเรียนที่ขาดอบรมเกินเกณฑ์ ({{ att_stats.max_absences }} ภาคเวลา)</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% elif w_key == 'scores_certificates' %}
+  <!-- ส่วน: สรุปคะแนน การคัดเลือก และเกียรติบัตร -->
+  <div class="card mb-4" id="widget-scores_certificates">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span><i class="bi bi-bar-chart-fill me-2 text-info"></i>สรุปคะแนน การคัดเลือก และเกียรติบัตร (ปีการศึกษา {{ year }})</span>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'food:score_summary' %}?year={{ year }}" class="btn btn-sm btn-outline-info">สรุปคะแนนรวม</a>
+        <a href="{% url 'food:score_announcement' %}?year={{ year }}" class="btn btn-sm btn-outline-warning text-dark">เอกสารประกาศผล</a>
+        <a href="{% url 'food:admin_certificates' %}?year={{ year }}" class="btn btn-sm btn-outline-success">เกียรติบัตร</a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 text-center">
+        <div class="col-6 col-md-3">
+          <div class="p-2 rounded border bg-light h-100">
+            <div class="fw-bold fs-5 text-primary">{{ score_cert_stats.cat_count|default:0 }} หมวด ({{ score_cert_stats.total_weight|floatformat:0 }}%)</div>
+            <div class="small text-muted">หัวข้อคะแนนใหญ่</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="p-2 rounded border bg-light h-100">
+            <div class="fw-bold fs-5 {% if score_cert_stats.is_approved %}text-success{% else %}text-warning-emphasis{% endif %}">
+              {% if score_cert_stats.is_approved %}ประกาศผลแล้ว{% else %}รอประกาศผล{% endif %}
+            </div>
+            <div class="small text-muted">ผ่านเกณฑ์ {{ score_cert_stats.passed_count|default:0 }} คน</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="p-2 rounded border bg-light h-100">
+            <div class="fw-bold fs-5 text-success">{{ score_cert_stats.cert_eligible_count|default:0 }} / {{ score_cert_stats.cert_ineligible_count|default:0 }}</div>
+            <div class="small text-muted">รับเกียรติบัตร / ไม่ผ่านเกณฑ์</div>
+            <div class="mt-1">
+              {% if score_cert_stats.cert_published %}
+                <span class="badge bg-success" style="font-size:0.7rem;">เปิดแสดงเกียรติบัตรแล้ว</span>
+              {% else %}
+                <span class="badge bg-secondary" style="font-size:0.7rem;">ปิดแสดงเกียรติบัตร</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="p-2 rounded border bg-light h-100">
+            <div class="fw-bold fs-5 text-secondary">{{ score_cert_stats.lecturer_count|default:0 }} / {{ score_cert_stats.committee_count|default:0 }}</div>
+            <div class="small text-muted">วิทยากร / คณะกรรมการ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% elif w_key == 'rights_summary' %}
+  <!-- ส่วน: รอบและสรุปการใช้สิทธิ์ -->
+  <div class="card mb-4" id="widget-rights_summary">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-award me-2 text-success"></i>รอบและสรุปการใช้สิทธิ์ (ปีการศึกษา {{ year }})</span>
+      <div class="d-flex gap-2">
+        <a href="{% url 'composn:admin_use_records' %}?year={{ year }}" class="btn btn-sm btn-outline-success">แสดงรายชื่อผู้ใช้สิทธิ์</a>
+        <a href="{% url 'composn:admin_rounds' %}" class="btn btn-sm btn-outline-primary">ตั้งค่าการใช้สิทธิ์</a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge bg-success">ยืนยันใช้สิทธิ์: {{ used_this_year }} คน</span>
+        <span class="badge bg-primary">ค่าย 1: {{ used_camp1 }} คน</span>
+        <span class="badge" style="background:#d84315;">ค่าย 2: {{ used_camp2 }} คน</span>
+        <span class="badge bg-secondary">สละสิทธิ์: {{ waived_this_year }} คน</span>
+      </div>
+      {% for r in open_rounds %}
+        <div class="d-flex justify-content-between align-items-center border-top py-2">
+          <div>
+            <span class="badge bg-success me-2">กำลังเปิด</span>
+            <strong>ค่าย {{ r.camp_level }} ปีการศึกษา {{ r.academic_year }}</strong>
+            {% if r.title %}<span class="text-muted small">({{ r.title }})</span>{% endif %}
+            <div class="small text-muted mt-1">ยืนยันแล้ว <b>{{ r.confirmed }}</b> คน</div>
+          </div>
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'composn:admin_round_detail' r.pk %}">
+            <i class="bi bi-eye me-1"></i>ดูรายละเอียด
+          </a>
+        </div>
+      {% empty %}
+        <div class="text-center py-2 text-muted small border-top">ขณะนี้ไม่มีรอบใช้สิทธิ์ที่เปิดอยู่</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif w_key == 'food_orders' %}
+  <!-- ส่วน: รายการอาหารและยอดผู้เลือก -->
+  <div class="card mb-4" id="widget-food_orders">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-bowl-hot me-2 text-primary"></i>รายการอาหารและยอดผู้เลือก (ปีการศึกษา {{ year }} · เปิดอยู่ {{ food_active }} / ทั้งหมด {{ food_total_count }})</span>
+      <a href="{% url 'food:orders' %}?year={{ year }}" class="btn btn-sm btn-outline-primary">รายการอาหาร</a>
+    </div>
+    <div class="card-body p-0">
+      {% if recent_orders %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr><th>วันที่จัดอาหาร</th><th>ร้านอาหาร</th><th class="text-center">เลือกแล้ว</th><th>สถานะ</th></tr>
+          </thead>
+          <tbody>
+            {% for o in recent_orders %}
+            <tr>
+              <td><small>{{ o.food_date|date_thai }}</small></td>
+              <td><a href="{% url 'food:order_detail' o.pk %}" class="fw-semibold text-decoration-none">{{ o.restaurant_name }}</a></td>
+              <td class="text-center"><span class="badge bg-info text-dark">{{ o.selected_users_count }} คน</span></td>
+              <td>
+                {% with st=o.get_status %}
+                {% if st == 'active' %}<span class="badge badge-active">กำลังเปิดเลือก</span>
+                {% elif st == 'closed' %}<span class="badge badge-closed">ปิดแก้ไข</span>
+                {% else %}<span class="badge badge-completed">เสร็จสิ้น</span>{% endif %}
+                {% endwith %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-4 text-muted">ยังไม่มีรายการอาหาร</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% elif w_key == 'survey_summary' %}
+  <!-- ส่วน: สรุปผลแบบสอบถาม -->
+  <div class="card mb-4" id="widget-survey_summary">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <span><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>สรุปผลแบบสอบถาม (ปี {{ year }})</span>
+      <a href="{% url 'food:surveys_manage' %}?year={{ year }}" class="btn btn-sm btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>แบบสอบถาม
+      </a>
+    </div>
+    <div class="card-body">
+      {% for s_sum in survey_summaries %}
+      {% with s=s_sum.survey %}
+      <div class="{% if not forloop.last %}border-bottom pb-3 mb-3{% endif %}">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+          <div>
+            <strong class="text-primary">{{ s.title }}</strong>
+            {% if s.is_open %}<span class="badge bg-success ms-1">เปิดรับคำตอบ</span>{% else %}<span class="badge bg-secondary ms-1">ปิดแล้ว</span>{% endif %}
+          </div>
+          <span class="badge bg-info text-dark">นักเรียนตอบแล้ว {{ s_sum.respondent_count }} คน</span>
+        </div>
+        <div class="row g-2">
+          {% for q_item in s_sum.questions %}
+          <div class="col-md-6">
+            <div class="p-2 rounded border bg-light h-100 small">
+              <div class="fw-semibold mb-1">
+                {{ forloop.counter }}. {{ q_item.question.question_text }}
+                {% if q_item.avg_rating %}<span class="badge bg-warning text-dark ms-1">เฉลี่ย {{ q_item.avg_rating }}/5</span>{% endif %}
+              </div>
+              {% if q_item.option_stats %}
+                {% for opt in q_item.option_stats %}
+                <div class="d-flex justify-content-between" style="font-size:0.78rem;">
+                  <span>{{ opt.option }}</span>
+                  <span class="fw-semibold">{{ opt.count }} คน ({{ opt.percent }}%)</span>
+                </div>
+                <div class="progress mb-1" style="height:6px;">
+                  <div class="progress-bar bg-success" style="width:{{ opt.percent }}%;"></div>
+                </div>
+                {% endfor %}
+              {% elif q_item.text_answers %}
+                <div class="text-muted" style="font-size:0.78rem;">ข้อเสนอแนะล่าสุด: {{ q_item.text_answers.0.text }} (รวม {{ q_item.answer_count }} ข้อความ)</div>
+              {% else %}
+                <div class="text-muted">ยังไม่มีคำตอบ</div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endwith %}
+      {% empty %}
+      <div class="text-center py-3 text-muted small">
+        ยังไม่มีแบบสอบถามในปีการศึกษา {{ year }} ·
+        <a href="{% url 'food:surveys_manage' %}?year={{ year }}">คลิกที่นี่เพื่อสร้างแบบสอบถาม</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif w_key == 'school_requests' %}
+  <!-- ส่วน: คำขอเปลี่ยนชื่อโรงเรียนรออนุมัติ -->
+  <div class="card mb-4" id="widget-school_requests">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-building-check me-2 text-primary"></i>คำขอเปลี่ยนชื่อโรงเรียนรออนุมัติ ({{ pending_requests }})</span>
+      <a href="{% url 'composn:admin_school_requests' %}" class="btn btn-sm btn-outline-primary">ตรวจสอบทั้งหมด</a>
+    </div>
+    <div class="card-body p-0">
+      {% if pending_school_req_list %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>โรงเรียนเดิม</th><th>โรงเรียนใหม่</th></tr></thead>
+          <tbody>
+            {% for sr in pending_school_req_list %}
+            <tr>
+              <td class="code">{{ sr.user.camp1_code }}</td>
+              <td>{{ sr.user.get_full_name }}</td>
+              <td class="small text-muted">{{ sr.old_school_name|default:"-" }}</td>
+              <td class="small fw-semibold text-primary">{{ sr.new_school_name }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-3 text-muted small">ไม่มีคำขอเปลี่ยนชื่อโรงเรียนรออนุมัติ</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% elif w_key == 'recent_logs' %}
+  <!-- ส่วน: กิจกรรมล่าสุด (Audit Log) -->
+  <div class="card mb-4" id="widget-recent_logs">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-clock-history me-2 text-warning"></i>กิจกรรมล่าสุด (Audit Log)</span>
+      <a href="{% url 'composn:admin_audit_logs' %}" class="btn btn-sm btn-outline-warning">Audit Log</a>
+    </div>
+    <div class="card-body p-0" style="max-height:380px;overflow-y:auto;">
+      <div class="list-group list-group-flush">
+        {% for l in recent_logs %}
+        <div class="list-group-item px-3 py-2">
+          <div class="d-flex justify-content-between">
+            <small class="fw-semibold code">{{ l.user.camp1_code|default:"-" }}</small>
+            <small class="text-muted">{{ l.created_at|datetime_thai }}</small>
+          </div>
+          <small class="text-primary">
+            {% for k, v in action_labels.items %}{% if k == l.action %}{{ v }}{% endif %}{% endfor %}
+          </small>
+          {% if l.new_value %}<small class="d-block text-muted text-truncate" style="font-size:0.75rem;">{{ l.new_value }}</small>{% endif %}
+        </div>
+        {% empty %}
+        <div class="text-center py-4 text-muted">ยังไม่มีกิจกรรม</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+{% empty %}
+  <div class="card">
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-sliders fs-1 d-block mb-2 text-primary"></i>
+      <h6>ยังไม่ได้เลือกส่วนที่ต้องการแสดงบนแดชบอร์ด</h6>
+      <button class="btn btn-primary btn-sm mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#dashCustomizePanel">
+        เปิดเมนู "ปรับแต่งแดชบอร์ด"
+      </button>
+    </div>
+  </div>
+{% endfor %}
+
+{% if is_year_approved %}
+<!-- Modal ยืนยันรหัสผ่าน Admin เพื่อยกเลิกประกาศผลจากหน้าแดชบอร์ด -->
+<div class="modal fade" id="dashUnapproveScoresModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" action="{% url 'composn:admin_dashboard' %}" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="dash_unapprove_scores">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="modal-header bg-danger text-white py-2">
+        <h6 class="modal-title fw-bold mb-0"><i class="bi bi-shield-lock-fill me-2"></i>ยืนยันการยกเลิกประกาศผลคะแนน</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="ปิด"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2">
+          การยกเลิกประกาศผลปีการศึกษา <strong>{{ year }}</strong> จะปลดล็อกให้แก้ไขเวลาเรียน คะแนน เกณฑ์คัดเลือก หัวข้อคะแนน และรอบการใช้สิทธิ์ได้อีกครั้ง
+        </p>
+        <label class="form-label small fw-semibold" for="dashUnapproveConfirmPassword">กรุณากรอกรหัสผ่านปัจจุบันของ Admin เพื่อยืนยัน</label>
+        <input type="password" class="form-control" name="confirm_password" id="dashUnapproveConfirmPassword" required autocomplete="current-password">
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+        <button type="submit" class="btn btn-sm btn-danger fw-semibold"><i class="bi bi-unlock me-1"></i>ยืนยันยกเลิกประกาศผล</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function moveDashWidgetRow(btn, dir) {
+  var row = btn.closest('.dash-widget-row');
+  var list = document.getElementById('dashWidgetOrderList');
+  if (!row || !list) return;
+  if (dir < 0 && row.previousElementSibling) {
+    list.insertBefore(row, row.previousElementSibling);
+  } else if (dir > 0 && row.nextElementSibling) {
+    list.insertBefore(row.nextElementSibling, row);
+  }
+}
+document.addEventListener('DOMContentLoaded', function () {
+  var modalEl = document.getElementById('dashUnapproveScoresModal');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', function () {
+      var pw = document.getElementById('dashUnapproveConfirmPassword');
+      if (pw) pw.focus();
+    });
+  }
+});
+</script>
+{% endblock %}

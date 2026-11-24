@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}รายการอาหาร{% endblock %}
+{% block breadcrumb %}ตั้งค่าระบบ / รายการอาหาร{% endblock %}
+{% block content %}
+<form id="food-settings-master-form" method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="save_all_food_settings">
+</form>
+
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-palette2 me-2 text-primary"></i>รายการอาหาร
+      {% info_tip "ควบคุมการเปิด-ปิดระบบเลือกอาหารสำหรับสมาชิก และตั้งค่าสีหัวการ์ดรายการอาหารตามวันในสัปดาห์" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" form="food-settings-master-form" class="btn btn-primary btn-sm fw-semibold">
+      <i class="bi bi-floppy me-1"></i>บันทึกการตั้งค่าหน้าอาหาร
+    </button>
+    <a href="{% url 'food:orders' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-bowl-hot me-1"></i>รายการอาหาร
+    </a>
+    <a href="{% url 'food:order_create' %}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>สร้างรายการอาหารใหม่
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- เปิด/ปิดระบบอาหาร -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-power me-2 text-primary"></i>สถานะระบบเลือกอาหารสำหรับสมาชิก</div>
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div>
+            <h5 class="mb-0">ระบบอาหาร{% if setting.food_system_open %}เปิดอยู่{% else %}ปิดชั่วคราว{% endif %} {% info_tip "ควบคุมการแสดงผลและการเลือกอาหารในฝั่งสมาชิก" %}</h5>
+          </div>
+          <div class="form-check form-switch fs-4">
+            <input form="food-settings-master-form" class="form-check-input" type="checkbox" name="food_system_open" value="1" {% if setting.food_system_open %}checked{% endif %} title="เปิด/ปิดระบบเลือกอาหาร">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold small">ข้อความแจ้งเตือนเมื่อปิดระบบอาหาร</label>
+          <input form="food-settings-master-form" type="text" name="food_closed_message" class="form-control form-control-sm" value="{{ setting.food_closed_message }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- สีการ์ดอาหารประจำวัน -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-palette me-2 text-primary"></i>ตั้งค่าสีหัวการ์ดรายการอาหารตามวันในสัปดาห์</div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#f9a825;color:#000;">จันทร์</span> สีวันจันทร์</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_monday" value="{{ setting.color_monday }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#e91e8c;color:#fff;">อังคาร</span> สีวันอังคาร</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_tuesday" value="{{ setting.color_tuesday }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#2e7d32;color:#fff;">พุธ</span> สีวันพุธ</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_wednesday" value="{{ setting.color_wednesday }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#e65100;color:#fff;">พฤหัสบดี</span> สีวันพฤหัสบดี</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_thursday" value="{{ setting.color_thursday }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#1565c0;color:#fff;">ศุกร์</span> สีวันศุกร์</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_friday" value="{{ setting.color_friday }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#6a1b9a;color:#fff;">เสาร์</span> สีวันเสาร์</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_saturday" value="{{ setting.color_saturday }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold mb-1"><span class="badge" style="background:#c62828;color:#fff;">อาทิตย์</span> สีวันอาทิตย์</label>
+            <input form="food-settings-master-form" type="color" class="form-control form-control-color w-100" name="color_sunday" value="{{ setting.color_sunday }}">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

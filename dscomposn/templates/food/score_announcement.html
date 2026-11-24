@@ -1,0 +1,1784 @@
+{% extends 'base.html' %}
+{% load composn_tags static %}
+{% block title %}การประกาศผล{% endblock %}
+{% block breadcrumb %}เวลาเรียน / คะแนน / การประกาศผล{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-3 no-print" id="announcementMainTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link fw-semibold {% if tab != 'qualification' %}active{% endif %}" id="tab-doc-btn" data-bs-toggle="tab" data-bs-target="#pane-document" data-tab-name="document" type="button" role="tab">
+      <i class="bi bi-megaphone-fill me-1 text-primary"></i>1. เอกสารประกาศผล (พิมพ์ / ส่งออก)
+    </button>
+  </li>
+  {% if user.is_admin_role %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link fw-semibold {% if tab == 'qualification' %}active{% endif %}" id="tab-qual-btn" data-bs-toggle="tab" data-bs-target="#pane-qualification" data-tab-name="qualification" type="button" role="tab">
+      <i class="bi bi-trophy me-1 text-warning"></i>2. อนุมัติประกาศผล &amp; กำหนดค่าเอกสารประกาศผล
+      {% if is_approved %}
+        <span class="badge bg-success ms-1">อนุมัติแล้ว</span>
+      {% else %}
+        <span class="badge bg-danger ms-1">ยังไม่อนุมัติ</span>
+      {% endif %}
+    </button>
+  </li>
+  {% endif %}
+</ul>
+
+<div class="tab-content" id="announcementTabContent">
+  <div class="tab-pane fade {% if tab != 'qualification' %}show active{% endif %}" id="pane-document" role="tabpanel">
+
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3 no-print">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-megaphone-fill me-2 text-primary"></i>การประกาศผล
+      {% if is_year_approved %}
+        <span class="badge bg-success ms-1" style="font-size:0.75rem;"><i class="bi bi-check-circle-fill me-1"></i>อนุมัติประกาศผลแล้ว</span>
+      {% else %}
+        <span class="badge bg-warning text-dark ms-1" style="font-size:0.75rem;"><i class="bi bi-hourglass-split me-1"></i>ฉบับร่าง (ยังไม่อนุมัติประกาศผล)</span>
+      {% endif %}
+    </h4>
+    <small class="text-muted">
+      เกณฑ์คัดเลือก: <strong>{{ effective_max_qualified|default:setting.max_qualified_count }} คน</strong> (ผ่านการคัดเลือก {{ passed_count }} / {{ all_count }} คน)
+    </small>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if user.is_admin_role %}
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" data-bs-toggle="collapse" data-bs-target="#announcementCustomizeCollapse" aria-expanded="false" aria-controls="announcementCustomizeCollapse">
+      <i class="bi bi-sliders me-1"></i>ปรับแต่งข้อมูล & จัดหน้า A4
+    </button>
+    {% endif %}
+    <button type="button" onclick="window.print()" class="btn btn-warning btn-sm fw-bold text-dark">
+      <i class="bi bi-printer-fill me-1"></i>พิมพ์เอกสาร (A4)
+    </button>
+    <a href="?year={{ year }}&only={% if only_passed %}passed{% else %}all{% endif %}&export=docx" class="btn btn-outline-primary btn-sm fw-semibold">
+      <i class="bi bi-file-earmark-word-fill me-1 text-primary"></i>Export Word (.docx)
+    </a>
+    <a href="?year={{ year }}&only={% if only_passed %}passed{% else %}all{% endif %}&export=pdf" class="btn btn-outline-danger btn-sm fw-semibold" target="_blank">
+      <i class="bi bi-file-earmark-pdf-fill me-1 text-danger"></i>Export PDF
+    </a>
+    <a href="?year={{ year }}&only={% if only_passed %}passed{% else %}all{% endif %}&export=xlsx" class="btn btn-outline-success btn-sm fw-semibold">
+      <i class="bi bi-file-earmark-excel me-1 text-success"></i>Export Excel (.xlsx)
+    </a>
+    <button type="button" class="btn btn-outline-secondary btn-sm fw-semibold" id="btn-announcement-cert-zip-modal" data-bs-toggle="modal" data-bs-target="#announcementCertZipModal">
+      <i class="bi bi-award-fill me-1 text-warning"></i>เกียรติบัตร
+      <span class="badge bg-light text-primary ms-1 border">{{ cert_total_count }}</span>
+    </button>
+  </div>
+</div>
+
+<!-- Filter Bar (ไม่แสดงตอนพิมพ์) -->
+<div class="card mb-3 no-print shadow-sm">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()" title="เลือกปีการศึกษา">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="only" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="passed" {% if only_passed %}selected{% endif %}>เฉพาะผู้ผ่านการคัดเลือก ({{ passed_count }} คน)</option>
+          <option value="all" {% if not only_passed %}selected{% endif %}>แสดงทั้งหมด ({{ all_count }} คน)</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหารหัส/ชื่อ/โรงเรียน">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>แสดงผล</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- ส่วนฟอร์มปรับแต่งข้อมูลประกาศผล & รูปแบบจัดหน้า (Margins / Font / Columns) -->
+<!-- ========================================================================= -->
+{% if user.is_admin_role %}
+<div class="collapse mb-3 no-print" id="announcementCustomizeCollapse">
+  <div class="card shadow border-primary">
+    <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+      <span class="fw-bold"><i class="bi bi-sliders me-2"></i>ปรับแต่งข้อมูล & รูปแบบหน้ากระดาษ A4 (กั้นหน้า-กั้นหลัง / ขนาดตัวอักษร / ขนาดช่องตาราง)</span>
+      <button type="button" class="btn-close btn-close-white" data-bs-toggle="collapse" data-bs-target="#announcementCustomizeCollapse" aria-label="Close"></button>
+    </div>
+    <div class="card-body py-3">
+      <form method="post" id="announcement-settings-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_announcement_text">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="only" value="{% if only_passed %}passed{% else %}all{% endif %}">
+        <input type="hidden" name="q" value="{{ q }}">
+
+        <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active py-1 px-3 small fw-semibold" id="tab-layout-btn" data-bs-toggle="pill" data-bs-target="#tab-layout" type="button" role="tab">
+              <i class="bi bi-layout-text-window me-1"></i>1. กั้นหน้า-กั้นหลัง & ตัวอักษร & ตาราง
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 small fw-semibold" id="tab-content-btn" data-bs-toggle="pill" data-bs-target="#tab-content" type="button" role="tab">
+              <i class="bi bi-card-text me-1"></i>2. ข้อความประกาศราชการ (แผ่นที่ 1)
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 small fw-semibold" id="tab-signer-btn" data-bs-toggle="pill" data-bs-target="#tab-signer" type="button" role="tab">
+              <i class="bi bi-person-badge me-1"></i>3. ผู้ลงนาม & รายชื่อแนบท้าย (แผ่นที่ 2)
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content border rounded p-3 bg-light bg-opacity-50 mb-3" id="pills-tabContent">
+          <!-- แท็บ 1: รูปแบบหน้ากระดาษ (กั้นหน้า-กั้นหลัง / ขนาดตัวอักษร / ช่องตาราง) -->
+          <div class="tab-pane fade show active" id="tab-layout" role="tabpanel">
+            <div class="row g-3">
+              <!-- กั้นหน้า กั้นหลัง (Margins) -->
+              <div class="col-12">
+                <div class="fw-bold text-primary small d-flex justify-content-between align-items-center">
+                  <span><i class="bi bi-bounding-box me-1"></i>ระยะขอบกระดาษ (กั้นหน้า-กั้นหลัง) — หน่วย: มิลลิเมตร (มม.)</span>
+                  <span class="text-muted fw-normal" style="font-size: 0.78rem;">ค่ามาตรฐานราชการ = 25 มม. (2.5 ซม.)</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">กั้นหน้า (ขอบซ้าย)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="60" name="announcement_margin_left_mm" value="{{ setting.announcement_margin_left_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">กั้นหลัง (ขอบขวา)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="60" name="announcement_margin_right_mm" value="{{ setting.announcement_margin_right_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ขอบบน (Top)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="60" name="announcement_margin_top_mm" value="{{ setting.announcement_margin_top_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ขอบล่าง (Bottom)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="60" name="announcement_margin_bottom_mm" value="{{ setting.announcement_margin_bottom_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+
+              <!-- ขนาดตัวอักษรทุกส่วน ระยะบรรทัด ย่อหน้า และความสูงตราครุฑ -->
+              <div class="col-12 mt-3 pt-2 border-top">
+                <div class="fw-bold text-primary small mb-1">
+                  <i class="bi bi-fonts me-1"></i>ขนาดตัวอักษรทุกส่วน · ระยะบรรทัด · ย่อหน้า · ตราครุฑ (Typography &amp; Spacing)
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 1 (ประกาศโรงเรียน...)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="28" name="announcement_font_size_title1" value="{{ setting.announcement_font_size_title1|default:17.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 2 (เรื่องประกาศผล...)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="26" name="announcement_font_size_title2" value="{{ setting.announcement_font_size_title2|default:15.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 3 (ชื่อศูนย์อบรม)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="24" name="announcement_font_size_title3" value="{{ setting.announcement_font_size_title3|default:14.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">เนื้อหาประกาศ &amp; วันที่ (แผ่นที่ 1)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="22" name="announcement_font_size_body" value="{{ setting.announcement_font_size_body|default:14.5 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ชื่อผู้ลงนาม (ผู้อำนวยการ)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="9" max="24" name="announcement_font_size_director_name" value="{{ setting.announcement_font_size_director_name|default:14.5 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ตำแหน่งผู้ลงนาม</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="8" max="22" name="announcement_font_size_director_pos" value="{{ setting.announcement_font_size_director_pos|default:13.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">หัวข้อรายชื่อแนบท้าย (แผ่นที่ 2)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="9" max="24" name="announcement_font_size_list_title1" value="{{ setting.announcement_font_size_list_title1|default:14.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ชื่อศูนย์อบรม (แผ่นที่ 2)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="8" max="22" name="announcement_font_size_list_title2" value="{{ setting.announcement_font_size_list_title2|default:12.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ตารางรายชื่อนักเรียน (แผ่นที่ 2)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="8" max="16" name="announcement_font_size_table" value="{{ setting.announcement_font_size_table|default:10.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">pt</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ระยะห่างบรรทัดเนื้อหา</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.05" min="1.0" max="3.0" name="announcement_line_spacing" value="{{ setting.announcement_line_spacing|default:1.85 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">เท่า</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ระยะห่างระหว่างย่อหน้า</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="0" max="30" name="announcement_paragraph_spacing_mm" value="{{ setting.announcement_paragraph_spacing_mm|default_if_none:4.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ระยะย่อหน้าเนื้อหา</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="60" name="announcement_indent_mm" value="{{ setting.announcement_indent_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">ความสูงตราครุฑ (แผ่นที่ 1)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="12" max="50" name="announcement_garuda_height_mm" value="{{ setting.announcement_garuda_height_mm|default:30.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+              </div>
+
+              <!-- ขนาดแต่ละช่องตาราง -->
+              <div class="col-12 mt-3 pt-2 border-top">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <div class="fw-bold text-primary small">
+                    <i class="bi bi-table me-1"></i>ขนาดความกว้างแต่ละช่องตารางรายชื่อ (แผ่นที่ 2) — หน่วย: มิลลิเมตร (มม.)
+                  </div>
+                  <span class="badge bg-secondary">ความกว้างรวมตาราง: {{ total_col_w|default:176 }} มม.</span>
+                </div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="ลำดับ">1. ลำดับ</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="40" name="announcement_col_w_no" value="{{ setting.announcement_col_w_no|default:14.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.no }}%</div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="เลขประจำตัวค่าย 2">2. เลขประจำตัวค่าย 2</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="60" name="announcement_col_w_camp2" value="{{ setting.announcement_col_w_camp2|default:24.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.camp2 }}%</div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="เลขประจำตัวค่าย 1">3. เลขประจำตัวค่าย 1</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="10" max="60" name="announcement_col_w_rights" value="{{ setting.announcement_col_w_rights|default:24.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.rights }}%</div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="ชื่อ นามสกุล">4. ชื่อ นามสกุล</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="20" max="100" name="announcement_col_w_name" value="{{ setting.announcement_col_w_name|default:50.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.name }}%</div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="โรงเรียน">5. โรงเรียน</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="20" max="100" name="announcement_col_w_school" value="{{ setting.announcement_col_w_school|default:54.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.school }}%</div>
+              </div>
+              <div class="col-4 col-md-2">
+                <label class="form-label small fw-semibold mb-1 text-truncate d-block" title="ระดับชั้น">6. ระดับ</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" step="0.5" min="5" max="40" name="announcement_col_w_grade" value="{{ setting.announcement_col_w_grade|default:14.0 }}" class="form-control text-center fw-bold">
+                  <span class="input-group-text">มม.</span>
+                </div>
+                <div class="small text-muted text-center" style="font-size:0.72rem;">{{ col_w_pct.grade }}%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- แท็บ 2: ข้อความประกาศราชการ (แผ่นที่ 1) -->
+          <div class="tab-pane fade" id="tab-content" role="tabpanel">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1">ชื่อโรงเรียนในประกาศ</label>
+                <input type="text" name="announcement_school_name" value="{{ setting.announcement_school_name|default:'โรงเรียนเทพศิรินทร์' }}" class="form-control form-control-sm" placeholder="โรงเรียนเทพศิรินทร์">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1">หัวข้อประกาศ</label>
+                <input type="text" name="announcement_title" value="{{ setting.announcement_title|default:'ประกาศผลการคัดเลือกเข้าค่ายโอลิมปิกวิชาการ (สอวน.)' }}" class="form-control form-control-sm" placeholder="ประกาศผลการคัดเลือกเข้าค่ายโอลิมปิกวิชาการ (สอวน.)">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold mb-1">ชื่อศูนย์อบรมในประกาศ</label>
+                <input type="text" name="announcement_center_name" value="{{ setting.announcement_center_name|default:'ศูนย์โรงเรียนเทพศิรินทร์-สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหาร ลาดกระบัง' }}" class="form-control form-control-sm" placeholder="ศูนย์โรงเรียนเทพศิรินทร์-สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหาร ลาดกระบัง">
+              </div>
+
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">ข้อความย่อหน้าที่ 1 (ตามที่...)</label>
+                  <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_p1 }}" onclick="document.getElementById('body_p1_input').value=this.dataset.default;" title="คืนค่าข้อความเริ่มต้น">
+                    <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                  </button>
+                </div>
+                <textarea name="announcement_body_p1" id="body_p1_input" class="form-control form-control-sm" rows="4" placeholder="{{ default_announcement_p1 }}">{{ edit_announcement_body_p1 }}</textarea>
+                <div class="form-text small text-muted">แสดงข้อความเดิมให้ปรับแก้ไขได้โดยตรง (หรือกดคืนค่าข้อความเดิม)</div>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">ข้อความย่อหน้าที่ 2 (บัดนี้...)</label>
+                  <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_p2_template }}" onclick="document.getElementById('body_p2_input').value=this.dataset.default;" title="คืนค่าข้อความเริ่มต้น">
+                    <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                  </button>
+                </div>
+                <textarea name="announcement_body_p2" id="body_p2_input" class="form-control form-control-sm" rows="4" placeholder="{{ default_announcement_p2 }}">{{ edit_announcement_body_p2 }}</textarea>
+                <div class="form-text small text-muted">รองรับตัวแปร <code class="text-primary">{count}</code> สำหรับแทรกจำนวนคนอัตโนมัติ เช่น 30 คน</div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">วันที่ในประกาศ</label>
+                  <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_date }}" onclick="document.getElementById('date_text_input').value=this.dataset.default;" title="คืนค่าวันที่ปัจจุบัน">
+                    <i class="bi bi-arrow-counterclockwise"></i> คืนค่าวันที่ปัจจุบัน
+                  </button>
+                </div>
+                <input type="text" name="announcement_date_text" id="date_text_input" value="{{ edit_announcement_date_text }}" class="form-control form-control-sm" placeholder="{{ default_announcement_date }}">
+                <div class="form-text small text-muted">เช่น ประกาศ ณ วันที่ 2 มกราคม พ.ศ. 2570 (ปรับแก้ไขข้อความวันที่ได้โดยตรง)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- แท็บ 3: ผู้ลงนาม & รายชื่อแนบท้าย (แผ่นที่ 2) -->
+          <div class="tab-pane fade" id="tab-signer" role="tabpanel">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">ชื่อผู้อำนวยการ</label>
+                <input type="text" name="announcement_director_name" value="{{ setting.announcement_director_name|default:'นายวิธาน พรหมสินธุศักดิ์' }}" class="form-control form-control-sm" placeholder="นายวิธาน พรหมสินธุศักดิ์">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">ตำแหน่งผู้อำนวยการ (ขึ้นบรรทัดใหม่ได้)</label>
+                <textarea name="announcement_director_position" class="form-control form-control-sm" rows="2" placeholder="ผู้อำนวยการโรงเรียนเทพศิรินทร์&#10;ประธานศูนย์โรงเรียนเทพศิรินทร์ สอวน.วิชาคอมพิวเตอร์ ค่าย 1">{{ edit_announcement_director_position }}</textarea>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">หัวข้อรายชื่อแนบท้ายประกาศ (แผ่นที่ 2)</label>
+                  <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_list_title }}" onclick="document.getElementById('list_title_input').value=this.dataset.default;" title="คืนค่าหัวข้อเริ่มต้น">
+                    <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                  </button>
+                </div>
+                <input type="text" name="announcement_list_title" id="list_title_input" value="{{ edit_announcement_list_title }}" class="form-control form-control-sm" placeholder="{{ default_announcement_list_title }}">
+                <div class="form-text small text-muted">แสดงหัวข้อรายชื่อเดิมให้ปรับแก้ไขได้โดยตรง</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">หมายเหตุท้ายตารางแนบท้าย (ถ้ามี)</label>
+                <textarea name="announcement_note" class="form-control form-control-sm" rows="2" placeholder="หมายเหตุเพิ่มเติม...">{{ setting.announcement_note }}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+          <span class="small text-muted"><i class="bi bi-info-circle me-1"></i>ค่าที่บันทึกจะมีผลกับทั้งหน้าแสดงผลบนระบบ, ไฟล์ Word (.docx) และไฟล์ PDF</span>
+          <div>
+            <button type="button" class="btn btn-outline-secondary btn-sm me-2" data-bs-toggle="collapse" data-bs-target="#announcementCustomizeCollapse">ปิด</button>
+            <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+              <i class="bi bi-floppy me-1"></i>บันทึกการปรับแต่ง
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ========================================================================= -->
+<!-- มุมมองเอกสาร A4 แนวตั้ง สไตล์ Microsoft Word / PDF (Print Layout) -->
+<!-- ========================================================================= -->
+<div class="word-document-viewer">
+  <div class="word-viewer-toolbar no-print">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="btn-group btn-group-sm" role="group" aria-label="โหมดแสดงผล">
+        <button type="button" class="btn btn-dark active" id="btn-view-mode-html" onclick="setDocViewMode('html')">
+          <i class="bi bi-file-earmark-text me-1"></i>มุมมองจัดหน้า A4 (1:1)
+        </button>
+        <button type="button" class="btn btn-outline-danger" id="btn-view-mode-pdf" onclick="setDocViewMode('pdf')">
+          <i class="bi bi-file-earmark-pdf-fill me-1"></i>ตัวอย่าง PDF จริง (100%)
+        </button>
+      </div>
+      <span class="small text-muted d-none d-md-inline">
+        กั้นหน้า: <strong>{{ setting.announcement_margin_left_mm|default:25.0 }} มม.</strong> · 
+        กั้นหลัง: <strong>{{ setting.announcement_margin_right_mm|default:25.0 }} มม.</strong> · 
+        ขอบบน: <strong>{{ setting.announcement_margin_top_mm|default:25.0 }} มม.</strong> · 
+        ขอบล่าง: <strong>{{ setting.announcement_margin_bottom_mm|default:25.0 }} มม.</strong> · 
+        ฟอนต์เนื้อหา: <strong>{{ setting.announcement_font_size_body|default:14.5 }} pt</strong> · 
+        ฟอนต์ตาราง: <strong>{{ setting.announcement_font_size_table|default:10.0 }} pt</strong>
+      </span>
+    </div>
+    <div class="small text-muted d-none d-sm-block">
+      <span id="view-mode-desc"><i class="bi bi-check-circle-fill text-success me-1"></i>ฟอนต์ TH Sarabun New ตรงตามไฟล์ PDF จริง 1:1</span>
+    </div>
+  </div>
+
+  <!-- โหมดแสดงตัวอย่าง PDF จริง (Render จาก ReportLab ตรงตามไฟล์ดาวน์โหลด 100%) -->
+  <div id="announcement-pdf-stage" style="display:none; max-width:210mm; margin:0 auto 32px; background:#525659; border-radius:6px; overflow:hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.28);">
+    <div class="bg-dark text-white py-2 px-3 d-flex justify-content-between align-items-center small">
+      <span><i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>ตัวอย่างไฟล์ PDF จริง (เรนเดอร์จากระบบ ReportLab 100%)</span>
+      <a href="?year={{ year }}&only={% if only_passed %}passed{% else %}all{% endif %}&export=pdf" target="_blank" class="text-white text-decoration-none">
+        <i class="bi bi-box-arrow-up-right me-1"></i>เปิดในแท็บใหม่
+      </a>
+    </div>
+    <iframe id="announcement-pdf-iframe" data-src="?year={{ year }}&only={% if only_passed %}passed{% else %}all{% endif %}&export=pdf#toolbar=0&navpanes=0&view=Fit" style="width:100%; height:920px; border:none; display:block; background:#fff;"></iframe>
+  </div>
+
+  <!-- โหมดหน้ากระดาษ A4 HTML (จัดหน้าและพิมพ์) -->
+  <div id="announcement-html-stage">
+  <!-- แผ่นที่ 1: หน้าประกาศทางการ (รูปแบบหนังสือราชการ ตราครุฑ ตามไฟล์ Word) -->
+  <div class="word-page-container">
+    <div class="word-page-label no-print">
+      <span>แผ่นที่ 1: ประกาศราชการ (ตราครุฑ)</span>
+    </div>
+    <div class="word-page a4-portrait" id="announcement-page-1"
+         style="padding-top: {{ setting.announcement_margin_top_mm|default:25 }}mm;
+                padding-bottom: {{ setting.announcement_margin_bottom_mm|default:25 }}mm;
+                padding-left: {{ setting.announcement_margin_left_mm|default:25 }}mm;
+                padding-right: {{ setting.announcement_margin_right_mm|default:25 }}mm;
+                --ann-compact-h-mm: max(6.0mm, calc({{ setting.announcement_font_size_body|default:14.5 }} * 0.44 * 1mm));
+                --ann-line-h-mm: calc({{ setting.announcement_font_size_body|default:14.5 }} * 0.44 * {{ setting.announcement_line_spacing|default:1.85 }} * 1mm);
+                --ann-para-gap-mm: {{ setting.announcement_paragraph_spacing_mm|default_if_none:4.0 }}mm;
+                --ann-indent-mm: {{ setting.announcement_indent_mm|default:25.0 }}mm;">
+      
+      <!-- ตราครุฑตรงกลาง ขนาดมาตรฐานราชการ/Word (~3 ซม.) -->
+      <div class="text-center">
+        {% if setting.logo_garuda %}
+          <img src="{{ setting.logo_garuda.url }}" alt="ตราครุฑ" class="word-garuda-img"
+               style="height: {{ setting.announcement_garuda_height_mm|default:30.0 }}mm; max-height: {{ setting.announcement_garuda_height_mm|default:30.0 }}mm;">
+        {% else %}
+          <img src="/static/img/garuda.png" alt="ตราครุฑ" class="word-garuda-img"
+               style="height: {{ setting.announcement_garuda_height_mm|default:30.0 }}mm; max-height: {{ setting.announcement_garuda_height_mm|default:30.0 }}mm;"
+               onerror="this.style.display='none'">
+        {% endif %}
+        <div class="word-doc-title-1" style="font-size: {{ setting.announcement_font_size_title1|default:17.0 }}pt;">ประกาศ{{ announcement_school_name_display }}</div>
+        <div class="word-doc-title-2" style="font-size: {{ setting.announcement_font_size_title2|default:15.0 }}pt;">{{ announcement_title_display }} ค่าย 2 ปีการศึกษา {{ year }}</div>
+        <div class="word-doc-title-3" style="font-size: {{ setting.announcement_font_size_title3|default:14.0 }}pt;">{{ announcement_center_name_display }}</div>
+        <div class="word-doc-divider"><span class="word-doc-divider-line"></span></div>
+      </div>
+
+      <div class="word-body-content"
+           style="font-size: {{ setting.announcement_font_size_body|default:14.5 }}pt;
+                  line-height: var(--ann-line-h-mm);">
+        <!-- ย่อหน้าที่ 1: ตามที่... (ชิดซ้ายปกติ ตัดบรรทัดตรงกับไฟล์ PDF 100%) -->
+        <div class="word-paragraph-lines" aria-label="{{ announcement_body_p1_display }}">
+          {% for ln in p1_lines %}
+            <div class="word-body-line word-justified-line" style="padding-left: {{ ln.indent_mm }}mm;{% if ln.is_sub_para_start %} margin-top: var(--ann-para-gap-mm, 4mm);{% endif %}">{{ ln.text }}</div>
+          {% empty %}
+            <p class="word-paragraph" style="text-indent: {{ setting.announcement_indent_mm|default:25.0 }}mm;">{{ announcement_body_p1_display }}</p>
+          {% endfor %}
+        </div>
+
+        <!-- ย่อหน้าที่ 2: บัดนี้... (ชิดซ้ายปกติ ตัดบรรทัดตรงกับไฟล์ PDF 100%) -->
+        <div class="word-paragraph-lines mt-pdf-p2" aria-label="{{ announcement_body_p2_display }}">
+          {% for ln in p2_lines %}
+            <div class="word-body-line word-justified-line" style="padding-left: {{ ln.indent_mm }}mm;{% if ln.is_sub_para_start %} margin-top: var(--ann-para-gap-mm, 4mm);{% endif %}">{{ ln.text }}</div>
+          {% empty %}
+            <p class="word-paragraph" style="text-indent: {{ setting.announcement_indent_mm|default:25.0 }}mm;">{{ announcement_body_p2_display }}</p>
+          {% endfor %}
+        </div>
+
+        <!-- วันที่ในประกาศ (ขอบซ้ายตรงกับคำว่า "ประกาศ..." ด้านบน และห่างจากเนื้อหา 1.5 บรรทัด ตามแบบสารบรรณ) -->
+        <div class="word-date-line" style="padding-left: {{ date_indent_mm }}mm;">
+          {{ announcement_date_display }}
+        </div>
+
+        <!-- ลายเซ็นผู้อำนวยการ (จัดตำแหน่งตามแบบสารบรรณ ตรงกับไฟล์ PDF 1:1) -->
+        <div class="word-signature-block" style="width: {{ sig_box_w_mm }}mm; margin-left: {{ sig_left_from_margin_mm }}mm;">
+          <div class="word-signature-space"></div>
+          <div class="word-signature-name" style="font-size: {{ setting.announcement_font_size_director_name|default:14.5 }}pt;">({{ announcement_director_name_display }})</div>
+          {% for pl in director_position_lines %}
+            <div class="word-signature-pos" style="font-size: {{ setting.announcement_font_size_director_pos|default:13.0 }}pt;">{{ pl }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- แผ่นที่ 2: บัญชีรายชื่อแนบท้ายประกาศ (ตามไฟล์ Excel/Word พร้อม 4 โลโก้) -->
+  <div class="word-page-container">
+    <div class="word-page-label no-print">
+      <span>แผ่นที่ 2: บัญชีรายชื่อแนบท้ายประกาศ (4 ตราสัญลักษณ์)</span>
+    </div>
+    <div class="word-page a4-portrait" id="announcement-page-2"
+         style="padding-top: {{ setting.announcement_margin_top_mm|default:25 }}mm;
+                padding-bottom: {{ setting.announcement_margin_bottom_mm|default:25 }}mm;
+                padding-left: {{ setting.announcement_margin_left_mm|default:25 }}mm;
+                padding-right: {{ setting.announcement_margin_right_mm|default:25 }}mm;">
+      
+      <!-- ตราสัญลักษณ์ 4 รูปด้านบน (โรงเรียนเทพศิรินทร์, สพฐ., สอวน., ศูนย์อบรม) -->
+      <div class="text-center">
+        <div class="word-logos-row">
+          {% if setting.logo_school %}<img src="{{ setting.logo_school.url }}" alt="ตราโรงเรียน" class="word-header-logo">{% endif %}
+          {% if setting.logo_obec %}<img src="{{ setting.logo_obec.url }}" alt="รูปสพฐ." class="word-header-logo">{% endif %}
+          {% if setting.logo_posn %}<img src="{{ setting.logo_posn.url }}" alt="ตรา สอวน." class="word-header-logo">{% endif %}
+          {% if setting.logo_center %}<img src="{{ setting.logo_center.url }}" alt="ตราศูนย์อบรม" class="word-header-logo">{% endif %}
+        </div>
+        <div class="word-list-title-1" style="font-size: {{ setting.announcement_font_size_list_title1|default:14.0 }}pt;">{{ announcement_list_title_display }}</div>
+        <div class="word-list-title-2" style="font-size: {{ setting.announcement_font_size_list_title2|default:12.0 }}pt;">{{ announcement_center_name_display }}</div>
+      </div>
+
+      <!-- ตารางรายชื่อนักเรียน สไตล์ Word Table Grid พร้อมขนาดความกว้างแต่ละคอลัมน์ที่ปรับได้ -->
+      <div class="table-responsive" style="overflow-x: visible !important;">
+        <table class="word-table" id="announcement-list-table"
+               data-base-font-pt="{{ setting.announcement_font_size_table|default:10.0 }}"
+               style="font-size: {{ setting.announcement_font_size_table|default:10.0 }}pt;">
+          <thead>
+            <tr>
+              <th style="width: {{ col_w_pct.no }}%;">ลำดับ</th>
+              <th style="width: {{ col_w_pct.camp2 }}%;">เลขประจำตัวค่าย 2</th>
+              <th style="width: {{ col_w_pct.rights }}%;">เลขประจำตัวค่าย 1</th>
+              <th style="width: {{ col_w_pct.name }}%;">ชื่อ นามสกุล</th>
+              <th style="width: {{ col_w_pct.school }}%;">โรงเรียน</th>
+              <th style="width: {{ col_w_pct.grade }}%;">ระดับ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr {% if forloop.counter|divisibleby:2 %}class="word-table-even"{% endif %}>
+              <td class="text-center col-no">{{ forloop.counter }}</td>
+              <td class="text-center fw-bold col-camp2">{{ r.camp2_code }}</td>
+              <td class="text-center col-rights">{{ r.rights_code }}</td>
+              <td class="text-start fw-bold col-name">{{ r.user.get_full_name }}</td>
+              <td class="text-start col-school">{{ r.user.school_name }}</td>
+              <td class="text-center col-grade">{{ r.grade }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">ยังไม่มีรายชื่อผู้ผ่านการคัดเลือก</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if announcement_note_display %}
+      <div class="word-table-note">
+        <strong>หมายเหตุ:</strong> {{ announcement_note_display|linebreaksbr }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  </div><!-- /#announcement-html-stage -->
+</div>
+  </div><!-- /#pane-document -->
+
+  {% if user.is_admin_role %}
+  <!-- TAB 2: อนุมัติประกาศผล & กำหนดค่าเอกสารประกาศผล (ย้ายมารวมไว้ในหน้าการประกาศผล) -->
+  <div class="tab-pane fade no-print {% if tab == 'qualification' %}show active{% endif %}" id="pane-qualification" role="tabpanel">
+    <div class="card mb-3 shadow-sm">
+      <div class="card-body py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <form method="get" class="d-flex align-items-center gap-2 mb-0">
+          <input type="hidden" name="tab" value="qualification">
+          <label class="small fw-semibold text-muted mb-0">เลือกปีการศึกษา:</label>
+          <select name="year" class="form-select form-select-sm fw-bold" style="width:auto;" onchange="this.form.submit()">
+            {% for y in academic_year_choices %}
+              <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <a href="{% url 'food:score_categories' %}?year={{ year }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-calendar3 me-1"></i>กำหนดปีการศึกษา / หัวข้อคะแนน
+        </a>
+      </div>
+    </div>
+
+    <!-- ส่วนบนสุด: อนุมัติประกาศผลคะแนน & ผลการคัดเลือกเข้าค่าย 2 (สีแดงก่อนอนุมัติ / สีเขียวหลังอนุมัติ) -->
+    <div class="card mb-3 {% if is_approved %}border-success{% else %}border-danger{% endif %} shadow-sm" id="approval-status-card">
+      <div class="card-header {% if is_approved %}bg-success bg-opacity-10 text-success border-success{% else %}bg-danger bg-opacity-10 text-danger border-danger{% endif %} d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-bold fs-6"><i class="bi bi-patch-check-fill me-2 {% if is_approved %}text-success{% else %}text-danger{% endif %}"></i>อนุมัติประกาศผลคะแนน &amp; ผลการคัดเลือกเข้าค่าย 2 (ปี {{ year }})</span>
+        {% if is_approved %}
+          <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>สถานะ: อนุมัติประกาศผลแล้ว</span>
+        {% else %}
+          <span class="badge bg-danger fs-6"><i class="bi bi-hourglass-split me-1"></i>สถานะ: ยังไม่อนุมัติ</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-3 p-md-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+          <div class="flex-grow-1">
+            {% if is_approved %}
+              <div class="alert alert-success d-flex align-items-center mb-0 py-2 px-3">
+                <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
+                <div>
+                  <div class="fw-bold text-success fs-6">
+                    อนุมัติประกาศผลแล้วเมื่อ {{ approval.approved_at|datetime_thai }}{% if approval.approved_by %} โดย {{ approval.approved_by.get_full_name|default:approval.approved_by.camp1_code }}{% endif %}
+                  </div>
+                  <div class="small text-dark mt-1">
+                    ผู้ผ่านการคัดเลือกเข้าค่าย 2: <strong class="text-success fs-6">{{ approval.max_qualified_count }} คน</strong>
+                    · นักเรียนที่ผ่านการคัดเลือกทุกคนได้รับรหัสค่าย 2 ในระบบตามประกาศเรียบร้อยแล้ว
+                    · <strong class="text-success"><i class="bi bi-lock-fill me-1"></i>ระบบล็อกการแก้ไขเวลาเรียน คะแนน เกณฑ์คัดเลือก และรหัสค่าย 2 ของปี {{ year }} แล้ว</strong>
+                    (หากต้องการยกเลิก ต้องใส่รหัสผ่านปัจจุบันของ Admin)
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              <div class="alert alert-danger d-flex align-items-center mb-0 py-2 px-3">
+                <i class="bi bi-exclamation-triangle-fill fs-3 text-danger me-3"></i>
+                <div>
+                  <div class="fw-bold text-danger fs-6">
+                    ยังไม่อนุมัติประกาศผล
+                    {% info_tip "นักเรียนทุกคน (ทั้งนักเรียนปัจจุบันและนักเรียนที่ใช้สิทธิ์) จะยังไม่เห็นคะแนนและผลการคัดเลือกเข้าค่าย 2 ของปีนี้ · เมื่ออนุมัติแล้ว นักเรียนที่ผ่านการคัดเลือกจะได้รับรหัสค่าย 2 ตามประกาศ" %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-start justify-content-lg-end">
+            {% if is_approved %}
+              <button type="button" id="btn-approve-scores" class="btn btn-success btn-lg fw-bold shadow px-4 py-2 btn-approved-locked" disabled>
+                <i class="bi bi-check-circle-fill me-2"></i>อนุมัติประกาศผลแล้ว (ปี {{ year }})
+              </button>
+              <button type="button" id="btn-unapprove-scores" class="btn btn-outline-danger btn-sm py-2" data-bs-toggle="modal" data-bs-target="#unapproveScoresPasswordModal" title="ยกเลิกประกาศผล (ต้องใส่รหัสผ่านปัจจุบันของ Admin)">
+                <i class="bi bi-unlock-fill me-1"></i>ยกเลิกประกาศผล
+              </button>
+            {% else %}
+              <form method="post" onsubmit="return confirm('ยืนยันอนุมัติประกาศผลคะแนนปีการศึกษา {{ year }}? เมื่ออนุมัติแล้วนักเรียนที่ผ่านการคัดเลือกจะได้รับรหัสค่าย 2 ตามประกาศผลทันที และระบบจะล็อกการแก้ไขผลทั้งหมดของปีนี้');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="approve_scores">
+                <input type="hidden" name="tab" value="qualification">
+                <input type="hidden" name="year" value="{{ year }}">
+                <button type="submit" id="btn-approve-scores" class="btn btn-danger btn-lg fw-bold shadow px-4 py-2">
+                  <i class="bi bi-megaphone-fill me-2"></i>อนุมัติประกาศผลคะแนน &amp; ผลการคัดเลือกเข้าค่าย 2 (ปี {{ year }})
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ส่วนกำหนดค่าเอกสารประกาศผล & ผู้ผ่านการคัดเลือก พร้อมตัวอย่าง PDF จริง 2 หน้า -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span><i class="bi bi-file-earmark-text me-2 text-primary"></i>กำหนดค่าเอกสารประกาศผล &amp; ผู้ผ่านการคัดเลือก (ปี {{ year }} · เอกสาร 2 หน้า)</span>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{% url 'food:score_announcement' %}?year={{ year }}&only=passed&export=pdf" target="_blank" class="btn btn-outline-danger btn-sm fw-semibold">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>เปิด PDF ประกาศผล (2 หน้า)
+          </a>
+          <button type="button" class="btn btn-warning btn-sm text-dark fw-semibold" onclick="var b=document.getElementById('tab-doc-btn');if(b)b.click();">
+            <i class="bi bi-megaphone me-1"></i>ดูเอกสารประกาศผล
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_qualification">
+          <input type="hidden" name="tab" value="qualification">
+          <input type="hidden" name="year" value="{{ year }}">
+          {% if not is_approved %}
+          <input type="hidden" name="passing_score" value="0">
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small mb-1">
+                จำนวนผู้ที่ผ่านการคัดเลือก (คน)
+                {% info_tip "ค่าเริ่มต้น: 30 คน (ระบบจะคัดเลือกผู้ที่ได้คะแนนรวมสูงสุดตามลำดับจำนวนคนที่ระบุ)" %}
+              </label>
+              <div class="input-group input-group-sm">
+                <input type="number" min="0" name="max_qualified_count" class="form-control fw-bold text-primary" value="{% if is_approved %}{{ approval.max_qualified_count }}{% else %}{{ setting.max_qualified_count }}{% endif %}" placeholder="30" {% if is_approved %}disabled{% endif %}>
+                <span class="input-group-text fw-semibold">คน</span>
+              </div>
+              {% if is_approved %}
+              <div class="form-text text-warning small"><i class="bi bi-lock-fill me-1"></i>ล็อกจำนวนผู้ผ่านการคัดเลือกหลังอนุมัติประกาศผล (ข้อความและรูปแบบหน้า A4 ยังแก้ไขได้)</div>
+              {% endif %}
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small mb-1">ชื่อโรงเรียนที่ออกประกาศ (แผ่นที่ 1)</label>
+              <input type="text" name="announcement_school_name" class="form-control form-control-sm" value="{{ setting.announcement_school_name }}" placeholder="โรงเรียนเทพศิรินทร์">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small mb-1">หัวข้อประกาศ (เรื่อง — แผ่นที่ 1)</label>
+              <input type="text" name="announcement_title" class="form-control form-control-sm" value="{{ setting.announcement_title }}" placeholder="ประกาศผลการคัดเลือกเข้าค่ายโอลิมปิกวิชาการ (สอวน.)">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small mb-1">ชื่อศูนย์อบรม (แผ่นที่ 1 &amp; แผ่นที่ 2)</label>
+              <input type="text" name="announcement_center_name" class="form-control form-control-sm" value="{{ setting.announcement_center_name }}" placeholder="ศูนย์โรงเรียนเทพศิรินทร์-สถาบันเทคโนโลยีพระจอมเกล้าเจ้าคุณทหาร ลาดกระบัง">
+            </div>
+
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold small mb-0">ข้อความย่อหน้าที่ 1 (ตามที่... — แผ่นที่ 1)</label>
+                <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_p1 }}" onclick="document.getElementById('qual_body_p1_input').value=this.dataset.default;" title="คืนค่าข้อความเริ่มต้น">
+                  <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                </button>
+              </div>
+              <textarea name="announcement_body_p1" id="qual_body_p1_input" class="form-control form-control-sm" rows="3" placeholder="{{ default_announcement_p1 }}">{{ edit_announcement_body_p1 }}</textarea>
+              <div class="form-text small text-muted">แสดงข้อความเดิมให้ปรับแก้ไขได้โดยตรง (หรือกดคืนค่าข้อความเดิม)</div>
+            </div>
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold small mb-0">ข้อความย่อหน้าที่ 2 (บัดนี้... — แผ่นที่ 1)</label>
+                <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_p2_template }}" onclick="document.getElementById('qual_body_p2_input').value=this.dataset.default;" title="คืนค่าข้อความเริ่มต้น">
+                  <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                </button>
+              </div>
+              <textarea name="announcement_body_p2" id="qual_body_p2_input" class="form-control form-control-sm" rows="3" placeholder="{{ default_announcement_p2 }}">{{ edit_announcement_body_p2 }}</textarea>
+              <div class="form-text small text-muted">รองรับตัวแปร <code class="text-primary">{count}</code> สำหรับแทรกจำนวนคนอัตโนมัติ เช่น 30 คน</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small mb-1">ชื่อผู้อำนวยการ / ผู้ลงนาม (แผ่นที่ 1)</label>
+              <input type="text" name="announcement_director_name" class="form-control form-control-sm" value="{{ setting.announcement_director_name|default:'นายวิธาน พรหมสินธุศักดิ์' }}" placeholder="นายวิธาน พรหมสินธุศักดิ์">
+            </div>
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold small mb-0">วันที่ในประกาศ (แผ่นที่ 1)</label>
+                <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_date }}" onclick="document.getElementById('qual_date_text_input').value=this.dataset.default;" title="คืนค่าวันที่ปัจจุบัน">
+                  <i class="bi bi-arrow-counterclockwise"></i> คืนค่าวันที่ปัจจุบัน
+                </button>
+              </div>
+              <input type="text" name="announcement_date_text" id="qual_date_text_input" class="form-control form-control-sm" value="{{ edit_announcement_date_text }}" placeholder="{{ default_announcement_date }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold small mb-1">ตำแหน่งผู้อำนวยการ / ตำแหน่งผู้ลงนาม (แผ่นที่ 1)</label>
+              <textarea name="announcement_director_position" class="form-control form-control-sm" rows="2" placeholder="ผู้อำนวยการโรงเรียนเทพศิรินทร์&#10;ประธานศูนย์โรงเรียนเทพศิรินทร์ สอวน.วิชาคอมพิวเตอร์ ค่าย 1">{{ edit_announcement_director_position }}</textarea>
+            </div>
+            <div class="col-md-6">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label fw-semibold small mb-0">หัวข้อรายชื่อแนบท้ายประกาศ (แผ่นที่ 2)</label>
+                <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" data-default="{{ default_announcement_list_title }}" onclick="document.getElementById('qual_list_title_input').value=this.dataset.default;" title="คืนค่าหัวข้อเริ่มต้น">
+                  <i class="bi bi-arrow-counterclockwise"></i> คืนค่าข้อความเดิม
+                </button>
+              </div>
+              <input type="text" name="announcement_list_title" id="qual_list_title_input" class="form-control form-control-sm" value="{{ edit_announcement_list_title }}" placeholder="{{ default_announcement_list_title }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small mb-1">หมายเหตุท้ายเอกสารประกาศผล (แผ่นที่ 2 — ถ้ามี)</label>
+              <textarea name="announcement_note" class="form-control form-control-sm" rows="2">{{ setting.announcement_note }}</textarea>
+            </div>
+
+            <!-- กั้นหน้า-กั้นหลัง, ขนาดตัวอักษร, และความกว้างช่องตาราง (ตรงกับ PDF 100%) -->
+            <div class="col-12 pt-2 border-top">
+              <div class="fw-bold text-primary small mb-2">
+                <i class="bi bi-layout-text-window me-1"></i>รูปแบบจัดหน้า A4 (กั้นหน้า-กั้นหลัง / ขนาดตัวอักษร / ความกว้างช่องตาราง — ตรงกับ PDF ทั้ง 2 หน้า)
+              </div>
+              <div class="row g-2">
+                <div class="col-6 col-md-3">
+                  <label class="form-label small fw-semibold mb-1">กั้นหน้า (ขอบซ้าย)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="60" name="announcement_margin_left_mm" value="{{ setting.announcement_margin_left_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small fw-semibold mb-1">กั้นหลัง (ขอบขวา)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="60" name="announcement_margin_right_mm" value="{{ setting.announcement_margin_right_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small fw-semibold mb-1">ขอบบน (Top)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="60" name="announcement_margin_top_mm" value="{{ setting.announcement_margin_top_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small fw-semibold mb-1">ขอบล่าง (Bottom)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="60" name="announcement_margin_bottom_mm" value="{{ setting.announcement_margin_bottom_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 1 (ประกาศโรงเรียน...)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="28" name="announcement_font_size_title1" value="{{ setting.announcement_font_size_title1|default:17.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 2 (เรื่องประกาศผล...)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="26" name="announcement_font_size_title2" value="{{ setting.announcement_font_size_title2|default:15.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">หัวข้อบรรทัด 3 (ชื่อศูนย์อบรม)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="24" name="announcement_font_size_title3" value="{{ setting.announcement_font_size_title3|default:14.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">เนื้อหาประกาศ &amp; วันที่ (แผ่นที่ 1)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="22" name="announcement_font_size_body" value="{{ setting.announcement_font_size_body|default:14.5 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ชื่อผู้ลงนาม (ผู้อำนวยการ)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="9" max="24" name="announcement_font_size_director_name" value="{{ setting.announcement_font_size_director_name|default:14.5 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งผู้ลงนาม</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="8" max="22" name="announcement_font_size_director_pos" value="{{ setting.announcement_font_size_director_pos|default:13.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">หัวข้อรายชื่อแนบท้าย (แผ่นที่ 2)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="9" max="24" name="announcement_font_size_list_title1" value="{{ setting.announcement_font_size_list_title1|default:14.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ชื่อศูนย์อบรม (แผ่นที่ 2)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="8" max="22" name="announcement_font_size_list_title2" value="{{ setting.announcement_font_size_list_title2|default:12.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ตารางรายชื่อนักเรียน (แผ่นที่ 2)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="8" max="16" name="announcement_font_size_table" value="{{ setting.announcement_font_size_table|default:10.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">pt</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ระยะห่างบรรทัดเนื้อหา</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.05" min="1.0" max="3.0" name="announcement_line_spacing" value="{{ setting.announcement_line_spacing|default:1.85 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">เท่า</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ระยะห่างระหว่างย่อหน้า</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="0" max="30" name="announcement_paragraph_spacing_mm" value="{{ setting.announcement_paragraph_spacing_mm|default_if_none:4.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ระยะย่อหน้าเนื้อหา</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="60" name="announcement_indent_mm" value="{{ setting.announcement_indent_mm|default:25.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-6 col-md-3 mt-2">
+                  <label class="form-label small fw-semibold mb-1">ความสูงตราครุฑ (แผ่นที่ 1)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="12" max="50" name="announcement_garuda_height_mm" value="{{ setting.announcement_garuda_height_mm|default:30.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">1. ลำดับ</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="40" name="announcement_col_w_no" value="{{ setting.announcement_col_w_no|default:14.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">2. เลขค่าย 2</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="60" name="announcement_col_w_camp2" value="{{ setting.announcement_col_w_camp2|default:24.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">3. เลขค่าย 1</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="10" max="60" name="announcement_col_w_rights" value="{{ setting.announcement_col_w_rights|default:24.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">4. ชื่อ นามสกุล</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="20" max="100" name="announcement_col_w_name" value="{{ setting.announcement_col_w_name|default:50.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">5. โรงเรียน</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="20" max="100" name="announcement_col_w_school" value="{{ setting.announcement_col_w_school|default:54.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+                <div class="col-4 col-md-2 mt-2">
+                  <label class="form-label small fw-semibold mb-1 text-truncate d-block">6. ระดับ</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" step="0.5" min="5" max="40" name="announcement_col_w_grade" value="{{ setting.announcement_col_w_grade|default:14.0 }}" class="form-control text-center fw-bold">
+                    <span class="input-group-text">มม.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top flex-wrap gap-2">
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-warning text-dark btn-sm" onclick="var b=document.getElementById('tab-doc-btn');if(b)b.click();">
+                <i class="bi bi-megaphone me-1"></i>ดูเอกสารประกาศผล
+              </button>
+              <button type="button" class="btn btn-outline-danger btn-sm fw-semibold" data-bs-toggle="collapse" data-bs-target="#scAnnouncementPdfPreviewCollapse" onclick="var f=document.getElementById('sc-ann-pdf-iframe');if(f&&f.dataset.src)f.src=f.dataset.src.replace('#','&_ts='+Date.now()+'#');">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i>แสดงตัวอย่าง PDF จริง (2 หน้า)
+              </button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+              <i class="bi bi-check2-circle me-1"></i>บันทึกการตั้งค่าเอกสารประกาศผล &amp; เกณฑ์คัดเลือก
+            </button>
+          </div>
+        </form>
+
+        <!-- ตัวอย่างไฟล์ PDF จริง 2 หน้าในหน้าตั้งค่า -->
+        <div class="collapse mt-3" id="scAnnouncementPdfPreviewCollapse">
+          <div class="border rounded overflow-hidden shadow-sm" style="background:#525659;">
+            <div class="bg-dark text-white py-2 px-3 d-flex justify-content-between align-items-center small">
+              <span><i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>ตัวอย่างเอกสารประกาศผล PDF จริง (2 หน้า: แผ่นที่ 1 ประกาศราชการ + แผ่นที่ 2 รายชื่อแนบท้าย)</span>
+              <a href="{% url 'food:score_announcement' %}?year={{ year }}&only=passed&export=pdf" target="_blank" class="text-white text-decoration-none">
+                <i class="bi bi-box-arrow-up-right me-1"></i>เปิดในแท็บใหม่
+              </a>
+            </div>
+            <iframe id="sc-ann-pdf-iframe" data-src="{% url 'food:score_announcement' %}?year={{ year }}&only=passed&export=pdf#toolbar=0&navpanes=0&view=FitH" style="width:100%; height:840px; border:none; display:block; background:#fff;"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /#pane-qualification -->
+  {% endif %}
+</div><!-- /#announcementTabContent -->
+
+<!-- Modal: เลือกรายบุคคล / กลุ่ม เพื่อดาวน์โหลดเกียรติบัตรแยกไฟล์ (.zip) จากหน้าประกาศผล (ไม่แสดงตอนพิมพ์) -->
+<div class="modal fade no-print" id="announcementCertZipModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" action="{% url 'food:certificates_export_zip' %}" id="announcement-cert-zip-form">
+        {% csrf_token %}
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="scope" value="all">
+        <input type="hidden" name="select_mode" value="selected">
+        <input type="hidden" name="has_group_toggles" value="1">
+        <input type="hidden" name="return_to" value="announcement">
+        <div class="modal-header py-2">
+          <h6 class="modal-title fw-bold mb-0">
+            <i class="bi bi-file-earmark-zip-fill text-primary me-2"></i>ดาวน์โหลดเกียรติบัตรแยกไฟล์รายบุคคล (.zip) — ปีการศึกษา {{ year }}
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="announcement-cert-download-card">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
+            <div class="small fw-semibold text-dark">
+              <i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>ดาวน์โหลด PDF รวมเล่มแยกตามกลุ่ม:
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+              <a href="{% url 'food:certificates_export_all' %}?year={{ year }}&return_to=announcement" target="_blank" class="btn btn-outline-success btn-sm py-0 px-2">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF นักเรียน ({{ cert_eligible_count }})
+              </a>
+              <a href="{% url 'food:certificate_recipients_export_pdf' %}?year={{ year }}&type=lecturer&return_to=announcement" target="_blank" class="btn btn-outline-info text-dark btn-sm py-0 px-2">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF วิทยากร ({{ cert_lecturer_count }})
+              </a>
+              <a href="{% url 'food:certificate_recipients_export_pdf' %}?year={{ year }}&type=committee&return_to=announcement" target="_blank" class="btn btn-outline-primary btn-sm py-0 px-2">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF คณะกรรมการ ({{ cert_committee_count }})
+              </a>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div class="small text-muted">
+              เลือกแล้ว <strong id="ann-cert-selected-total" class="text-primary">{{ cert_total_count }}</strong> คน
+              (สร้าง PDF แยก 1 คนต่อ 1 ไฟล์ จัดเก็บแยกโฟลเดอร์ตามกลุ่ม)
+            </div>
+            <div class="btn-group btn-group-sm">
+              <button type="button" class="btn btn-outline-primary" id="btn-ann-cert-all">เลือกทั้งหมด</button>
+              <button type="button" class="btn btn-outline-secondary" id="btn-ann-cert-none">ยกเลิกทั้งหมด</button>
+            </div>
+          </div>
+
+          <!-- กลุ่ม 1: นักเรียน -->
+          <div class="card mb-2 border-success border-opacity-50">
+            <div class="card-header py-2 bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
+              <label class="form-check-label d-flex align-items-center gap-2 fw-bold small text-success mb-0" style="cursor:pointer;">
+                <input class="form-check-input m-0 ann-grp-master" type="checkbox" name="include_students" value="1"
+                       id="ann-grp-students" data-group="students" {% if cert_eligible_count > 0 %}checked{% endif %}>
+                <span>1. นักเรียนที่ได้รับเกียรติบัตร ({{ cert_eligible_count }} คน)</span>
+              </label>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success"><span class="ann-grp-count" data-group="students">{{ cert_eligible_count }}</span>/{{ cert_eligible_count }}</span>
+                {% if cert_eligible_students %}
+                <button type="button" class="btn btn-outline-success btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#ann-list-students">รายชื่อ</button>
+                {% endif %}
+              </div>
+            </div>
+            {% if cert_eligible_students %}
+            <div id="ann-list-students" class="collapse show">
+              <div class="list-group list-group-flush" style="max-height: 190px; overflow-y: auto;">
+                {% for s in cert_eligible_students %}
+                <label class="list-group-item list-group-item-action py-1 px-3 d-flex align-items-center gap-2 small" style="cursor:pointer;">
+                  <input class="form-check-input m-0 ann-chk-item" type="checkbox" name="student_ids" value="{{ s.user.pk }}" data-group="students" checked>
+                  <span class="badge bg-light text-dark border code">{{ s.user.camp1_code }}</span>
+                  <span class="fw-semibold">{{ s.user.get_full_name }}</span>
+                  <span class="text-muted ms-auto">{{ s.user.school_name }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- กลุ่ม 2: วิทยากร -->
+          <div class="card mb-2 border-info border-opacity-50">
+            <div class="card-header py-2 bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
+              <label class="form-check-label d-flex align-items-center gap-2 fw-bold small text-dark mb-0" style="cursor:pointer;">
+                <input class="form-check-input m-0 ann-grp-master" type="checkbox" name="include_lecturer" value="1"
+                       id="ann-grp-lecturer" data-group="lecturer" {% if cert_lecturer_count > 0 %}checked{% endif %}>
+                <span>2. รายชื่อวิทยากร ({{ cert_lecturer_count }} คน)</span>
+              </label>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-info text-dark"><span class="ann-grp-count" data-group="lecturer">{{ cert_lecturer_count }}</span>/{{ cert_lecturer_count }}</span>
+                {% if cert_lecturers %}
+                <button type="button" class="btn btn-outline-info text-dark btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#ann-list-lecturer">รายชื่อ</button>
+                {% endif %}
+              </div>
+            </div>
+            {% if cert_lecturers %}
+            <div id="ann-list-lecturer" class="collapse show">
+              <div class="list-group list-group-flush" style="max-height: 190px; overflow-y: auto;">
+                {% for r in cert_lecturers %}
+                <label class="list-group-item list-group-item-action py-1 px-3 d-flex align-items-center gap-2 small" style="cursor:pointer;">
+                  <input class="form-check-input m-0 ann-chk-item" type="checkbox" name="recipient_ids" value="{{ r.pk }}" data-group="lecturer" checked>
+                  <span class="fw-semibold">{{ r.full_name }}</span>
+                  <span class="text-muted ms-auto">{{ r.school_province }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- กลุ่ม 3: คณะกรรมการ -->
+          <div class="card mb-0 border-primary border-opacity-50">
+            <div class="card-header py-2 bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+              <label class="form-check-label d-flex align-items-center gap-2 fw-bold small text-primary mb-0" style="cursor:pointer;">
+                <input class="form-check-input m-0 ann-grp-master" type="checkbox" name="include_committee" value="1"
+                       id="ann-grp-committee" data-group="committee" {% if cert_committee_count > 0 %}checked{% endif %}>
+                <span>3. รายชื่อคณะกรรมการ ({{ cert_committee_count }} คน)</span>
+              </label>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary"><span class="ann-grp-count" data-group="committee">{{ cert_committee_count }}</span>/{{ cert_committee_count }}</span>
+                {% if cert_committees %}
+                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#ann-list-committee">รายชื่อ</button>
+                {% endif %}
+              </div>
+            </div>
+            {% if cert_committees %}
+            <div id="ann-list-committee" class="collapse show">
+              <div class="list-group list-group-flush" style="max-height: 190px; overflow-y: auto;">
+                {% for r in cert_committees %}
+                <label class="list-group-item list-group-item-action py-1 px-3 d-flex align-items-center gap-2 small" style="cursor:pointer;">
+                  <input class="form-check-input m-0 ann-chk-item" type="checkbox" name="recipient_ids" value="{{ r.pk }}" data-group="committee" checked>
+                  <span class="fw-semibold">{{ r.full_name }}</span>
+                  <span class="text-muted ms-auto">{{ r.school_province }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="modal-footer py-2 d-flex justify-content-between">
+          <a href="{% url 'food:admin_certificates' %}?year={{ year }}&tab=students" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-award me-1"></i>ไปหน้าจัดการเกียรติบัตร
+          </a>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary btn-sm fw-semibold" id="btn-ann-cert-zip-submit" {% if cert_total_count == 0 %}disabled{% endif %}>
+              <i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ .zip
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if user.is_admin_role %}
+<!-- Modal ยืนยันการยกเลิกประกาศผลด้วยรหัสผ่านปัจจุบันของ Admin -->
+<div class="modal fade no-print" id="unapproveScoresPasswordModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger">
+      <form method="post" id="unapprove-scores-pw-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="unapprove_scores">
+        <input type="hidden" name="tab" value="qualification">
+        <input type="hidden" name="year" value="{{ year }}">
+        <div class="modal-header bg-danger text-white py-2">
+          <h6 class="modal-title fw-bold mb-0"><i class="bi bi-shield-lock-fill me-2"></i>ยืนยันยกเลิกประกาศผล (ปี {{ year }})</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning small mb-3">
+            <strong>คำเตือน:</strong> การยกเลิกประกาศผลปีการศึกษา {{ year }} จะทำให้:
+            <ul class="mb-0 mt-1 ps-3">
+              <li>นักเรียนจะยังไม่เห็นผลคะแนนและสถานะการคัดเลือกเข้าค่าย 2 จนกว่าจะอนุมัติใหม่อีกครั้ง</li>
+              <li>รหัสค่าย 2 ที่ระบบกำหนดอัตโนมัติให้ผู้ผ่านคัดเลือก (ที่ไม่ได้กำหนดเอง) จะถูกนำออก</li>
+              <li>ระบบจะปลดล็อกการแก้ไขเวลาเรียน คะแนน เกณฑ์คัดเลือก และวันที่อบรม</li>
+            </ul>
+          </div>
+          <label class="form-label small fw-bold" for="unapprove-pw-input">กรุณากรอกรหัสผ่านปัจจุบันของ Admin ({{ request.user.get_full_name|default:request.user.camp1_code }}) เพื่อยืนยัน</label>
+          <div class="input-group">
+            <input type="password" name="confirm_password" id="unapprove-pw-input" class="form-control" required autocomplete="current-password" placeholder="รหัสผ่านปัจจุบันของคุณ...">
+            <button type="button" class="btn btn-outline-secondary" id="btn-toggle-unapprove-pw" tabindex="-1" title="แสดง/ซ่อนรหัสผ่าน">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+          <button type="submit" class="btn btn-danger btn-sm fw-semibold">
+            <i class="bi bi-unlock-fill me-1"></i>ยืนยันยกเลิกประกาศผล
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.btn-approved-locked:disabled {
+  opacity: 1 !important;
+  background-color: #198754 !important;
+  border-color: #198754 !important;
+  color: #fff !important;
+  cursor: default;
+}
+@media (max-width: 767.98px) {
+  #sc-ann-pdf-iframe { height: 60vh !important; }
+  #pane-qualification .btn-lg { width: 100%; font-size: 1rem; white-space: normal; }
+}
+/* ========================================================================= */
+/* TH Sarabun New Font (ตรงตาม ReportLab PDF 1:1 เหมือนหน้าเกียรติบัตร) */
+/* ========================================================================= */
+@font-face {
+  font-family: 'THSarabunNew';
+  src: url("{% static 'fonts/THSarabunNew.ttf' %}") format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'THSarabunNew';
+  src: url("{% static 'fonts/THSarabunNew-Bold.ttf' %}") format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+/* ========================================================================= */
+/* CSS สไตล์ Microsoft Word & ReportLab PDF A4 Vertical Sheet Viewer */
+/* ========================================================================= */
+.word-document-viewer {
+  background: #525659; /* สีเทาเข้มแบบโปรแกรม Word / PDF Reader */
+  padding: 24px 12px 48px;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.word-viewer-toolbar {
+  max-width: 210mm;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px 16px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.word-page-container {
+  max-width: 210mm;
+  margin: 0 auto 32px;
+}
+
+.word-page-label {
+  color: #e0e0e0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+/* แผ่นกระดาษ A4 แนวตั้ง ขนาด 210mm x 297mm ตรงตาม PDF 2 หน้าพอดี (1:1) */
+.word-page.a4-portrait {
+  background: #ffffff;
+  color: #000000;
+  width: 210mm;
+  height: 297mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  overflow: hidden;
+  margin: 0 auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+  position: relative;
+}
+
+.word-page.a4-portrait,
+.word-page.a4-portrait * {
+  font-family: 'THSarabunNew', 'TH Sarabun New', 'Sarabun', sans-serif !important;
+}
+
+@media (max-width: 768px) {
+  .word-document-viewer {
+    padding: 10px 4px 20px;
+  }
+  .word-page.a4-portrait {
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 16px 12px !important;
+  }
+  .word-doc-title-1,
+  .word-doc-title-2,
+  .word-doc-title-3,
+  .word-body-line,
+  .word-justified-line,
+  .word-date-line,
+  .word-signature-name,
+  .word-signature-pos,
+  .word-list-title-1,
+  .word-list-title-2 {
+    white-space: normal !important;
+    height: auto !important;
+    line-height: 1.5 !important;
+  }
+  .word-logos-row {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 10px;
+  }
+  .word-page.a4-portrait .table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .word-table {
+    min-width: 560px;
+  }
+}
+
+/* ตราครุฑตรงกลาง ขนาดตามความสูงที่ตั้งค่า (ค่าเริ่มต้น 3.0 ซม.) ตรงกับ PDF 1:1 */
+.word-garuda-img {
+  height: 30mm;
+  max-height: 30mm;
+  max-width: none;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  background: transparent;
+}
+
+/* ตราสัญลักษณ์ 4 รูป แผ่นที่ 2 ขนาด 16×16 มม. ระยะห่างศูนย์กลาง 24 มม. (ห่างกัน 8 มม.) ตรงกับ PDF 1:1 */
+.word-logos-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8mm;
+  height: 16mm;
+  margin-bottom: 3mm;
+}
+.word-header-logo {
+  width: 16mm;
+  height: 16mm;
+  max-width: 16mm;
+  max-height: 16mm;
+  object-fit: contain;
+  background: transparent;
+}
+
+/* ข้อความทุกบรรทัดบนแผ่นที่ 1 ใช้ระยะบรรทัดเท่ากันทั้งหมด (--ann-line-h-mm) ตรงกับ ReportLab PDF 1:1 */
+.word-doc-title-1 {
+  font-size: 17pt;
+  font-weight: bold;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  margin-top: 5mm;
+  margin-bottom: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+.word-doc-title-2 {
+  font-size: 15pt;
+  font-weight: bold;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  margin: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+.word-doc-title-3 {
+  font-size: 14pt;
+  font-weight: bold;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  margin: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+.word-doc-divider {
+  height: var(--ann-line-h-mm, 11.8mm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.word-doc-divider-line {
+  display: block;
+  width: 50mm;
+  border-top: 0.75pt solid #000000;
+  height: 0;
+}
+
+/* เนื้อความประกาศราชการ (ชิดซ้ายปกติ ตัดคำตรงกับ ReportLab PDF 100%) */
+.word-body-content {
+  margin-top: 0;
+}
+
+.word-paragraph-lines {
+  margin: 0;
+}
+
+.word-paragraph-lines.mt-pdf-p2 {
+  margin-top: var(--ann-para-gap-mm, 4mm);
+}
+
+.word-body-line,
+.word-justified-line {
+  position: relative;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  text-align: left;
+  white-space: nowrap;
+  overflow: visible;
+  margin: 0;
+}
+
+.word-paragraph {
+  text-indent: 25mm; /* ย่อหน้า 2.5 ซม. */
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.word-date-line {
+  padding-left: 0;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  text-align: left;
+  white-space: nowrap;
+  margin: 0;
+  margin-top: calc(var(--ann-line-h-mm, 11.8mm) * 0.5); /* เว้น 1 1/2 บรรทัดจากบรรทัดสุดท้ายของเนื้อหา */
+}
+
+/* บล็อกลายเซ็นผู้อำนวยการ จัดวางตามแบบสารบรรณและตรงกับไฟล์ PDF 1:1 (เว้น 3 บรรทัดจากวันที่) */
+.word-signature-block {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  overflow: visible;
+}
+
+.word-signature-space {
+  height: calc(var(--ann-line-h-mm, 11.8mm) * 2); /* เว้น 2 บรรทัดเต็มสำหรับลงลายมือชื่อ (รวมเป็น 3x line_h จากบรรทัดวันที่) */
+  width: 100%;
+}
+
+.word-signature-name {
+  font-size: 14.5pt;
+  font-weight: bold;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  white-space: nowrap;
+  margin: 0;
+}
+
+.word-signature-pos {
+  font-size: 13pt;
+  height: var(--ann-line-h-mm, 11.8mm);
+  line-height: var(--ann-line-h-mm, 11.8mm);
+  white-space: nowrap;
+  margin: 0;
+}
+
+/* ข้อความหัวรายชื่อ (แผ่นที่ 2) ตรงกับ PDF 1:1 */
+.word-list-title-1 {
+  font-size: 14pt;
+  font-weight: bold;
+  height: 5.5mm;
+  line-height: 5.5mm;
+  white-space: nowrap;
+  margin-top: 0;
+  margin-bottom: 0;
+  text-align: center;
+}
+.word-list-title-2 {
+  font-size: 12pt;
+  color: #000;
+  height: 5.5mm;
+  line-height: 5.5mm;
+  white-space: nowrap;
+  margin-bottom: 6.0mm;
+  text-align: center;
+}
+
+/* ตารางรายชื่อแนบท้าย สไตล์ Word Grid (ทุกช่องบรรทัดเดียว ปรับขนาดย่อลงอัตโนมัติ) */
+.word-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: #000;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.word-table th,
+.word-table td {
+  border: 0.5pt solid #333333;
+  padding: 0 1.5mm;
+  vertical-align: middle;
+  line-height: 1.15;
+  white-space: nowrap !important;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.word-table th {
+  background-color: #f0f4f8;
+  font-weight: bold;
+  text-align: center;
+  height: 7mm;
+  white-space: nowrap !important;
+}
+
+.word-table td {
+  height: 5.8mm;
+}
+
+.word-table-even td {
+  background-color: #fafafa;
+}
+
+.word-table-note {
+  font-size: 10pt;
+  line-height: 4.5mm;
+  color: #000;
+  border-top: 0.5pt solid #444444;
+  margin-top: 2.5mm;
+  padding-top: 2mm;
+}
+
+/* ========================================================================= */
+/* Print Mode (พิมพ์จริงบนกระดาษ A4) */
+/* ========================================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .sidebar, .topbar, .sidebar-overlay, .no-print, .alert, .nav-tabs, .page-header, #pane-qualification {
+    display: none !important;
+  }
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  .content-area {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .word-document-viewer {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+  .word-page-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  .word-page-container:last-of-type {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .word-page.a4-portrait {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+  .word-table th {
+    background-color: #f0f4f8 !important;
+  }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// สลับมุมมองจัดหน้า A4 (HTML) และตัวอย่าง PDF จริง (100% ReportLab)
+function setDocViewMode(mode) {
+  var htmlStage = document.getElementById('announcement-html-stage');
+  var pdfStage = document.getElementById('announcement-pdf-stage');
+  var pdfIframe = document.getElementById('announcement-pdf-iframe');
+  var btnHtml = document.getElementById('btn-view-mode-html');
+  var btnPdf = document.getElementById('btn-view-mode-pdf');
+  var desc = document.getElementById('view-mode-desc');
+
+  if (mode === 'pdf') {
+    if (htmlStage) htmlStage.style.display = 'none';
+    if (pdfStage) pdfStage.style.display = 'block';
+    if (btnHtml) { btnHtml.classList.remove('btn-dark', 'active'); btnHtml.classList.add('btn-outline-dark'); }
+    if (btnPdf) { btnPdf.classList.remove('btn-outline-danger'); btnPdf.classList.add('btn-danger', 'active'); }
+    if (desc) desc.innerHTML = '<i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>โหมดตัวอย่าง PDF จริง (100% ReportLab)';
+    if (pdfIframe && pdfIframe.dataset.src) {
+      pdfIframe.src = pdfIframe.dataset.src.replace('#', '&_ts=' + Date.now() + '#');
+    }
+  } else {
+    if (pdfStage) pdfStage.style.display = 'none';
+    if (htmlStage) htmlStage.style.display = 'block';
+    if (btnPdf) { btnPdf.classList.remove('btn-danger', 'active'); btnPdf.classList.add('btn-outline-danger'); }
+    if (btnHtml) { btnHtml.classList.remove('btn-outline-dark'); btnHtml.classList.add('btn-dark', 'active'); }
+    if (desc) desc.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i>ฟอนต์ TH Sarabun New ตรงตามไฟล์ PDF จริง 1:1';
+    autoFitTableCells();
+  }
+}
+
+// ปรับความสูงแถวและขนาดตัวอักษรในช่องตารางแผ่น 2 อัตโนมัติ ให้ตรงกับ ReportLab PDF 1:1 และอยู่ในแผ่นที่ 2 (เอกสาร 2 หน้าพอดี)
+function autoFitTableCells() {
+  var table = document.querySelector('.word-table');
+  var page2 = document.getElementById('announcement-page-2');
+  if (!table) return;
+
+  var baseFontPt = parseFloat(table.dataset.baseFontPt || '{{ setting.announcement_font_size_table|default:10.0 }}') || 10.0;
+  var marginTopMm = parseFloat('{{ setting.announcement_margin_top_mm|default:25.0 }}') || 25.0;
+  var marginBottomMm = parseFloat('{{ setting.announcement_margin_bottom_mm|default:25.0 }}') || 25.0;
+  var pxPerMm = page2 ? ((page2.clientWidth || 793.7) / 210.0) : (96.0 / 25.4);
+  var ptToPx = (pxPerMm * 25.4) / 72.0;
+
+  var rowHMm = Math.max(5.8, baseFontPt * 0.58);
+  var theadHMm = Math.max(7.0, baseFontPt * 0.70);
+  var effectiveFontPt = baseFontPt;
+
+  var bodyRows = table.querySelectorAll('tbody tr');
+  var nRows = Math.max(bodyRows.length, 1);
+  var noteEl = page2 ? page2.querySelector('.word-table-note') : null;
+  var noteLinesCount = noteEl ? Math.max(1, (noteEl.innerText || '').split(/\r?\n/).filter(Boolean).length) : 0;
+  var noteReserveMm = noteLinesCount > 0 ? (6.5 + noteLinesCount * 4.5) : 0.0;
+  var safeBottomMm = Math.min(marginBottomMm, 16.0);
+  var tableTopFromTopMm = marginTopMm + 36.0;
+  var availTableHMm = 297.0 - tableTopFromTopMm - safeBottomMm - noteReserveMm;
+
+  if ((theadHMm + nRows * rowHMm) > availTableHMm && availTableHMm > 40.0) {
+    var scale = availTableHMm / (theadHMm + nRows * rowHMm);
+    rowHMm = Math.max(3.6, rowHMm * scale);
+    theadHMm = Math.max(5.0, theadHMm * scale);
+    effectiveFontPt = Math.max(7.0, Math.min(effectiveFontPt, rowHMm / 0.54));
+  }
+
+  var baseFontPx = effectiveFontPt * ptToPx;
+  var ths = table.querySelectorAll('thead th');
+  ths.forEach(function (th) {
+    th.style.height = (theadHMm * pxPerMm) + 'px';
+  });
+  bodyRows.forEach(function (tr) {
+    tr.querySelectorAll('td').forEach(function (td) {
+      td.style.height = (rowHMm * pxPerMm) + 'px';
+    });
+  });
+
+  var padPx = 2.0 * 1.5 * pxPerMm;
+  var cells = table.querySelectorAll('th, td');
+  cells.forEach(function (cell) {
+    var isHeader = cell.tagName.toLowerCase() === 'th';
+    var minPt = isHeader ? 6.8 : 5.5;
+    var curPt = effectiveFontPt;
+    cell.style.fontSize = (curPt * ptToPx) + 'px';
+    var avail = cell.clientWidth - padPx;
+    if (avail > 0) {
+      while (curPt >= minPt && (cell.scrollWidth - padPx) > (avail + 0.5)) {
+        curPt -= 0.25;
+        cell.style.fontSize = (Math.max(minPt, curPt) * ptToPx) + 'px';
+      }
+    }
+  });
+}
+
+window.addEventListener('resize', autoFitTableCells);
+document.addEventListener('DOMContentLoaded', function () {
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(autoFitTableCells);
+  } else {
+    setTimeout(autoFitTableCells, 300);
+  }
+
+  document.querySelectorAll('#announcementMainTabs [data-tab-name]').forEach(function (btn) {
+    btn.addEventListener('shown.bs.tab', function () {
+      var t = btn.getAttribute('data-tab-name');
+      if (t === 'document') {
+        autoFitTableCells();
+      }
+      if (history.replaceState) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('tab', t);
+        history.replaceState(null, '', url.toString());
+      }
+    });
+  });
+
+  var unapproveModalEl = document.getElementById('unapproveScoresPasswordModal');
+  var unapprovePwInput = document.getElementById('unapprove-pw-input');
+  var toggleUnapprovePwBtn = document.getElementById('btn-toggle-unapprove-pw');
+  if (unapproveModalEl) {
+    unapproveModalEl.addEventListener('shown.bs.modal', function () {
+      if (unapprovePwInput) {
+        unapprovePwInput.value = '';
+        unapprovePwInput.type = 'password';
+        unapprovePwInput.focus();
+      }
+      if (toggleUnapprovePwBtn) toggleUnapprovePwBtn.innerHTML = '<i class="bi bi-eye"></i>';
+    });
+  }
+  if (toggleUnapprovePwBtn && unapprovePwInput) {
+    toggleUnapprovePwBtn.addEventListener('click', function () {
+      var show = unapprovePwInput.type === 'password';
+      unapprovePwInput.type = show ? 'text' : 'password';
+      toggleUnapprovePwBtn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    });
+  }
+});
+
+(function () {
+  var form = document.getElementById('announcement-cert-zip-form');
+  if (!form) return;
+  var masters = Array.prototype.slice.call(form.querySelectorAll('.ann-grp-master'));
+  var items = Array.prototype.slice.call(form.querySelectorAll('.ann-chk-item'));
+  var totalEl = document.getElementById('ann-cert-selected-total');
+  var submitBtn = document.getElementById('btn-ann-cert-zip-submit');
+  var btnAll = document.getElementById('btn-ann-cert-all');
+  var btnNone = document.getElementById('btn-ann-cert-none');
+
+  function syncCounts() {
+    var totalChecked = 0;
+    masters.forEach(function (m) {
+      var grp = m.dataset.group;
+      var grpItems = items.filter(function (i) { return i.dataset.group === grp; });
+      var grpChecked = grpItems.filter(function (i) { return i.checked; }).length;
+      totalChecked += grpChecked;
+      var cntEl = form.querySelector('.ann-grp-count[data-group="' + grp + '"]');
+      if (cntEl) cntEl.textContent = grpChecked;
+      if (grpItems.length > 0) {
+        m.checked = grpChecked > 0;
+        m.indeterminate = (grpChecked > 0 && grpChecked < grpItems.length);
+      } else {
+        m.checked = false;
+        m.indeterminate = false;
+      }
+    });
+    if (totalEl) totalEl.textContent = totalChecked;
+    if (submitBtn) submitBtn.disabled = (totalChecked === 0);
+  }
+
+  masters.forEach(function (m) {
+    m.addEventListener('change', function () {
+      var grp = m.dataset.group;
+      var on = m.checked;
+      items.filter(function (i) { return i.dataset.group === grp; }).forEach(function (i) {
+        i.checked = on;
+      });
+      syncCounts();
+    });
+  });
+
+  items.forEach(function (i) {
+    i.addEventListener('change', syncCounts);
+  });
+
+  if (btnAll) {
+    btnAll.addEventListener('click', function () {
+      items.forEach(function (i) { i.checked = true; });
+      syncCounts();
+    });
+  }
+  if (btnNone) {
+    btnNone.addEventListener('click', function () {
+      items.forEach(function (i) { i.checked = false; });
+      syncCounts();
+    });
+  }
+
+  syncCounts();
+})();
+</script>
+{% endblock %}

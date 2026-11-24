@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายงานการสั่งอาหาร A4 - {{ o.restaurant_name }}</title>
+  {% if site_setting.site_favicon %}
+  <link rel="icon" href="{{ site_setting.site_favicon.url }}">
+  <link rel="shortcut icon" href="{{ site_setting.site_favicon.url }}">
+  <link rel="apple-touch-icon" href="{{ site_setting.site_favicon.url }}">
+  {% endif %}
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Sarabun', sans-serif;
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    @page { size: A4 portrait; margin: 8mm; }
+    body { font-size: 8.5pt; color: #000; background: #fff; line-height: 1.25; }
+    @media print {
+      .no-print { display: none !important; }
+      .a4-container { border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    }
+    @media screen and (max-width: 767.98px) {
+      body { overflow-x: auto; padding: 0 4px 16px; }
+      .a4-container { width: 100%; min-width: 640px; min-height: auto; margin-top: 56px; }
+      .print-toolbar { flex-wrap: wrap; gap: 6px; padding: 8px 10px; font-size: 0.85rem; }
+    }
+    .print-toolbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #1a237e; color: #fff; padding: 8px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 9999; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .btn-print {
+      background: #fbbc04; color: #000; border: none; padding: 6px 18px;
+      border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
+    }
+    .a4-container {
+      width: 194mm; min-height: 275mm; margin: 50px auto 10px; padding: 6mm;
+      background: #fff; border: 1px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .header { border-bottom: 2px solid {{ o.day_color }}; padding-bottom: 3mm; margin-bottom: 3mm; }
+    .title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5mm; }
+    .title { font-size: 13pt; font-weight: 700; color: #1a237e; }
+    .day-badge { background: {{ o.day_color }}; color: #fff; padding: 1.5mm 3.5mm; border-radius: 3px; font-size: 8pt; font-weight: 700; }
+    .meta-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1mm 4mm; font-size: 8.5pt; }
+    .meta-label { font-weight: 700; min-width: 24mm; display: inline-block; }
+    .summary-bar {
+      background: #f1f3f4; border-left: 4px solid {{ o.day_color }};
+      padding: 1.5mm 3mm; margin-bottom: 2.5mm;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .grand-total { font-size: 10pt; font-weight: 700; color: #c62828; }
+    .report-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 2mm; }
+    .report-table th { background: #1a237e; color: #fff; padding: 1.5mm 2mm; text-align: left; border: 0.5pt solid #555; }
+    .report-table td { padding: 1mm 1.5mm; border: 0.5pt solid #999; vertical-align: top; }
+    .report-table tr:nth-child(even) td { background: #fbfbfb; }
+    .col-num { width: 8mm; text-align: center; font-weight: 700; }
+    .col-menu { width: 42mm; font-weight: 700; }
+    .col-qty { width: 15mm; text-align: center; font-weight: 700; font-size: 9pt; color: #1a237e; }
+    .name-line { line-height: 1.35; padding: 0.3mm 0; font-size: 7.5pt; }
+    .footer { border-top: 0.5pt solid #ccc; padding-top: 1.5mm; display: flex; justify-content: space-between; font-size: 7pt; color: #666; }
+  </style>
+</head>
+<body>
+<div class="print-toolbar no-print">
+  <div><strong>รายงานการสั่งอาหาร A4</strong> — {{ o.restaurant_name }}</div>
+  <div>
+    <button class="btn-print" onclick="window.print()">พิมพ์ออก PDF / เครื่องพิมพ์</button>
+    <a href="javascript:window.close()" style="color:#fff;margin-left:12px;text-decoration:none;">ปิดหน้านี้</a>
+  </div>
+</div>
+
+<div class="a4-container">
+  <div>
+    <div class="header">
+      <div class="title-row">
+        <div class="title">รายงานสรุปรายละเอียดการสั่งอาหาร</div>
+        <div class="day-badge">วัน{{ o.day_name }}</div>
+      </div>
+      <div class="meta-grid">
+        <div><span class="meta-label">วันที่จัดอาหาร:</span> {{ o.date_full }}</div>
+        <div><span class="meta-label">เงื่อนไข:</span> เลือกได้ {{ o.max_selection_count }} ({{ o.get_selection_mode_display }})</div>
+        <div><span class="meta-label">ชื่อร้านอาหาร:</span> <strong>{{ o.restaurant_name }}</strong></div>
+      </div>
+    </div>
+
+    <div class="summary-bar">
+      <div>รายการเมนูอาหารทั้งหมด: <strong>{{ menu_data|length }}</strong> เมนู</div>
+      <div class="grand-total">ยอดรวมการสั่งทั้งหมด: {{ grand_total }} รายการ</div>
+    </div>
+
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th class="col-num">ที่</th>
+          <th class="col-menu">รายการอาหาร</th>
+          <th class="col-qty">จำนวน</th>
+          <th>รหัส และ ชื่อผู้เลือก (เรียงตามลำดับ 5 รายชื่อต่อบรรทัด)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in menu_data %}
+        <tr>
+          <td class="col-num">{{ item.number }}</td>
+          <td class="col-menu">
+            {{ item.menu.menu_name }}
+            {% if item.menu.menu_description %}<div style="font-size:6.5pt;color:#666;font-weight:normal;">{{ item.menu.menu_description }}</div>{% endif %}
+          </td>
+          <td class="col-qty">{% if item.total > 0 %}{{ item.total }}{% else %}-{% endif %}</td>
+          <td>
+            {% if item.name_lines %}
+              {% for line in item.name_lines %}<div class="name-line">{{ line }}</div>{% endfor %}
+            {% else %}
+              <span style="color:#999;font-style:italic;">- ไม่มีผู้เลือก -</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#e8eaf6; font-weight:700;">
+          <td colspan="2" style="text-align:right; padding:1.5mm;">ยอดรวมทั้งสิ้น:</td>
+          <td style="text-align:center; font-size:9.5pt; color:#c62828;">{{ grand_total }}</td>
+          <td>รายการ</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>พิมพ์เมื่อ: {% now "d/m/Y H:i" %} น. | โดย: {{ user.camp1_code }} {{ user.get_full_name }}</span>
+    <span>{{ site_setting.site_title_inline|default:"ระบบ DS-COMPOSN" }} — หน้า 1 / 1</span>
+  </div>
+</div>
+</body>
+</html>

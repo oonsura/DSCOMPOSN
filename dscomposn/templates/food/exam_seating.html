@@ -1,0 +1,1187 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}จัดที่นั่งสอบ{% endblock %}
+{% block breadcrumb %}เวลาเรียน / คะแนน / จัดที่นั่งสอบ{% endblock %}
+{% block extra_head %}
+<style>
+  .exam-chart-sheet {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .exam-chart-body-wrap { display: flex; align-items: stretch; }
+  .exam-chart-body-wrap.front-top, .exam-chart-body-wrap.front-bottom { flex-direction: column; }
+  .exam-chart-body-wrap.front-left, .exam-chart-body-wrap.front-right { flex-direction: row; }
+  .exam-front-bar {
+    background: #d9ead3;
+    border: 1px solid #93c47d;
+    color: #1b5e20;
+    font-weight: 700;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 4px;
+  }
+  .exam-front-horiz { padding: 6px 12px; width: 100%; }
+  .exam-front-vert { width: 38px; flex: 0 0 38px; writing-mode: vertical-rl; padding: 12px 4px; }
+  .exam-front-left { transform: rotate(180deg); }
+  .exam-grid-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .exam-block-lab { margin-bottom: 14px; }
+  .exam-block-desk { margin-bottom: 8px; }
+  .exam-lab-row, .exam-desk-row { display: grid; align-items: stretch; }
+  .exam-desk-row { gap: 8px; }
+  .exam-desk-row-label { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+  .exam-seat-cell, .exam-desk-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #333;
+    background: #fff;
+    min-width: 0;
+    position: relative;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .exam-lab-row .exam-seat-cell + .exam-seat-cell { border-left: 0; }
+  .exam-lab-row + .exam-lab-row .exam-seat-cell { border-top: 0; }
+  .exam-seat-interactive { cursor: pointer; }
+  .exam-seat-interactive:hover {
+    z-index: 5;
+    box-shadow: 0 0 0 2px #0d6efd inset, 0 4px 10px rgba(13,110,253,0.22);
+    background: #f4f8ff;
+  }
+  .seat-num {
+    background: #fff2cc;
+    border-bottom: 1px solid #555;
+    text-align: center;
+    font-size: 0.78rem;
+    padding: 2px 4px;
+    line-height: 1.15;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .exam-seat-cell:has(.seat-body + .seat-num) .seat-num {
+    border-bottom: 0;
+    border-top: 1px solid #555;
+  }
+  .seat-body {
+    flex: 1;
+    min-height: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 3px;
+    text-align: center;
+  }
+  .seat-code { color: #0000cc; font-weight: 700; font-size: 0.85rem; line-height: 1.15; }
+  .seat-code-current { color: #0000cc !important; }
+  .seat-code-rights { color: #1b5e20 !important; }
+  .seat-reserve { color: #cc0000; font-weight: 700; font-size: 0.82rem; }
+  .seat-blocked { color: #6c757d; font-size: 0.72rem; }
+  .seat-status-blocked .seat-body {
+    background: repeating-linear-gradient(45deg, #f1f3f5, #f1f3f5 5px, #e9ecef 5px, #e9ecef 10px);
+  }
+  .seat-is-start .seat-num { background: #ffe082; }
+  .start-badge { color: #d84315; font-size: 0.72rem; }
+  .seat-moving-source {
+    outline: 3px solid #fd7e14 !important;
+    outline-offset: -2px;
+    background: #fff3cd !important;
+    z-index: 6;
+  }
+  .mode-move-active .exam-seat-interactive:not(.seat-status-reserve):not(.seat-status-blocked):hover {
+    box-shadow: 0 0 0 2px #198754 inset !important;
+    background: #e8f5e9 !important;
+  }
+  .mode-pick-start-active .exam-seat-interactive:hover {
+    box-shadow: 0 0 0 2px #d84315 inset !important;
+    background: #fff3e0 !important;
+  }
+  .exam-proctor-bar {
+    background: #fce5cd;
+    border: 1px solid #e6b8af;
+    padding: 8px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: #111;
+    border-radius: 6px;
+  }
+  .exam-proctor-empty { background: #f8f9fa; border-style: dashed; border-color: #ced4da; font-weight: 400; }
+  .examinee-scroll-box { max-height: 360px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px; }
+  .examinee-item {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    border-bottom: 1px solid #f1f3f5; font-size: 0.82rem; cursor: pointer;
+  }
+  .examinee-item:hover { background: #f8f9fa; }
+  .examinee-item:last-child { border-bottom: 0; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>จัดที่นั่งสอบ</h4>
+    <small class="text-muted">ปีการศึกษา {{ year }} · จัดห้องสอบ เครื่องเว้นเครื่อง ที่นั่งสอบโต๊ะ กำหนดวิทยากรคุมสอบ และเปิด/ปิดประกาศผล</small>
+  </div>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <form method="get" class="d-inline-flex align-items-center gap-1">
+      <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for y in academic_year_choices %}
+          <option value="{{ y }}" {% if y == year %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="{% url 'food:exam_rooms_manage' %}" class="btn btn-outline-primary btn-sm fw-semibold">
+      <i class="bi bi-building-gear me-1"></i>จัดการห้องสอบ / สร้างห้องใหม่
+    </a>
+    {% if selected_plan %}
+    <button type="button" class="btn btn-outline-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#multiRoomModal">
+      <i class="bi bi-diagram-3 me-1"></i>จัดกระจายหลายห้อง
+    </button>
+    <a href="{% url 'food:exam_seating_print' selected_plan.pk %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+      <i class="bi bi-printer me-1"></i>พิมพ์ผังรวมทุกห้อง (A4)
+    </a>
+    <a href="{% url 'food:exam_seating_export_pdf' selected_plan.pk %}" class="btn btn-danger btn-sm" target="_blank">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF รวมทุกห้อง (A4)
+    </a>
+    <a href="{% url 'food:exam_seating_export_xlsx' selected_plan.pk %}" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel รวมทุกห้อง
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if not exam_dates %}
+  <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <strong>ยังไม่มีวันสอบในปีการศึกษา {{ year }}</strong> — กรุณากำหนดวันสอบในเมนู ตั้งค่าระบบ &rsaquo; กำหนดปีการศึกษา (แท็บ 2) ก่อนจึงจะจัดที่นั่งสอบได้
+    </div>
+    <a href="{% url 'food:score_categories' %}?tab=dates&year={{ year }}" class="btn btn-warning btn-sm fw-semibold text-dark">
+      <i class="bi bi-calendar-event me-1"></i>ไปตั้งค่าวันสอบ
+    </a>
+  </div>
+{% else %}
+  <!-- แถบเลือกวันสอบ และตั้งค่าเปิด/ปิดให้ผู้เข้าสอบดูรายวันสอบ -->
+  <div class="card mb-3">
+    <div class="card-header py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="small fw-bold text-dark">
+        <i class="bi bi-calendar-check me-1 text-primary"></i>เลือกวันที่สอบ และกำหนดสิทธิ์การเปิดให้ผู้เข้าสอบดู (ต่อวันที่สอบ)
+      </span>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <a href="{% url 'food:score_categories' %}?tab=dates&year={{ year }}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.78rem;">
+          <i class="bi bi-sliders me-1"></i>ตั้งค่าวันสอบ / ประเภทการสอบ
+        </a>
+        {% if selected_plan %}
+        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">ผู้เข้าสอบทั้งหมด {{ total_examinees }} คน</span>
+        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">จัดแล้ว {{ seated_count }} คน</span>
+        <span class="badge {% if unseated_count %}bg-warning text-dark{% else %}bg-light text-muted border{% endif %}">ยังไม่จัด {{ unseated_count }} คน</span>
+        <span class="badge bg-info bg-opacity-10 text-dark border border-info-subtle">ห้องเปิดใช้ {{ open_rooms_count }}/{{ plan_rooms|length }}</span>
+        {% if seated_count %}
+        <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline" onsubmit="return confirm('ล้างการจัดที่นั่งของผู้เข้าสอบทั้งหมดในวันสอบนี้?')">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="clear_plan">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+          <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">ล้างทั้งวันสอบ</button>
+        </form>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    <div class="card-body py-2">
+      <div class="row g-2">
+        {% for item in exam_date_items %}
+        {% with ed=item.training_date p=item.plan rd=item.readiness %}
+        <div class="col-md-6 col-xl-4">
+          <div class="border rounded p-2 d-flex flex-wrap justify-content-between align-items-center gap-2 h-100 {% if selected_date and selected_date.pk == ed.pk %}border-primary bg-primary bg-opacity-10{% else %}bg-light{% endif %}">
+            <a href="?year={{ year }}&date_id={{ ed.pk }}" class="text-decoration-none flex-grow-1 min-w-0">
+              <div class="fw-bold {% if selected_date and selected_date.pk == ed.pk %}text-primary{% else %}text-dark{% endif %}">
+                <i class="bi bi-calendar3 me-1"></i>{{ ed.date|date_thai_short }}
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle ms-1" style="font-size:0.72rem;">{{ ed.effective_exam_type_display }}</span>
+              </div>
+              <div class="small text-muted text-truncate">
+                {{ ed.get_exam_period_display }} · จัดแล้ว <strong class="text-dark">{{ item.seated_count }}</strong> คน · เปิด {{ item.open_rooms_count }} ห้อง
+              </div>
+              {% if not p.is_open and not rd.is_ready %}
+              <div class="small mt-1" style="font-size:0.74rem; line-height:1.25; color:#9a6700;">
+                <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>{{ rd.reason_text }}
+              </div>
+              {% endif %}
+            </a>
+            {% if p.is_open or rd.is_ready %}
+            <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline flex-shrink-0">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_plan_open">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="plan_id" value="{{ p.pk }}">
+              <input type="hidden" name="date_id" value="{{ selected_date.pk }}">
+              {% if selected_plan %}<input type="hidden" name="return_plan_id" value="{{ selected_plan.pk }}">{% endif %}
+              {% if active_plan_room %}<input type="hidden" name="room_id" value="{{ active_plan_room.pk }}">{% endif %}
+              <button type="submit" class="btn btn-sm fw-semibold py-1 px-2 {% if p.is_open %}btn-success{% else %}btn-outline-secondary{% endif %}" title="คลิกเพื่อ เปิด/ปิด ให้ผู้เข้าสอบดูที่นั่งสอบในวันนี้">
+                <i class="bi bi-{% if p.is_open %}eye-fill{% else %}eye-slash{% endif %} me-1"></i>
+                {% if p.is_open %}เปิดให้ดู{% else %}ปิดไม่ให้ดู{% endif %}
+              </button>
+            </form>
+            {% else %}
+            <span class="d-inline-block flex-shrink-0" title="ไม่สามารถเปิดให้ดูได้: {{ rd.reason_text }}">
+              <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-1 px-2 opacity-75" disabled aria-disabled="true" title="ไม่สามารถเปิดให้ดูได้: {{ rd.reason_text }}">
+                <i class="bi bi-lock-fill me-1"></i>ยังไม่พร้อมเปิด
+              </button>
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        {% endwith %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if selected_plan %}
+  <!-- แถบเลือกห้องสอบ + มุมมองสรุปทั้งหมด -->
+  <ul class="nav nav-tabs mb-3">
+    {% for rs in room_summaries %}
+    <li class="nav-item">
+      <a class="nav-link d-flex align-items-center gap-1 {% if view_mode == 'room' and active_plan_room and active_plan_room.pk == rs.plan_room.pk %}active fw-bold{% endif %} {% if not rs.plan_room.is_open %}text-muted{% endif %}"
+         href="?year={{ year }}&date_id={{ selected_date.pk }}&plan_id={{ selected_plan.pk }}&room_id={{ rs.plan_room.pk }}&view=room">
+        <i class="bi bi-{% if rs.plan_room.room.has_computer %}pc-display{% else %}grid{% endif %}"></i>
+        <span>{{ rs.plan_room.room.name }}</span>
+        <span class="badge {% if rs.layout.assigned_count %}bg-primary{% else %}bg-secondary bg-opacity-50{% endif %}" style="font-size:0.7rem;">
+          {{ rs.layout.assigned_count }}/{{ rs.layout.total_seats }}
+        </span>
+        {% if not rs.plan_room.is_open %}
+          <span class="badge bg-danger" style="font-size:0.65rem;">ปิด</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+    <li class="nav-item ms-auto">
+      <a class="nav-link {% if view_mode == 'overview' %}active fw-bold{% endif %}"
+         href="?year={{ year }}&date_id={{ selected_date.pk }}&plan_id={{ selected_plan.pk }}&view=overview">
+        <i class="bi bi-table me-1"></i>สรุปทุกห้อง / รายชื่อผู้เข้าสอบ
+      </a>
+    </li>
+  </ul>
+
+  {% if view_mode == 'overview' %}
+  <!-- มุมมองสรุปทุกห้อง & รายชื่อผู้เข้าสอบ -->
+  <div class="row g-3 mb-3">
+    {% for rs in room_summaries %}
+    <div class="col-md-6 col-xl-3">
+      <div class="card h-100 {% if not rs.plan_room.is_open %}opacity-75{% endif %}">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-truncate">{{ rs.plan_room.room.name }}</span>
+          <span class="badge {% if rs.plan_room.is_open %}bg-success{% else %}bg-danger{% endif %}">
+            {% if rs.plan_room.is_open %}เปิด{% else %}ปิด{% endif %}
+          </span>
+        </div>
+        <div class="card-body py-2 small">
+          <div>ประเภท: <strong>{{ rs.plan_room.room.room_type_label }}</strong></div>
+          <div>จัดแล้ว: <strong class="text-primary">{{ rs.layout.assigned_count }}</strong> / {{ rs.layout.total_seats }} (สำรอง {{ rs.layout.reserve_count }}, ว่าง {{ rs.layout.free_count }})</div>
+          <div class="mt-1">
+            คุมสอบ:
+            {% if rs.proctors %}
+              <span class="text-dark fw-semibold">{% for p in rs.proctors %}{{ p.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+            {% else %}
+              <span class="text-muted">ยังไม่กำหนด</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-footer bg-white py-2 d-flex justify-content-between">
+          <a href="?year={{ year }}&date_id={{ selected_date.pk }}&plan_id={{ selected_plan.pk }}&room_id={{ rs.plan_room.pk }}&view=room" class="btn btn-outline-primary btn-sm py-0">จัดการห้องนี้</a>
+          <a href="{% url 'food:exam_seating_print' selected_plan.pk %}" class="btn btn-outline-secondary btn-sm py-0" target="_blank" title="พิมพ์ผังรวมทุกห้อง"><i class="bi bi-printer"></i></a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span><i class="bi bi-people me-2 text-primary"></i>รายชื่อผู้เข้าสอบทั้งหมด ({{ total_examinees }} คน)</span>
+      <input type="text" id="ov-search" class="form-control form-control-sm" style="max-width:260px;" placeholder="ค้นหารหัส / ชื่อ / ห้องสอบ...">
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0" id="ov-table" style="font-size:0.86rem;">
+        <thead>
+          <tr>
+            <th style="width:55px;">ลำดับ</th>
+            <th>รหัสผู้เข้าสอบ</th>
+            <th>ชื่อ - นามสกุล</th>
+            <th>โรงเรียน</th>
+            <th>กลุ่ม</th>
+            <th>ห้องสอบ</th>
+            <th>เครื่อง / ที่นั่ง</th>
+            <th style="width:150px;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ex in examinees %}
+          <tr class="ov-row">
+            <td class="text-center text-muted">{{ forloop.counter }}</td>
+            <td class="code fw-bold {% if ex.is_rights %}seat-code-rights{% else %}seat-code-current{% endif %}">{{ ex.display_code }}</td>
+            <td>{{ ex.full_name }}</td>
+            <td class="small text-muted">{{ ex.school_name|default:"-" }}</td>
+            <td>
+              {% if ex.is_rights %}
+                <span class="badge text-white" style="background-color:#1b5e20;">ใช้สิทธิ์</span>
+              {% else %}
+                <span class="badge text-white" style="background-color:#0000cc;">ปัจจุบัน</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if ex.assignment %}
+                <a href="?year={{ year }}&date_id={{ selected_date.pk }}&plan_id={{ selected_plan.pk }}&room_id={{ ex.assignment.plan_room_id }}" class="text-decoration-none fw-semibold">
+                  {{ ex.assignment.plan_room.room.name }}
+                </a>
+              {% else %}
+                <span class="text-danger small">ยังไม่จัดที่นั่ง</span>
+              {% endif %}
+            </td>
+            <td class="fw-bold">
+              {% if ex.assignment %}
+                <span class="badge bg-success">{{ ex.assignment.seat.seat_label }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="text-nowrap">
+              {% if ex.assignment %}
+              <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                      onclick="openCrossMoveModal({{ ex.assignment.pk }}, '{{ ex.display_code|escapejs }}', '{{ ex.full_name|escapejs }}', '{{ ex.assignment.plan_room.room.name|escapejs }}', '{{ ex.assignment.seat.seat_label|escapejs }}')">
+                ย้าย
+              </button>
+              <form method="post" action="{% url 'food:exam_seat_action' %}" class="d-inline" onsubmit="return confirm('ยกเลิกที่นั่งของ {{ ex.display_code|escapejs }} ?')">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="cancel_seat">
+                <input type="hidden" name="assignment_id" value="{{ ex.assignment.pk }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">ยกเลิก</button>
+              </form>
+              {% else %}
+              <span class="text-muted small">-</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% elif active_plan_room %}
+  <!-- มุมมองจัดการรายห้อง -->
+  <div class="row g-3">
+    <!-- ซ้าย: แผนผังห้องสอบแบบคลิกจัดการได้ -->
+    <div class="col-xl-8">
+      <!-- แถบควบคุมประจำห้อง -->
+      <div class="card mb-3">
+        <div class="card-body py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_room_open">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <button type="submit" class="btn btn-sm fw-semibold {% if active_plan_room.is_open %}btn-success{% else %}btn-danger{% endif %}">
+                <i class="bi bi-{% if active_plan_room.is_open %}toggle-on{% else %}toggle-off{% endif %} me-1"></i>
+                {% if active_plan_room.is_open %}ห้องนี้: เปิดใช้งาน{% else %}ห้องนี้: ปิด{% endif %}
+              </button>
+            </form>
+
+            <button type="button" class="btn btn-sm btn-warning text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#proctorModal">
+              <i class="bi bi-person-badge me-1"></i>กำหนดวิทยากรคุมสอบ ({{ active_proctors|length }})
+            </button>
+
+            <a href="{% url 'food:exam_room_layout' active_plan_room.room_id %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-grid-1x2 me-1"></i>แก้ไขผังที่นั่ง/เลขเครื่อง
+            </a>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center gap-1">
+            {% if active_plan_room.room.has_computer %}
+            <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="apply_default_reserves">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary" title="ใส่ตำแหน่งสำรองเริ่มต้นตามห้องจริง">คืนค่าสำรองเริ่มต้น</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline" onsubmit="return confirm('ล้างรายชื่อผู้เข้าสอบทั้งหมดในห้อง {{ active_plan_room.room.name|escapejs }} ?')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="clear_room">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-eraser me-1"></i>ล้างผู้สอบในห้อง</button>
+            </form>
+          </div>
+        </div>
+        <div class="card-footer bg-light py-1 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+          <div>
+            จัดแล้ว <strong class="text-primary">{{ active_layout.assigned_count }}</strong> ·
+            สำรอง <strong class="text-danger">{{ active_layout.reserve_count }}</strong> ·
+            งดใช้ <strong>{{ active_layout.blocked_count }}</strong> ·
+            ว่าง <strong class="text-success">{{ active_layout.free_count }}</strong>
+            (รวม {{ active_layout.total_seats }} ที่นั่ง)
+          </div>
+          <form method="post" action="{% url 'food:exam_plan_action' %}" class="d-inline-flex align-items-center gap-1">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_room_meta">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+            <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+            <span class="text-muted">หัวข้อผัง:</span>
+            <input type="text" name="exam_subtitle" value="{{ active_plan_room.exam_subtitle }}" class="form-control form-control-sm py-0" style="width:175px;" placeholder="{{ selected_plan.default_chart_subtitle }}">
+            <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-2">บันทึก</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- แถบสถานะโหมดย้าย 2 คลิก / เลือกจุดเริ่มต้น -->
+      <div id="move-mode-banner" class="alert alert-warning py-2 d-none justify-content-between align-items-center mb-2">
+        <div><i class="bi bi-arrows-move me-1"></i><span id="move-mode-text">กำลังย้าย...</span></div>
+        <button type="button" class="btn btn-sm btn-outline-dark py-0" onclick="exitInteractiveModes()">ยกเลิกโหมดย้าย</button>
+      </div>
+      <div id="pick-start-banner" class="alert alert-info py-2 d-none justify-content-between align-items-center mb-2">
+        <div><i class="bi bi-geo-alt-fill me-1"></i><strong>โหมดเลือกจุดเริ่มต้น:</strong> กรุณาคลิกที่นั่งบนแผนผังด้านล่างเพื่อตั้งเป็นจุดเริ่มต้นจัดเรียง</div>
+        <button type="button" class="btn btn-sm btn-outline-dark py-0" onclick="exitInteractiveModes()">ยกเลิก</button>
+      </div>
+
+      <div id="interactive-map-container">
+        {% include "food/_exam_room_map.html" with plan=selected_plan plan_room=active_plan_room layout=active_layout proctors=active_proctors interactive=True start_seat_id=active_plan_room.start_seat_id %}
+      </div>
+      <div class="small text-muted mt-2">
+        <i class="bi bi-info-circle me-1"></i>คลิกที่ช่องเครื่อง/ที่นั่งบนผังเพื่อ <strong>จัดคนเข้าสอบ, ยกเลิก, ย้าย/สลับที่นั่ง, ตั้งเป็นสำรอง/งดใช้ หรือเลือกเป็นจุดเริ่มต้น</strong>
+      </div>
+    </div>
+
+    <!-- ขวา: เครื่องมือจัดที่นั่งอัตโนมัติ & รายชื่อผู้เข้าสอบ -->
+    <div class="col-xl-4">
+      <div class="card">
+        <div class="card-header py-2 fw-bold">
+          <i class="bi bi-magic me-1 text-primary"></i>จัดผู้เข้าสอบลงห้องนี้
+        </div>
+        <form method="post" action="{% url 'food:exam_plan_action' %}" class="card-body py-2" id="auto-assign-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="auto_assign_room">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+          <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">รูปแบบการจัดเรียงที่นั่ง</label>
+            <select name="pattern" id="aa-pattern" class="form-select form-select-sm">
+              {% for k, lbl in fill_pattern_choices %}
+              <option value="{{ k }}" {% if active_pattern == k %}selected{% endif %}>{{ lbl }}</option>
+              {% endfor %}
+            </select>
+            <div class="small text-primary mt-1" id="aa-pattern-hint"></div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label small fw-semibold mb-1">เริ่มต้นที่นั่งหมายเลข</label>
+            <div class="input-group input-group-sm">
+              <select name="start_seat_id" id="aa-start-seat" class="form-select form-select-sm">
+                <option value="">-- ค่าเริ่มต้น (ที่นั่งแรกตามลำดับ) --</option>
+                {% for s in active_room_seats %}
+                <option value="{{ s.pk }}" {% if active_plan_room.start_seat_id == s.pk %}selected{% endif %}>
+                  ที่นั่ง {{ s.seat_label }} (แถว {{ s.row_index }}, คอลัมน์ {{ s.col_index }})
+                </option>
+                {% endfor %}
+              </select>
+              <button type="button" class="btn btn-outline-primary" onclick="enterPickStartMode()" title="คลิกเลือกบนผัง">
+                <i class="bi bi-cursor-fill"></i> เลือกบนผัง
+              </button>
+            </div>
+          </div>
+
+          <div class="p-2 rounded bg-light border mb-2 small">
+            <div class="form-check mb-1">
+              <input class="form-check-input" type="checkbox" name="alternate" value="1" id="aa-alt" {% if active_alternate %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="aa-alt">จัดแบบเครื่องเว้นเครื่อง (เว้นระยะซ้าย-ขวา)</label>
+            </div>
+            <div class="form-check mb-1" id="aa-adj-wrap">
+              <input class="form-check-input" type="checkbox" name="skip_adjacent_to_reserve" value="1" id="aa-skip-res" checked>
+              <label class="form-check-label" for="aa-skip-res">เว้นที่นั่งติดกับเครื่อง "สำรอง" ด้วย</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="clear_existing_students" value="1" id="aa-clear">
+              <label class="form-check-label text-danger" for="aa-clear">ล้างผู้สอบเดิมในห้องนี้ก่อนจัดใหม่</label>
+            </div>
+          </div>
+
+          <hr class="my-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold">เลือกผู้เข้าสอบ (<span id="aa-selected-count" class="text-primary">0</span> คน)</span>
+            <div class="btn-group btn-group-sm">
+              <button type="button" class="btn btn-outline-primary py-0 px-2" onclick="selectVisibleExaminees(true)">เลือกทั้งหมด</button>
+              <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="selectVisibleExaminees(false)">ล้าง</button>
+            </div>
+          </div>
+
+          <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+            <button type="button" class="btn btn-primary ex-filter-btn active" data-filter="unseated">ยังไม่จัด ({{ unseated_count }})</button>
+            <button type="button" class="btn btn-outline-secondary ex-filter-btn" data-filter="all">ทั้งหมด</button>
+            <button type="button" class="btn btn-outline-secondary ex-filter-btn" data-filter="current">ปัจจุบัน</button>
+            <button type="button" class="btn btn-outline-secondary ex-filter-btn" data-filter="rights">ใช้สิทธิ์</button>
+          </div>
+
+          <input type="text" id="ex-search" class="form-control form-control-sm mb-2" placeholder="ค้นหารหัส (เช่น 69DS01) หรือชื่อ...">
+
+          <div class="input-group input-group-sm mb-2">
+            <span class="input-group-text">ลำดับ</span>
+            <input type="number" id="ex-range-from" class="form-control" value="{{ default_range_from }}" min="1" max="{{ total_examinees|default:1 }}">
+            <span class="input-group-text">ถึง</span>
+            <input type="number" id="ex-range-to" class="form-control" value="{{ default_range_to }}" min="1" max="{{ total_examinees|default:1 }}">
+            <button type="button" class="btn btn-outline-primary" onclick="selectExamineeRange()">เลือกช่วงนี้</button>
+          </div>
+
+          <div class="examinee-scroll-box mb-2" id="examinee-list">
+            {% for ex in examinees %}
+            <label class="examinee-item"
+                   data-idx="{{ forloop.counter }}"
+                   data-seated="{% if ex.assignment %}1{% else %}0{% endif %}"
+                   data-in-this-room="{% if ex.assignment and ex.assignment.plan_room_id == active_plan_room.pk %}1{% else %}0{% endif %}"
+                   data-rights="{% if ex.is_rights %}1{% else %}0{% endif %}"
+                   data-search="{{ ex.display_code|lower }} {{ ex.camp1_code|lower }} {{ ex.full_name|lower }}">
+              <input type="checkbox" class="form-check-input ex-chk mt-0" name="user_ids" value="{{ ex.user_id }}"
+                     {% if ex.assignment %}disabled{% endif %}>
+              <span class="text-muted" style="width:22px;">{{ forloop.counter }}.</span>
+              <span class="code fw-bold {% if ex.is_rights %}seat-code-rights{% else %}seat-code-current{% endif %}">{{ ex.display_code }}</span>
+              <span class="text-truncate flex-grow-1">{{ ex.full_name }}</span>
+              {% if ex.is_rights %}
+                <span class="badge text-white" style="font-size:0.65rem; background-color:#1b5e20;">สิทธิ์</span>
+              {% endif %}
+              {% if ex.assignment %}
+                <span class="badge bg-secondary" style="font-size:0.65rem;" title="{{ ex.assignment.plan_room.room.name }}">{{ ex.assignment.seat.seat_label }}</span>
+              {% endif %}
+            </label>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm w-100 fw-semibold">
+            <i class="bi bi-check2-circle me-1"></i>จัดผู้เข้าสอบลงห้อง {{ active_plan_room.room.name }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+{% endif %}
+
+{% if selected_plan and active_plan_room %}
+<!-- Modal จัดการที่นั่งรายจุด -->
+<div class="modal fade" id="seatActionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-pc-display me-1 text-primary"></i>
+          {% if active_plan_room.room.has_computer %}เครื่องหมายเลข{% else %}ที่นั่งหมายเลข{% endif %}
+          <span id="sm-seat-label" class="text-primary"></span>
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="sm-current-info" class="alert alert-light border py-2 small mb-3"></div>
+
+        <!-- กรณียังว่าง หรือเป็นสำรอง/งดใช้: จัดผู้เข้าสอบลงที่นั่งนี้ -->
+        <div id="sm-assign-box" class="mb-3">
+          <form method="post" action="{% url 'food:exam_seat_action' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="assign_seat">
+            <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+            <input type="hidden" name="seat_id" id="sm-assign-seat-id">
+            <input type="hidden" name="overwrite_reserve" value="1">
+            <label class="form-label small fw-semibold mb-1">จัดผู้เข้าสอบลงที่นั่งนี้ (ผู้ที่ยังไม่มีที่นั่ง):</label>
+            <div class="input-group input-group-sm">
+              <select name="user_id" class="form-select" id="sm-user-select">
+                <option value="">-- เลือกผู้เข้าสอบ ({{ unseated_examinees|length }} คน) --</option>
+                {% for ex in unseated_examinees %}
+                <option value="{{ ex.user_id }}">{{ ex.display_code }} - {{ ex.full_name }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-primary fw-semibold">จัดลงที่นั่ง</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- กรณีมีผู้เข้าสอบอยู่แล้ว: ย้าย / ย้ายข้ามห้อง / ยกเลิก -->
+        <div id="sm-occupied-actions" class="mb-3 d-none">
+          <div class="d-grid gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" onclick="startTwoClickMove()">
+              <i class="bi bi-arrows-move me-1"></i>ย้าย / สลับที่นั่งภายในห้องนี้ (คลิกปลายทางบนผัง)
+            </button>
+
+            {% if other_plan_rooms_for_move %}
+            <form method="post" action="{% url 'food:exam_seat_action' %}" class="p-2 rounded border bg-light">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="move_or_swap">
+              <input type="hidden" name="source_assignment_id" id="sm-cross-asgn-id">
+              <div class="small fw-semibold mb-1"><i class="bi bi-box-arrow-right me-1"></i>ย้าย / สลับไปห้องสอบอื่น:</div>
+              <div class="row g-1">
+                <div class="col-6">
+                  <select name="target_plan_room_id" id="sm-target-pr" class="form-select form-select-sm" onchange="populateTargetSeats()">
+                    {% for opr in other_plan_rooms_for_move %}
+                    <option value="{{ opr.plan_room.pk }}">{{ opr.plan_room.room.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-4">
+                  <select name="target_seat_id" id="sm-target-seat" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-2">
+                  <button type="submit" class="btn btn-primary btn-sm w-100">ย้าย</button>
+                </div>
+              </div>
+            </form>
+            {% endif %}
+
+            <form method="post" action="{% url 'food:exam_seat_action' %}" onsubmit="return confirm('ยืนยันยกเลิกที่นั่งของผู้เข้าสอบคนนี้?')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="cancel_seat">
+              <input type="hidden" name="assignment_id" id="sm-cancel-asgn-id">
+              <button type="submit" class="btn btn-outline-danger btn-sm w-100 fw-semibold">
+                <i class="bi bi-x-circle me-1"></i>ยกเลิกผู้เข้าสอบออกจากที่นั่งนี้
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ตั้งค่าสถานะที่นั่ง / จุดเริ่มต้น -->
+        <div class="border-top pt-2 d-flex flex-wrap justify-content-between gap-2">
+          <div id="sm-status-btns" class="btn-group btn-group-sm">
+            <form method="post" action="{% url 'food:exam_seat_action' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_seat_status">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <input type="hidden" name="seat_id" class="sm-seat-id-field">
+              <input type="hidden" name="status" value="reserve">
+              <button type="submit" class="btn btn-outline-danger btn-sm">ตั้งเป็น "สำรอง"</button>
+            </form>
+            <form method="post" action="{% url 'food:exam_seat_action' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_seat_status">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <input type="hidden" name="seat_id" class="sm-seat-id-field">
+              <input type="hidden" name="status" value="blocked">
+              <button type="submit" class="btn btn-outline-secondary btn-sm">ตั้งเป็น "งดใช้"</button>
+            </form>
+            <form method="post" action="{% url 'food:exam_seat_action' %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_seat_status">
+              <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+              <input type="hidden" name="seat_id" class="sm-seat-id-field">
+              <input type="hidden" name="status" value="empty">
+              <button type="submit" class="btn btn-outline-success btn-sm">ตั้งเป็น "ว่าง"</button>
+            </form>
+          </div>
+          <form method="post" action="{% url 'food:exam_seat_action' %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_start_seat">
+            <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+            <input type="hidden" name="seat_id" class="sm-seat-id-field">
+            <button type="submit" class="btn btn-outline-warning text-dark btn-sm">★ ตั้งเป็นจุดเริ่มต้น</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal กำหนดวิทยากรคุมสอบประจำห้อง -->
+<div class="modal fade" id="proctorModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post" action="{% url 'food:exam_plan_action' %}" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_proctors">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+      <input type="hidden" name="plan_room_id" value="{{ active_plan_room.pk }}">
+      <div class="modal-header py-2">
+        <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2 text-warning"></i>กำหนดวิทยากรคุมสอบ: {{ active_plan_room.room.name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2 d-flex flex-wrap align-items-center gap-3 small bg-light p-2 rounded border">
+          <span class="fw-semibold">รูปแบบการแสดงชื่อบนผัง:</span>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="radio" name="name_style" value="short" id="ns-short" checked>
+            <label class="form-check-label" for="ns-short">ชื่อย่อ (เช่น ครูเสฏฐวุฒิ ครูเมธาวี)</label>
+          </div>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="radio" name="name_style" value="full" id="ns-full">
+            <label class="form-check-label" for="ns-full">ชื่อ-นามสกุลเต็ม</label>
+          </div>
+        </div>
+
+        {% if lecturers or committees %}
+        <div class="row g-2 mb-3">
+          {% if lecturers %}
+          <div class="col-md-7">
+            <div class="fw-semibold small mb-1 text-primary">รายชื่อวิทยากร (ปีการศึกษา {{ year }})</div>
+            <div class="border rounded p-2" style="max-height:240px; overflow-y:auto;">
+              {% for lec in lecturers %}
+              {% with conflict=proctor_other_rooms|get_item:lec.pk %}
+              <label class="d-flex align-items-center gap-2 py-1 border-bottom small" style="cursor:pointer;">
+                <input type="checkbox" class="form-check-input mt-0" name="recipient_ids" value="{{ lec.pk }}"
+                       {% if lec.pk in active_proctor_recipient_ids %}checked{% endif %}>
+                <span class="flex-grow-1">{{ lec.full_name }}</span>
+                {% if conflict %}
+                  <span class="badge bg-warning text-dark" style="font-size:0.65rem;">คุม {{ conflict|join:", " }}</span>
+                {% endif %}
+              </label>
+              {% endwith %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% if committees %}
+          <div class="col-md-5">
+            <div class="fw-semibold small mb-1 text-success">รายชื่อคณะกรรมการ</div>
+            <div class="border rounded p-2" style="max-height:240px; overflow-y:auto;">
+              {% for com in committees %}
+              {% with conflict=proctor_other_rooms|get_item:com.pk %}
+              <label class="d-flex align-items-center gap-2 py-1 border-bottom small" style="cursor:pointer;">
+                <input type="checkbox" class="form-check-input mt-0" name="recipient_ids" value="{{ com.pk }}"
+                       {% if com.pk in active_proctor_recipient_ids %}checked{% endif %}>
+                <span class="flex-grow-1">{{ com.full_name }}</span>
+                {% if conflict %}
+                  <span class="badge bg-warning text-dark" style="font-size:0.65rem;">คุม {{ conflict|join:", " }}</span>
+                {% endif %}
+              </label>
+              {% endwith %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div>
+          <label class="form-label small fw-semibold mb-1">ระบุชื่อผู้คุมสอบเพิ่มเติมเอง (พิมพ์บรรทัดละ 1 ชื่อ หรือคั่นด้วยเครื่องหมายจุลภาค ,)</label>
+          <textarea name="custom_names" class="form-control form-control-sm" rows="2" placeholder="เช่น ครูสมชาย ใจดี">{{ active_proctor_custom_names }}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold"><i class="bi bi-check2-circle me-1"></i>บันทึกวิทยากรคุมสอบ</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if selected_plan %}
+<!-- Modal ย้าย/สลับข้ามห้องจากหน้าสรุป -->
+<div class="modal fade" id="crossMoveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <form method="post" action="{% url 'food:exam_seat_action' %}" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="move_or_swap">
+      <input type="hidden" name="source_assignment_id" id="cm-asgn-id">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold">ย้าย / สลับที่นั่ง</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body small">
+        <div class="mb-2">ผู้เข้าสอบ: <strong id="cm-student"></strong></div>
+        <div class="mb-2 text-muted">ปัจจุบัน: <span id="cm-current"></span></div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold mb-1">ห้องสอบปลายทาง</label>
+          <select name="target_plan_room_id" id="cm-target-pr" class="form-select form-select-sm" onchange="populateCmSeats()">
+            {% for rs in room_summaries %}
+            <option value="{{ rs.plan_room.pk }}">{{ rs.plan_room.room.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label fw-semibold mb-1">เลขเครื่อง / ที่นั่งปลายทาง</label>
+          <select name="target_seat_id" id="cm-target-seat" class="form-select form-select-sm"></select>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">ย้าย / สลับ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal จัดกระจายผู้เข้าสอบข้ามหลายห้อง -->
+<div class="modal fade" id="multiRoomModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'food:exam_plan_action' %}" class="modal-content">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="auto_assign_multi">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="plan_id" value="{{ selected_plan.pk }}">
+      <div class="modal-header py-2">
+        <h5 class="modal-title fw-bold"><i class="bi bi-diagram-3 me-2 text-success"></i>จัดผู้เข้าสอบกระจายหลายห้องอัตโนมัติ</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body small">
+        <p class="text-muted mb-2">ระบบจะนำผู้เข้าสอบที่ยังไม่ถูกจัดทั้งหมด (<strong>{{ unseated_count }} คน</strong>) จัดเรียงลงห้องสอบที่เลือกตามลำดับจากบนลงล่าง</p>
+        <div class="mb-2 fw-semibold">เลือกและเรียงลำดับห้องสอบ:</div>
+        <div id="mr-room-list" class="d-flex flex-column gap-1 mb-3">
+          {% for rs in room_summaries %}
+          <div class="d-flex align-items-center gap-2 p-2 border rounded bg-light mr-room-row">
+            <input type="checkbox" class="form-check-input mt-0" name="plan_room_ids" value="{{ rs.plan_room.pk }}" {% if rs.plan_room.is_open %}checked{% endif %}>
+            <span class="flex-grow-1 fw-semibold">{{ rs.plan_room.room.name }} <span class="text-muted fw-normal">(ว่าง {{ rs.layout.free_count }})</span></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="moveMrRow(this, -1)" title="เลื่อนขึ้น"><i class="bi bi-arrow-up"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="moveMrRow(this, 1)" title="เลื่อนลง"><i class="bi bi-arrow-down"></i></button>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="form-check mb-1">
+          <input class="form-check-input" type="checkbox" name="alternate" value="1" id="mr-alt" checked>
+          <label class="form-check-label fw-semibold" for="mr-alt">จัดแบบเครื่องเว้นเครื่อง</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="skip_adjacent_to_reserve" value="1" id="mr-skip-res" checked>
+          <label class="form-check-label" for="mr-skip-res">เว้นที่นั่งติดกับเครื่องสำรอง</label>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ปิด</button>
+        <button type="submit" class="btn btn-success btn-sm fw-semibold">จัดกระจายผู้เข้าสอบทันที</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ข้อมูลที่นั่งของทุกห้องสำหรับ dropdown ย้ายข้ามห้อง
+var ROOM_SEATS_MAP = {
+  {% for rs in room_summaries %}
+  "{{ rs.plan_room.pk }}": [
+    {% for blk in rs.layout.blocks %}{% for r in blk.rows %}{% for cell in r.cells %}{% if cell %}
+    {"id": {{ cell.seat.pk }}, "label": "{{ cell.seat.seat_label|escapejs }}", "status": "{{ cell.status }}", "code": "{{ cell.display_code|escapejs }}"},
+    {% endif %}{% endfor %}{% endfor %}{% endfor %}
+  ],
+  {% endfor %}
+};
+
+function _fillSeatSelect(selPrId, selSeatId) {
+  var prSel = document.getElementById(selPrId);
+  var sSel = document.getElementById(selSeatId);
+  if (!prSel || !sSel) return;
+  var list = (ROOM_SEATS_MAP[prSel.value] || []).slice().sort(function(a, b){
+    return (parseInt(a.label, 10) || 0) - (parseInt(b.label, 10) || 0);
+  });
+  sSel.innerHTML = '';
+  list.forEach(function(item) {
+    if (item.status === 'reserve' || item.status === 'blocked') return;
+    var opt = document.createElement('option');
+    opt.value = item.id;
+    opt.textContent = 'ที่นั่ง ' + item.label + (item.code ? ' (สลับกับ ' + item.code + ')' : ' (ว่าง)');
+    sSel.appendChild(opt);
+  });
+}
+function populateTargetSeats() { _fillSeatSelect('sm-target-pr', 'sm-target-seat'); }
+function populateCmSeats() { _fillSeatSelect('cm-target-pr', 'cm-target-seat'); }
+
+function openCrossMoveModal(asgnId, code, fullName, roomName, seatLabel) {
+  document.getElementById('cm-asgn-id').value = asgnId;
+  document.getElementById('cm-student').textContent = code + ' ' + fullName;
+  document.getElementById('cm-current').textContent = roomName + ' ที่นั่ง ' + seatLabel;
+  populateCmSeats();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('crossMoveModal')).show();
+}
+
+function moveMrRow(btn, dir) {
+  var row = btn.closest('.mr-room-row');
+  var box = document.getElementById('mr-room-list');
+  if (!row || !box) return;
+  if (dir < 0 && row.previousElementSibling) {
+    box.insertBefore(row, row.previousElementSibling);
+  } else if (dir > 0 && row.nextElementSibling) {
+    box.insertBefore(row.nextElementSibling, row);
+  }
+}
+
+// Interactive Seat Map State
+var _moveSource = null;
+var _pickStartMode = false;
+var _currentSeatData = null;
+
+function exitInteractiveModes() {
+  _moveSource = null;
+  _pickStartMode = false;
+  var cont = document.getElementById('interactive-map-container');
+  if (cont) {
+    cont.classList.remove('mode-move-active', 'mode-pick-start-active');
+    cont.querySelectorAll('.seat-moving-source').forEach(function(el){ el.classList.remove('seat-moving-source'); });
+  }
+  var mb = document.getElementById('move-mode-banner');
+  var pb = document.getElementById('pick-start-banner');
+  if (mb) mb.classList.add('d-none');
+  if (mb) mb.classList.remove('d-flex');
+  if (pb) pb.classList.add('d-none');
+  if (pb) pb.classList.remove('d-flex');
+}
+
+function enterPickStartMode() {
+  exitInteractiveModes();
+  _pickStartMode = true;
+  var cont = document.getElementById('interactive-map-container');
+  var pb = document.getElementById('pick-start-banner');
+  if (cont) cont.classList.add('mode-pick-start-active');
+  if (pb) { pb.classList.remove('d-none'); pb.classList.add('d-flex'); }
+}
+
+function startTwoClickMove() {
+  if (!_currentSeatData || !_currentSeatData.assignmentId) return;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('seatActionModal')).hide();
+  exitInteractiveModes();
+  _moveSource = _currentSeatData;
+  var cont = document.getElementById('interactive-map-container');
+  var mb = document.getElementById('move-mode-banner');
+  var mt = document.getElementById('move-mode-text');
+  if (cont) {
+    cont.classList.add('mode-move-active');
+    var srcEl = cont.querySelector('[data-seat-id="' + _moveSource.seatId + '"]');
+    if (srcEl) srcEl.classList.add('seat-moving-source');
+  }
+  if (mt) {
+    mt.textContent = 'กำลังย้าย ' + _moveSource.userCode + ' จากที่นั่ง ' + _moveSource.seatLabel + ' — กรุณาคลิกที่นั่งปลายทางบนผัง (ว่าง = ย้าย / มีคน = สลับ)';
+  }
+  if (mb) { mb.classList.remove('d-none'); mb.classList.add('d-flex'); }
+}
+
+function _postSeatAjax(params) {
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  var body = new URLSearchParams(params);
+  body.set('csrfmiddlewaretoken', csrf);
+  return fetch('{% url "food:exam_seat_action" %}', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded'},
+    body: body.toString()
+  }).then(function(r){ return r.json(); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var mapCont = document.getElementById('interactive-map-container');
+
+  // 2. Pattern hint & Alternate checkbox hint
+  var patSel = document.getElementById('aa-pattern');
+  var patHint = document.getElementById('aa-pattern-hint');
+  var hints = {
+    'seq_asc': 'จัดเรียงตามลำดับเลขเครื่อง/โต๊ะจากน้อยไปมาก (เช่น 1, 2, 3, ...)',
+    'snake_auto': 'สลับฟันปลาอัตโนมัติ: เริ่มซ้าย→ขวา หรือ ขวา→ซ้าย ตามตำแหน่งที่นั่งเริ่มต้น แล้วสลับทิศแถวถัดไป',
+    'snake_lr': 'สลับฟันปลา: แถวแรก ซ้าย→ขวา · แถวถัดไป ขวา→ซ้าย · แถวถัดไป ซ้าย→ขวา ...',
+    'snake_rl': 'สลับฟันปลา: แถวแรก ขวา→ซ้าย · แถวถัดไป ซ้าย→ขวา · แถวถัดไป ขวา→ซ้าย ...',
+    'lr': 'เรียงจากซ้ายไปขวาเหมือนกันทุกแถว',
+    'rl': 'เรียงจากขวาไปซ้ายเหมือนกันทุกแถว'
+  };
+  if (patSel && patHint) {
+    function syncHint() { patHint.textContent = hints[patSel.value] || ''; }
+    patSel.addEventListener('change', syncHint);
+    syncHint();
+  }
+  var altChk = document.getElementById('aa-alt');
+  var adjWrap = document.getElementById('aa-adj-wrap');
+  if (altChk && adjWrap) {
+    function syncAdj() { adjWrap.style.display = altChk.checked ? '' : 'none'; }
+    altChk.addEventListener('change', syncAdj);
+    syncAdj();
+  }
+
+  // 3. Click handlers on seat cells
+  if (mapCont) {
+    mapCont.addEventListener('click', function(e) {
+      var cell = e.target.closest('.exam-seat-interactive');
+      if (!cell) return;
+      var data = {
+        seatId: cell.getAttribute('data-seat-id'),
+        seatLabel: cell.getAttribute('data-seat-label'),
+        status: cell.getAttribute('data-seat-status'),
+        assignmentId: cell.getAttribute('data-assignment-id'),
+        userId: cell.getAttribute('data-user-id'),
+        userCode: cell.getAttribute('data-user-code'),
+        userName: cell.getAttribute('data-user-name')
+      };
+
+      if (_pickStartMode) {
+        var selStart = document.getElementById('aa-start-seat');
+        if (selStart) selStart.value = data.seatId;
+        _postSeatAjax({
+          action: 'set_start_seat',
+          plan_room_id: '{% if active_plan_room %}{{ active_plan_room.pk }}{% endif %}',
+          seat_id: data.seatId
+        }).then(function(res) {
+          if (res.ok) window.location.reload();
+          else alert(res.error || 'เกิดข้อผิดพลาด');
+        });
+        return;
+      }
+
+      if (_moveSource) {
+        if (_moveSource.seatId === data.seatId) { exitInteractiveModes(); return; }
+        _postSeatAjax({
+          action: 'move_or_swap',
+          source_assignment_id: _moveSource.assignmentId,
+          target_plan_room_id: '{% if active_plan_room %}{{ active_plan_room.pk }}{% endif %}',
+          target_seat_id: data.seatId
+        }).then(function(res) {
+          if (res.ok) window.location.reload();
+          else alert(res.error || 'ไม่สามารถย้ายไปยังที่นั่งนี้ได้');
+        });
+        return;
+      }
+
+      // Open Seat Action Modal
+      _currentSeatData = data;
+      document.getElementById('sm-seat-label').textContent = data.seatLabel;
+      document.getElementById('sm-assign-seat-id').value = data.seatId;
+      document.querySelectorAll('.sm-seat-id-field').forEach(function(inp){ inp.value = data.seatId; });
+
+      var infoEl = document.getElementById('sm-current-info');
+      var occBox = document.getElementById('sm-occupied-actions');
+      var asgnBox = document.getElementById('sm-assign-box');
+      var statusBtns = document.getElementById('sm-status-btns');
+
+      if (data.status === 'assigned') {
+        infoEl.innerHTML = 'สถานะปัจจุบัน: <strong class="text-primary">' + data.userCode + '</strong> — ' + data.userName;
+        occBox.classList.remove('d-none');
+        asgnBox.classList.add('d-none');
+        statusBtns.classList.add('d-none');
+        var ca = document.getElementById('sm-cancel-asgn-id');
+        var xa = document.getElementById('sm-cross-asgn-id');
+        if (ca) ca.value = data.assignmentId;
+        if (xa) xa.value = data.assignmentId;
+        populateTargetSeats();
+      } else {
+        var stText = data.status === 'reserve' ? '<span class="text-danger fw-bold">สำรอง</span>' :
+                     (data.status === 'blocked' ? '<span class="text-muted fw-bold">งดใช้งาน</span>' : '<span class="text-success fw-bold">ว่าง</span>');
+        infoEl.innerHTML = 'สถานะปัจจุบัน: ' + stText;
+        occBox.classList.add('d-none');
+        asgnBox.classList.remove('d-none');
+        statusBtns.classList.remove('d-none');
+      }
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('seatActionModal')).show();
+    });
+  }
+
+  // 4. Examinee list filter & search
+  var currentFilter = 'unseated';
+  var searchInp = document.getElementById('ex-search');
+  var clearChk = document.getElementById('aa-clear');
+  var items = Array.prototype.slice.call(document.querySelectorAll('#examinee-list .examinee-item'));
+
+  function syncClearExistingExaminees() {
+    var allowRoom = !!(clearChk && clearChk.checked);
+    items.forEach(function(el) {
+      var isSeated = el.getAttribute('data-seated') === '1';
+      var inThisRoom = el.getAttribute('data-in-this-room') === '1';
+      var chk = el.querySelector('.ex-chk');
+      if (!chk) return;
+      if (isSeated && inThisRoom) {
+        chk.disabled = !allowRoom;
+        if (!allowRoom) chk.checked = false;
+      }
+    });
+    updateSelectedCount();
+    applyExamineeFilter();
+  }
+
+  function applyExamineeFilter() {
+    var q = (searchInp ? searchInp.value : '').trim().toLowerCase();
+    var allowRoom = !!(clearChk && clearChk.checked);
+    items.forEach(function(el) {
+      var isSeated = el.getAttribute('data-seated') === '1';
+      var inThisRoom = el.getAttribute('data-in-this-room') === '1';
+      var isRights = el.getAttribute('data-rights') === '1';
+      var txt = el.getAttribute('data-search') || '';
+      var okFilter = true;
+      if (currentFilter === 'unseated') okFilter = !isSeated || (allowRoom && inThisRoom);
+      else if (currentFilter === 'current') okFilter = !isRights;
+      else if (currentFilter === 'rights') okFilter = isRights;
+      var okQuery = !q || txt.indexOf(q) !== -1;
+      el.style.display = (okFilter && okQuery) ? '' : 'none';
+    });
+  }
+  function updateSelectedCount() {
+    var cnt = document.querySelectorAll('#examinee-list .ex-chk:checked').length;
+    var badge = document.getElementById('aa-selected-count');
+    if (badge) badge.textContent = cnt;
+  }
+  if (clearChk) {
+    clearChk.addEventListener('change', syncClearExistingExaminees);
+  }
+  document.querySelectorAll('.ex-filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentFilter = btn.getAttribute('data-filter');
+      document.querySelectorAll('.ex-filter-btn').forEach(function(b) {
+        b.classList.remove('btn-primary', 'active');
+        b.classList.add('btn-outline-secondary');
+      });
+      btn.classList.remove('btn-outline-secondary');
+      btn.classList.add('btn-primary', 'active');
+      applyExamineeFilter();
+    });
+  });
+  if (searchInp) searchInp.addEventListener('input', applyExamineeFilter);
+  items.forEach(function(el) {
+    var chk = el.querySelector('.ex-chk');
+    if (chk) chk.addEventListener('change', updateSelectedCount);
+  });
+  applyExamineeFilter();
+  updateSelectedCount();
+
+  window.selectVisibleExaminees = function(checked) {
+    items.forEach(function(el) {
+      if (el.style.display === 'none') return;
+      var chk = el.querySelector('.ex-chk');
+      if (chk && !chk.disabled) chk.checked = !!checked;
+    });
+    updateSelectedCount();
+  };
+  window.selectExamineeRange = function() {
+    var from = parseInt(document.getElementById('ex-range-from').value, 10) || 1;
+    var to = parseInt(document.getElementById('ex-range-to').value, 10) || 9999;
+    if (to < from) {
+      var tmp = from;
+      from = to;
+      to = tmp;
+    }
+    items.forEach(function(el) {
+      var idx = parseInt(el.getAttribute('data-idx'), 10);
+      var chk = el.querySelector('.ex-chk');
+      if (chk && !chk.disabled) {
+        chk.checked = (idx >= from && idx <= to);
+      }
+    });
+    updateSelectedCount();
+  };
+
+  // 5. Overview table search
+  var ovSearch = document.getElementById('ov-search');
+  if (ovSearch) {
+    ovSearch.addEventListener('input', function() {
+      var q = ovSearch.value.trim().toLowerCase();
+      document.querySelectorAll('#ov-table .ov-row').forEach(function(tr) {
+        tr.style.display = (!q || tr.textContent.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+      });
+    });
+  }
+});
+</script>
+{% endblock %}

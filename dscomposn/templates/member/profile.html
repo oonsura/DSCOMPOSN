@@ -1,0 +1,558 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ข้อมูลส่วนตัว{% endblock %}
+{% block breadcrumb %}ข้อมูลส่วนตัว{% endblock %}
+{% block extra_css %}
+<style>
+  .pf-table th { width: 42%; color: #495057; font-weight: 600; vertical-align: middle; }
+  .pf-table td { vertical-align: middle; }
+  #inline-profile-form.is-editing tr.pf-editable-row th,
+  #inline-profile-form.is-editing tr.pf-editable-row td {
+    background-color: #fff9db !important;
+  }
+  #inline-profile-form.is-editing .pf-editable-row .form-control,
+  #inline-profile-form.is-editing .pf-editable-row .form-select {
+    background-color: #fffbe6 !important;
+    border-color: #f0c419 !important;
+    font-size: 0.86rem;
+    padding: 0.22rem 0.5rem;
+  }
+  #inline-profile-form.is-editing .pf-editable-row .form-control:focus {
+    background-color: #fff !important;
+    box-shadow: 0 0 0 0.2rem rgba(240, 196, 25, 0.28);
+  }
+</style>
+{% endblock %}
+{% block content %}
+{% with e=summary.eligibility %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <!-- รูปภาพประจำตัว (ระบบครอปใบหน้า ตรวจสอบหน้ากาก/แว่นดำ/หมวก และปรับขนาด <= 1 MB) -->
+    <div class="card mb-3"><div class="card-body text-center">
+      <h6 class="text-start mb-3">
+        <i class="bi bi-person-bounding-box me-1 text-primary"></i>รูปภาพประจำตัว
+        {% info_tip "ถ่ายหน้าตรง เห็นใบหน้าชัดเจน ห้ามสวมหน้ากาก แว่นดำ หรือหมวก · ระบบจะครอปเฉพาะใบหน้าและย่อขนาดไม่เกิน 1 MB อัตโนมัติ\nคลิกที่รูปเพื่อขยาย/ย่อ" %}
+      </h6>
+      {% if user.profile_photo %}
+        <div class="mb-3">
+          <img src="{{ user.profile_photo.url }}"
+               alt="รูปประจำตัว {{ user.get_full_name }}"
+               onclick="openPhotoLightbox('{{ user.profile_photo.url }}', '{{ user.camp1_code }} {{ user.get_full_name|escapejs }}')"
+               class="rounded-circle border border-3 border-primary shadow-sm"
+               style="width:128px;height:128px;object-fit:cover;cursor:zoom-in;"
+               title="คลิกเพื่อดูรูปขนาดใหญ่ (ย่อ/ขยายได้)">
+        </div>
+      {% else %}
+        <div class="mx-auto mb-2 d-flex align-items-center justify-content-center rounded-circle bg-light border text-muted"
+             style="width:110px;height:110px;">
+          <i class="bi bi-person-circle" style="font-size:3.5rem;"></i>
+        </div>
+        <div class="small text-muted mb-2">ยังไม่ได้อัปโหลดรูปภาพประจำตัว</div>
+      {% endif %}
+      <form method="post" enctype="multipart/form-data" class="text-start">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="upload_photo">
+        <div class="input-group input-group-sm mb-1">
+          <input type="file" name="profile_photo" class="form-control" accept="image/*" required>
+          <button type="submit" class="btn btn-primary fw-semibold">
+            <i class="bi bi-upload me-1"></i>อัปโหลด
+          </button>
+        </div>
+      </form>
+      {% if user.profile_photo %}
+      <form method="post" class="mt-2 text-end" onsubmit="return confirm('ลบรูปภาพประจำตัว?')">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_photo">
+        <button type="submit" class="btn btn-link btn-sm text-danger p-0 text-decoration-none">
+          <i class="bi bi-trash me-1"></i>ลบรูปภาพ
+        </button>
+      </form>
+      {% endif %}
+    </div></div>
+
+    <!-- กล่อง ปีการศึกษา / ระดับชั้น / สถานะสิทธิ์สอบท้ายค่าย (แสดงสิทธิ์สอบเมื่อประกาศผลการผ่านคัดเลือกแล้ว) -->
+    <div class="card mb-3" id="profile-rights-box">
+      <div class="card-body py-3">
+        <div class="table-responsive {% if show_profile_exam_status %}mb-2{% endif %}">
+          <table class="table table-sm table-bordered text-center align-middle mb-0" style="font-size:0.82rem;">
+            <thead class="table-light">
+              <tr>
+                <th class="text-start text-nowrap px-2">ปีการศึกษา</th>
+                {% for pl in profile_levels %}
+                <th class="px-1">{{ pl.year|default:"-" }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="table-light text-start text-nowrap px-2">ระดับชั้น</th>
+                {% for pl in profile_levels %}
+                <td class="px-1 {% if pl.level == '-' %}text-muted{% else %}fw-semibold{% endif %}">{{ pl.level }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <th class="table-light text-start text-nowrap px-2">สถานะ</th>
+                {% for pl in profile_levels %}
+                <td class="px-1">
+                  {% if pl.status_kind == 'training' %}
+                    <a href="{% url 'composn:training_scores_year' pl.year %}" class="badge bg-primary text-decoration-none" style="font-size:0.7rem;" title="ดูข้อมูลการอบรม ปีการศึกษา {{ pl.year }}">{{ pl.status_label }}</a>
+                  {% elif pl.status_kind == 'rights' %}
+                    <a href="{% url 'composn:training_scores_year' pl.year %}" class="badge bg-warning text-dark text-decoration-none" style="font-size:0.7rem;" title="ดูข้อมูลการใช้สิทธิ์ ปีการศึกษา {{ pl.year }}">{{ pl.status_label }}</a>
+                  {% elif pl.status_kind == 'waived' %}
+                    <span class="badge bg-secondary" style="font-size:0.7rem;">{{ pl.status_label }}</span>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {% if show_profile_exam_status %}
+        <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+          <span class="small fw-semibold text-dark">สถานะสิทธิ์สอบท้ายค่าย</span>
+          {% if user.camp2_code %}
+            <span class="badge px-3 py-1" style="background-color:#d84315; color:#fff; font-size:0.85rem;">มีสิทธิ์สอบท้ายค่าย 2</span>
+          {% else %}
+            <span class="badge bg-primary px-3 py-1" style="font-size:0.85rem;">มีสิทธิ์สอบท้ายค่าย 1</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- เกียรติบัตร (แสดงเมื่อผู้ดูแลระบบเปิดแสดงในปีการศึกษานั้นแล้วเท่านั้น) -->
+    {% if cert_year_published and cert_eligibility and cert_eligibility.is_current %}
+    <div class="card mb-3" id="profile-certificate-box">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-dark">
+            <i class="bi bi-award-fill text-warning me-1"></i>เกียรติบัตร (ปีการศึกษา {{ cert_year }})
+          </span>
+          {% info_tip "เกียรติบัตรสำหรับนักเรียนที่เข้าอบรมในปีปัจจุบัน และขาดอบรมไม่เกินเกณฑ์พร้อมเข้าสอบครบทุกครั้ง" %}
+        </div>
+        {% if cert_eligibility.is_eligible %}
+          <a href="{% url 'food:my_certificate' %}?year={{ cert_year }}" class="btn btn-warning btn-sm fw-bold text-dark shadow-sm w-100" target="_blank">
+            <i class="bi bi-award-fill text-danger me-1"></i>ดาวน์โหลดเกียรติบัตร (PDF)
+          </a>
+        {% else %}
+          <div class="small text-muted">
+            <span class="badge bg-secondary me-1">ไม่ผ่านเกณฑ์</span>{{ cert_eligibility.reason }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ที่นั่งสอบของฉัน (แสดงเมื่อผู้ดูแลระบบเปิดประกาศและเปิดห้องสอบนั้น) -->
+    {% if open_exam_seats %}
+    <div class="card mb-3 border-success border-opacity-50" id="profile-exam-seat-box">
+      <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-dark">
+            <i class="bi bi-grid-3x3-gap-fill text-success me-1"></i>ที่นั่งสอบของฉัน
+          </span>
+          <a href="{% url 'food:member_exam_seating' %}" class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:0.75rem;">
+            ดูผังห้องสอบ
+          </a>
+        </div>
+        <div class="d-flex flex-column gap-2">
+          {% for es in open_exam_seats %}
+          <div class="p-2 rounded bg-light border small">
+            <div class="fw-semibold text-primary">{{ es.plan.training_date.date|date_thai_short }} · {{ es.plan.effective_exam_type_display }}</div>
+            <div class="text-dark">{{ es.plan_room.room.name }}</div>
+            <div class="fw-bold text-success">
+              {% if es.plan_room.room.has_computer %}เครื่องหมายเลข{% else %}ที่นั่งหมายเลข{% endif %} {{ es.seat.seat_label }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-8">
+    <!-- ส่วนการใช้สิทธิ์: แสดงเฉพาะผู้ที่เคยเข้าค่ายมาก่อนปีปัจจุบัน (นักเรียนปัจจุบันไม่ต้องยืนยันสิทธิ์ จึงนำออก) -->
+    {% if not summary.is_current_student %}
+    <div class="card mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h5 class="mb-0"><i class="bi bi-award"></i> สิทธิ์ COMPOSN</h5>
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted small">สถานะสิทธิ์:</span>
+          {% if summary.has_rights_in_year and summary.camp_level == 2 %}
+            <span class="badge fs-6 px-3 py-2" style="background-color:#d84315; color:#fff;">
+              <i class="bi bi-award-fill me-1"></i>{{ summary.status }}
+            </span>
+          {% elif summary.has_rights_in_year and summary.camp_level == 1 %}
+            <span class="badge bg-success fs-6 px-3 py-2">
+              <i class="bi bi-award-fill me-1"></i>{{ summary.status }}
+            </span>
+          {% elif summary.status == 'หมดสิทธิ์' %}
+            <span class="badge bg-danger fs-6 px-3 py-2">{{ summary.status }}</span>
+          {% else %}
+            <span class="badge bg-secondary fs-6 px-3 py-2">{{ summary.status }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="alert {% if e.ok and summary.camp_level == 1 %}alert-success{% elif e.code == 'already_used' and summary.camp_level == 1 %}alert-info{% elif not e.ok and e.code != 'already_used' %}alert-secondary{% endif %} mb-3"
+           {% if summary.has_rights_in_year and summary.camp_level == 2 %}style="background-color:#ffe0b2; border:1px solid #d84315; color:#bf360c;"{% endif %}>
+        <div class="fw-semibold">{{ e.message }}</div>
+        {% if e.rights_round and e.rights_round.is_open %}
+          <div class="small mt-1 {% if summary.camp_level == 2 %}text-dark{% else %}text-muted{% endif %}">
+            <i class="bi bi-calendar-event me-1"></i><strong>เปิดให้ใช้สิทธิ์:</strong>
+            {{ e.rights_round.scheduled_open_at|default:e.rights_round.opened_at|datetime_thai }}
+            <span class="mx-2">|</span>
+            <i class="bi bi-clock-history me-1"></i><strong>ปิดระบบใช้สิทธิ์:</strong>
+            {% if e.rights_round.scheduled_close_at %}
+              {{ e.rights_round.scheduled_close_at|datetime_thai }}
+            {% else %}
+              จนกว่าจะปิดรอบการใช้สิทธิ์
+            {% endif %}
+          </div>
+        {% endif %}
+        {% if site_setting.rights_warning_text %}
+          <div class="small mt-1 text-muted"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>{{ site_setting.rights_warning_text }}</div>
+        {% endif %}
+        {% if summary.camp_level == 1 and site_setting.effective_exam_date_camp1 %}
+          <div class="small mt-1 fw-semibold text-primary"><i class="bi bi-calendar-check me-1"></i><strong>วันสอบท้ายค่าย 1:</strong> {{ site_setting.effective_exam_date_camp1 }}</div>
+        {% elif summary.camp_level == 2 and site_setting.exam_date_camp2 %}
+          <div class="small mt-1 fw-semibold" style="color:#bf360c;"><i class="bi bi-calendar-check me-1"></i><strong>วันสอบท้ายค่าย 2:</strong> {{ site_setting.exam_date_camp2 }}</div>
+        {% endif %}
+      </div>
+
+      {% if summary.has_rights_in_year %}
+        <div class="p-3 mb-3 rounded border {% if summary.camp_level == 1 %}{% if e.ok %}border-success bg-success bg-opacity-10{% elif summary.can_cancel %}border-primary bg-primary bg-opacity-10{% else %}bg-light{% endif %}{% endif %}"
+             {% if summary.camp_level == 2 %}style="background-color:#fff3e0; border-color:#d84315 !important;"{% endif %}>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <div class="fw-bold" {% if summary.camp_level == 2 %}style="color:#bf360c;"{% endif %}>
+                <i class="bi bi-check2-square me-1"></i>การใช้สิทธิ์ค่ายที่ {{ summary.camp_level }} ประจำปีการศึกษา {{ summary.academic_year }}
+                {% info_tip "ท่านสามารถกดยืนยันใช้สิทธิ์ และยกเลิกการใช้สิทธิ์ได้ทุกเมื่อ ก่อนหมดเวลาเปิดรอบ" %}
+              </div>
+            </div>
+            <div class="d-grid gap-2 d-sm-block">
+              {% if e.ok %}
+                <form method="post" action="{% url 'composn:confirm_rights' %}" class="d-grid d-sm-inline" onsubmit="return confirm('ยืนยันใช้สิทธิ์ค่ายที่ {{ e.rights_round.camp_level }} ปีการศึกษา {{ e.rights_round.academic_year }} ?');">
+                  {% csrf_token %}
+                  <button class="btn {% if e.rights_round.camp_level == 1 %}btn-success{% endif %}"
+                          {% if e.rights_round.camp_level == 2 %}style="background-color:#d84315; border-color:#bf360c; color:#fff;"{% endif %}>
+                    <i class="bi bi-check2-circle me-1"></i>ยืนยันใช้สิทธิ์ (ค่าย {{ e.rights_round.camp_level }} ปี {{ e.rights_round.academic_year }})
+                  </button>
+                </form>
+              {% elif summary.can_cancel %}
+                <form method="post" action="{% url 'composn:cancel_rights' %}" class="d-grid d-sm-inline" onsubmit="return confirm('ต้องการยกเลิกการใช้สิทธิ์ในปีการศึกษา {{ e.rights_round.academic_year }} หรือไม่? (สามารถกดยืนยันใหม่ได้ก่อนหมดเวลา)');">
+                  {% csrf_token %}
+                  <button class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>ยกเลิกการใช้สิทธิ์</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+      <h6 class="mt-3">ประวัติการใช้สิทธิ์</h6>
+      <div class="table-responsive">
+      <table class="table table-sm"><thead><tr><th>ปีการศึกษา</th><th>ค่าย</th><th>สถานะ</th><th>รหัสใช้สิทธิ์</th><th>เมื่อ</th></tr></thead>
+        {% for r in summary.year_records %}<tr><td>{{ r.academic_year }}</td><td>{{ r.camp_level }}</td><td>{{ r.status_text }}</td><td class="code">{{ r.rights_code|default:"-" }}</td><td>{{ r.confirmed_at|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+        {% empty %}<tr><td colspan="5" class="text-muted">ยังไม่มีประวัติ</td></tr>{% endfor %}
+      </table>
+      </div>
+      <a href="{% url 'composn:my_history_export' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i> ดาวน์โหลดประวัติ</a>
+    </div></div>
+    {% endif %}
+
+    <!-- ข้อมูลส่วนตัว + ปุ่มปากกาแก้ไขแบบ Inline (แถบพื้นหลังเหลืองอ่อนเฉพาะช่องที่แก้ไขได้) -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0"><i class="bi bi-person me-1"></i>ข้อมูลส่วนตัว</h5>
+          {% if form %}
+          <button type="button" id="btn-toggle-edit-profile"
+                  class="btn btn-sm btn-outline-warning text-dark fw-semibold"
+                  title="กดเพื่อแก้ไขข้อมูลส่วนตัว (เฉพาะช่องที่อนุญาต)">
+            <i class="bi bi-pencil-fill"></i>
+          </button>
+          {% endif %}
+        </div>
+
+        <div id="pf-edit-hint" class="small text-dark rounded px-2 py-1 mb-2 {% if not edit_mode_open %}d-none{% endif %}"
+             style="background:#fff9db; border:1px solid #f0c419;">
+          <i class="bi bi-pencil-square me-1 text-warning"></i>โหมดแก้ไข: ปรับข้อมูลได้เฉพาะช่องที่มีพื้นหลังสีเหลืองอ่อน
+        </div>
+
+        <form method="post" id="inline-profile-form" class="{% if edit_mode_open %}is-editing{% endif %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="profile">
+          <div class="table-responsive">
+          <table class="table table-sm mb-0 pf-table">
+            <tr>
+              <th>รหัสค่าย 1</th>
+              <td class="code">{{ user.camp1_code }}</td>
+            </tr>
+            <tr>
+              <th>รหัสค่าย 2</th>
+              <td class="code" style="color:#1b5e20;">{{ user.camp2_code|default:"-" }}</td>
+            </tr>
+            <tr class="{% if 'full_name' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>ชื่อ-นามสกุล</th>
+              <td>
+                {% if 'full_name' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.get_full_name|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.full_name }}
+                    {% for er in form.full_name.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.get_full_name|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'nickname' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>ชื่อเล่น</th>
+              <td>
+                {% if 'nickname' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.nickname|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.nickname }}
+                    {% for er in form.nickname.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.nickname|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>โรงเรียน</th>
+              <td>{{ user.school_name|default:"-" }}</td>
+            </tr>
+            <tr class="{% if 'birth_date' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>วันเกิด</th>
+              <td>
+                {% if 'birth_date' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.birth_date|date:"j N Y"|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.birth_date }}
+                    {% for er in form.birth_date.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.birth_date|date:"j N Y"|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>ระดับชั้นปัจจุบัน</th>
+              <td>{{ user.current_level|default:"-" }}</td>
+            </tr>
+            <tr class="{% if 'student_phone' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>เบอร์โทรนักเรียน</th>
+              <td>
+                {% if 'student_phone' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.student_phone|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.student_phone }}
+                    {% for er in form.student_phone.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.student_phone|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'parent_phone' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>เบอร์โทรผู้ปกครอง</th>
+              <td>
+                {% if 'parent_phone' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.parent_phone|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.parent_phone }}
+                    {% for er in form.parent_phone.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.parent_phone|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'email' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>อีเมล</th>
+              <td>
+                {% if 'email' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.email|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.email }}
+                    {% for er in form.email.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.email|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'chronic_disease' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>โรคประจำตัว</th>
+              <td>
+                {% if 'chronic_disease' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.chronic_disease|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.chronic_disease }}
+                    {% for er in form.chronic_disease.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.chronic_disease|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'food_allergy' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>แพ้อาหาร</th>
+              <td>
+                {% if 'food_allergy' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.food_allergy|default:"-" }}</span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    {{ form.food_allergy }}
+                    {% for er in form.food_allergy.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                  </div>
+                {% else %}
+                  {{ user.food_allergy|default:"-" }}
+                {% endif %}
+              </td>
+            </tr>
+            <tr class="{% if 'is_muslim' in editable_field_names %}pf-editable-row{% endif %}">
+              <th>ศาสนาอิสลาม</th>
+              <td>
+                {% if 'is_muslim' in editable_field_names %}
+                  <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">
+                    {% if user.is_muslim %}<span class="badge bg-success">ใช่ (อิสลาม)</span>{% else %}ไม่ใช่{% endif %}
+                  </span>
+                  <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                    <div class="form-check mb-0">
+                      {{ form.is_muslim }}
+                      <label class="form-check-label small" for="{{ form.is_muslim.id_for_label }}">ใช่ (ทานอาหารฮาลาล)</label>
+                    </div>
+                  </div>
+                {% else %}
+                  {% if user.is_muslim %}<span class="badge bg-success">ใช่ (อิสลาม)</span>{% else %}ไม่ใช่{% endif %}
+                {% endif %}
+              </td>
+            </tr>
+            {% if 'note' in editable_field_names %}
+            <tr class="pf-editable-row">
+              <th>หมายเหตุ</th>
+              <td>
+                <span class="pf-view {% if edit_mode_open %}d-none{% endif %}">{{ user.note|default:"-" }}</span>
+                <div class="pf-edit {% if not edit_mode_open %}d-none{% endif %}">
+                  {{ form.note }}
+                  {% for er in form.note.errors %}<div class="text-danger small">{{ er }}</div>{% endfor %}
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+          </table>
+          </div>
+
+          {% if form %}
+          <div id="pf-edit-actions" class="d-flex gap-2 mt-3 {% if not edit_mode_open %}d-none{% endif %}">
+            <button type="submit" class="btn btn-sm btn-primary flex-grow-1 fw-semibold">
+              <i class="bi bi-check2-circle me-1"></i>บันทึกข้อมูลส่วนตัว
+            </button>
+            <button type="button" id="btn-cancel-edit-profile" class="btn btn-sm btn-outline-secondary">ยกเลิก</button>
+          </div>
+          {% endif %}
+        </form>
+
+        <!-- ปุ่มคำร้องขอเปลี่ยนชื่อโรงเรียน -->
+        <hr class="my-3">
+        {% if open_request %}
+          <div class="alert alert-info small mb-0 py-2">
+            <div class="fw-semibold mb-1">
+              <i class="bi bi-building-check me-1"></i>คำร้องขอเปลี่ยนชื่อโรงเรียน
+              {% info_tip "ส่งคำร้องได้ครั้งเดียว จนกว่าผู้ดูแลระบบจะเคลียร์สถานะ" %}
+            </div>
+            <div>เดิม: <span class="text-muted">{{ open_request.old_school_name|default:"-" }}</span></div>
+            <div>ใหม่: <b>{{ open_request.new_school_name }}</b></div>
+            <div>สถานะ: <span class="badge bg-primary">{{ open_request.get_status_display }}</span></div>
+            {% if open_request.admin_note %}<div>หมายเหตุ: {{ open_request.admin_note }}</div>{% endif %}
+          </div>
+        {% else %}
+          <button type="button" class="btn btn-outline-primary btn-sm w-100 fw-semibold"
+                  data-bs-toggle="modal" data-bs-target="#schoolRequestModal">
+            <i class="bi bi-building-gear me-1"></i>คำร้องขอเปลี่ยนชื่อโรงเรียน
+          </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal คำร้องขอเปลี่ยนชื่อโรงเรียน -->
+{% if not open_request %}
+<div class="modal fade" id="schoolRequestModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'composn:school_request' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="bi bi-building-gear me-2 text-primary"></i>คำร้องขอเปลี่ยนชื่อโรงเรียน</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-muted">ชื่อโรงเรียนเดิม</label>
+            <input type="text" class="form-control bg-light" value="{{ user.school_name|default:'-' }}" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="id_new_school_name">ชื่อโรงเรียนใหม่ <span class="text-danger">*</span></label>
+            <input type="text" name="new_school_name" id="id_new_school_name" class="form-control" placeholder="กรอกชื่อโรงเรียนใหม่" required>
+          </div>
+          <div class="mb-0">
+            <label class="form-label small fw-semibold" for="id_school_reason">เหตุผล (ไม่บังคับ)</label>
+            <textarea name="reason" id="id_school_reason" rows="2" class="form-control" placeholder="ระบุเหตุผลการเปลี่ยนชื่อโรงเรียน เช่น ย้ายโรงเรียน / สะกดชื่อผิด"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-sm btn-primary fw-semibold">
+            <i class="bi bi-send me-1"></i>ส่งคำร้องให้ผู้ดูแลระบบอนุมัติ
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endwith %}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var btnToggle = document.getElementById('btn-toggle-edit-profile');
+  var btnCancel = document.getElementById('btn-cancel-edit-profile');
+  var formEl = document.getElementById('inline-profile-form');
+  var actionsEl = document.getElementById('pf-edit-actions');
+  var hintEl = document.getElementById('pf-edit-hint');
+  if (!btnToggle || !formEl) return;
+
+  function setEditing(editing) {
+    formEl.classList.toggle('is-editing', editing);
+    formEl.querySelectorAll('.pf-view').forEach(function (el) { el.classList.toggle('d-none', editing); });
+    formEl.querySelectorAll('.pf-edit').forEach(function (el) { el.classList.toggle('d-none', !editing); });
+    if (actionsEl) actionsEl.classList.toggle('d-none', !editing);
+    if (hintEl) hintEl.classList.toggle('d-none', !editing);
+    btnToggle.classList.toggle('btn-warning', editing);
+    btnToggle.classList.toggle('btn-outline-warning', !editing);
+    if (editing) {
+      var firstInput = formEl.querySelector('.pf-edit input, .pf-edit select, .pf-edit textarea');
+      if (firstInput) firstInput.focus();
+    }
+  }
+
+  btnToggle.addEventListener('click', function () {
+    setEditing(!formEl.classList.contains('is-editing'));
+  });
+  if (btnCancel) {
+    btnCancel.addEventListener('click', function () {
+      formEl.reset();
+      setEditing(false);
+    });
+  }
+})();
+</script>
+{% endblock %}

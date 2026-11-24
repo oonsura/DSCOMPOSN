@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}แบบสอบถาม (ปีการศึกษา {{ year }}){% endblock %}
+{% block breadcrumb %}แบบสอบถาม{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-clipboard2-check me-2 text-primary"></i>แบบสอบถาม (ปีการศึกษา {{ year }})
+      {% info_tip "กรุณาตอบแบบสอบถามเพื่อใช้เป็นข้อมูลในการจัดเตรียมอาหารและดูแลนักเรียน" %}
+    </h4>
+  </div>
+  <a href="{% url 'food:my_food' %}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-bowl-hot me-1"></i>กลับไปหน้ารายการอาหาร
+  </a>
+</div>
+
+{% for s in surveys %}
+<div class="card mb-3">
+  <div class="card-header fw-bold">
+    <i class="bi bi-ui-checks me-2 text-success"></i>{{ s.title }}
+  </div>
+  <div class="card-body">
+    {% if s.description %}<p class="text-muted small mb-3">{{ s.description }}</p>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="survey_id" value="{{ s.pk }}">
+      {% for item in s.q_items %}
+      {% with q=item.q %}
+      <div class="mb-3 p-3 rounded border bg-light bg-opacity-50">
+        <label class="form-label fw-semibold">
+          {{ forloop.counter }}. {{ q.question_text }}
+          {% if q.is_required %}<span class="text-danger">*</span>{% endif %}
+        </label>
+
+        {% if q.question_type == 'choice' %}
+          {% for opt in item.choices %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="q_{{ q.pk }}" id="q_{{ q.pk }}_{{ forloop.counter }}"
+                   value="{{ opt }}" {% if item.current == opt %}checked{% endif %} {% if q.is_required %}required{% endif %}>
+            <label class="form-check-label" for="q_{{ q.pk }}_{{ forloop.counter }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+        {% elif q.question_type == 'multiple' %}
+          {% for opt in item.choices %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="q_{{ q.pk }}" id="q_{{ q.pk }}_{{ forloop.counter }}"
+                   value="{{ opt }}" {% if opt in item.current_list %}checked{% endif %}>
+            <label class="form-check-label" for="q_{{ q.pk }}_{{ forloop.counter }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+        {% elif q.question_type == 'rating' %}
+          <div class="d-flex flex-wrap gap-3">
+            {% for opt in item.choices %}
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="q_{{ q.pk }}" id="q_{{ q.pk }}_{{ opt }}"
+                     value="{{ opt }}" {% if item.current == opt %}checked{% endif %} {% if q.is_required %}required{% endif %}>
+              <label class="form-check-label" for="q_{{ q.pk }}_{{ opt }}">{{ opt }} คะแนน</label>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <textarea name="q_{{ q.pk }}" rows="2" class="form-control" placeholder="พิมพ์คำตอบของท่าน..." {% if q.is_required %}required{% endif %}>{{ item.current }}</textarea>
+        {% endif %}
+      </div>
+      {% endwith %}
+      {% endfor %}
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-check2-circle me-1"></i>บันทึกคำตอบแบบสอบถาม
+      </button>
+    </form>
+  </div>
+</div>
+{% empty %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    ขณะนี้ยังไม่มีแบบสอบถามที่เปิดให้ตอบ
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

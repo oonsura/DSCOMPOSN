@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}รายละเอียดรอบ {{ rr }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      {{ rr }}
+      {% if rr.is_open %}<span class="badge bg-success ms-1">กำลังเปิด</span>{% else %}<span class="badge bg-secondary ms-1">ปิดแล้ว</span>{% endif %}
+      {% info_tip "จัดการวันที่เปิด-ปิด เปิดรอบใหม่ และลบรายการใช้สิทธิ์รายครั้ง" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-sm btn-outline-success" href="?export=xlsx"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</a>
+    {% if rr.is_open %}
+    <form class="d-inline" method="post" action="{% url 'composn:admin_close_round' rr.pk %}"
+          onsubmit="return confirm('ปิดรอบ? ผู้ที่ยังไม่ยืนยัน ({{ pending|length }} คน) จะถือว่าสละสิทธิ์ และระบบจะสำรองข้อมูลอัตโนมัติ')">
+      {% csrf_token %}
+      <input type="hidden" name="mark_waived" value="1">
+      <button class="btn btn-sm btn-danger"><i class="bi bi-stop-circle me-1"></i>ปิดรอบการใช้สิทธิ์</button>
+    </form>
+    {% else %}
+    <form class="d-inline" method="post" action="{% url 'composn:admin_reopen_round' rr.pk %}"
+          onsubmit="return confirm('ต้องการเปิดรอบนี้ใหม่อีกครั้ง? (รายการสละสิทธิ์ในรอบนี้จะถูกล้างเพื่อให้กลับมายืนยันได้)')">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-success"><i class="bi bi-arrow-clockwise me-1"></i>เปิดรอบนี้ใหม่อีกครั้ง</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'composn:admin_rounds' %}" class="btn btn-sm btn-outline-secondary">กลับ</a>
+  </div>
+</div>
+
+<!-- แก้ไขชื่อรอบและวันที่/เวลาเปิด-ปิด -->
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-calendar-range me-2 text-primary"></i>แก้ไขชื่อรอบ และตั้งค่าวันที่/เวลาเปิด-ปิด</div>
+  <div class="card-body">
+    <form method="post" action="{% url 'composn:admin_round_schedule' rr.pk %}" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">ชื่อรอบ</label>
+        <input type="text" name="title" class="form-control form-control-sm" value="{{ rr.title }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">วันที่/เวลาเปิดรอบ</label>
+        <input type="datetime-local" name="opened_at" class="form-control form-control-sm" value="{{ rr.opened_at|date:'Y-m-d\TH:i' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">เวลาเริ่มให้กดยืนยัน</label>
+        <input type="datetime-local" name="scheduled_open_at" class="form-control form-control-sm" value="{{ rr.scheduled_open_at|date:'Y-m-d\TH:i' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">เวลาสิ้นสุด {% info_tip "เว้นว่างได้หากไม่จำกัดเวลาสิ้นสุด" %}</label>
+        <input type="datetime-local" name="scheduled_close_at" class="form-control form-control-sm" value="{{ rr.scheduled_close_at|date:'Y-m-d\TH:i' }}">
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-floppy me-1"></i>บันทึกวันเวลาเปิด-ปิด
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if rr.backup_file %}
+<div class="alert alert-info py-2">
+  <i class="bi bi-hdd-stack me-1"></i>ไฟล์สำรองข้อมูล: <a href="{% url 'composn:admin_backup_download' rr.backup_file %}" class="fw-bold">{{ rr.backup_file }}</a>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="{% if rr.is_open %}col-lg-8{% else %}col-12{% endif %}">
+    <div class="card">
+      <div class="card-header">รายชื่อการบันทึกสิทธิ์ในรอบนี้ ({{ records|length }} รายการ)</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>รหัสใช้สิทธิ์</th><th>สถานะ</th><th>รหัสค่าย 1</th><th>ชื่อ-นามสกุล</th><th>โรงเรียน</th><th>ชั้น</th><th>เวลา</th><th>ลบ</th></tr>
+          </thead>
+          <tbody>
+          {% for r in records %}
+            <tr class="{% if not r.is_used %}table-secondary{% endif %}">
+              <td class="code">{{ r.rights_code|default:"-" }}</td>
+              <td>{% if r.is_used %}<span class="badge bg-success">ใช้สิทธิ์</span>{% else %}<span class="badge bg-secondary">สละสิทธิ์</span>{% endif %}</td>
+              <td class="code"><a href="{% url 'composn:admin_user_detail' r.user.pk %}">{{ r.user.camp1_code }}</a></td>
+              <td>{{ r.full_name_snapshot }}</td>
+              <td>{{ r.school_snapshot }}</td>
+              <td>{{ r.grade_level }}</td>
+              <td>{{ r.confirmed_at|date:"d/m/Y H:i"|default:"-" }}</td>
+              <td>
+                <form method="post" action="{% url 'composn:admin_use_record_delete' r.pk %}"
+                      onsubmit="return confirm('ลบรายการใช้สิทธิ์นี้?')">
+                  {% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+                  <button class="btn btn-sm btn-outline-danger py-0"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-3">ยังไม่มีรายการยืนยันใช้สิทธิ์</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% if rr.is_open %}
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">ผู้มีสิทธิ์ที่ยังไม่ยืนยัน ({{ pending|length }} คน)</div>
+      <div class="card-body" style="max-height:500px;overflow:auto">
+        <ul class="list-unstyled small mb-0">
+          {% for u in pending %}<li class="py-1 border-bottom"><span class="code">{% if rr.camp_level == 2 %}{{ u.camp2_code|default:u.camp1_code }}{% else %}{{ u.camp1_code }}{% endif %}</span> {{ u.get_full_name }}</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ประวัติเวลาเรียน{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+  <h4 class="mb-0">ประวัติเวลาเรียน: {{ student.camp1_code }} {{ student.get_full_name }}</h4>
+  <a href="{% url 'food:staff_attendance' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>กลับหน้าบันทึกเวลาเรียน</a>
+</div>
+<div class="p-2 mb-3 rounded fw-bold" style="background: {{ absence.color|default:'#e9f7ef' }}">{{ absence.text }}</div>
+<div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0">
+  <thead class="table-light"><tr><th>วันที่</th><th>ช่วง</th><th>สถานะ</th><th>เหตุผล</th><th>หมายเหตุ</th><th>บันทึกโดย</th><th>เมื่อ</th><th></th></tr></thead>
+  {% for a in records %}<tr><td>{{ a.date|date:"d/m/Y" }}</td><td>{{ a.get_session_period_display }}</td><td>{{ a.get_status_display }}</td><td>{{ a.reason }}</td><td>{{ a.note }}</td><td>{{ a.recorded_by.camp1_code }}</td><td class="small">{{ a.recorded_at|date:"d/m/Y H:i" }}</td>
+    <td>{% if a.academic_year in approved_years %}<span class="badge bg-secondary" title="อนุมัติประกาศผลแล้ว"><i class="bi bi-lock-fill"></i> ล็อก</span>{% else %}<form method="post" onsubmit="return confirm('ลบรายการนี้? (Soft Delete)')">{% csrf_token %}<input type="hidden" name="id" value="{{ a.pk }}"><button class="btn btn-sm btn-outline-danger py-0">ลบ</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="text-center text-muted py-3">ไม่มีรายการ</td></tr>{% endfor %}
+</table></div></div></div>
+{% endblock %}

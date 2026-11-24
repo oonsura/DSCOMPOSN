@@ -1,0 +1,1032 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}บันทึกคะแนน{% endblock %}
+{% block extra_head %}
+<style>
+.code-blue { color: #0d6efd !important; font-weight: 700; }
+.code-green { color: #198754 !important; font-weight: 700; }
+@media (max-width: 767.98px) {
+  #excel-score-grid .excel-cell-input {
+    min-width: 72px;
+    min-height: 38px;
+    font-size: 16px;
+  }
+  #excel-score-grid th, #excel-score-grid td {
+    white-space: nowrap;
+  }
+}
+</style>
+{% endblock %}
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link fw-semibold active" href="{% url 'food:staff_scores' %}?year={{ year }}">
+      <i class="bi bi-pencil-square me-1 text-primary"></i>บันทึกคะแนน
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold" href="{% url 'food:score_summary' %}?year={{ year }}">
+      <i class="bi bi-bar-chart-line me-1 text-info"></i>สรุปคะแนนรวม
+    </a>
+  </li>
+</ul>
+
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-pencil-square me-2 text-primary"></i>บันทึกคะแนน ปีการศึกษา {{ year }}
+      {% info_tip "แสดงทุกหัวข้อย่อยพร้อมกันแบบตาราง Excel · กรอกรายคน ใช้ลูกศร ▲ ▼ ◀ ▶ เลื่อนช่อง หรือ Copy จาก Excel / Google Sheets มาวาง (Ctrl+V) ได้ทันที" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if selected_main %}
+    <a class="btn btn-outline-success btn-sm" href="?year={{ year }}&main_id={{ selected_main.pk }}&exam_no={{ exam_no }}&center={{ center|urlencode }}&q={{ q|urlencode }}&export=xlsx">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export คะแนนหัวข้อนี้ ({{ sub_cols|length }} คอลัมน์)
+    </a>
+    {% endif %}
+    <a class="btn btn-success btn-sm fw-semibold" href="?year={{ year }}&center={{ center|urlencode }}&q={{ q|urlencode }}&export=all_xlsx">
+      <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export คะแนนทั้งหมด (หัวข้อใหญ่+ย่อย .xlsx)
+    </a>
+    <a class="btn btn-warning btn-sm text-dark fw-semibold" href="{% url 'food:score_announcement' %}?year={{ year }}">
+      <i class="bi bi-megaphone me-1"></i>เอกสารประกาศผล
+    </a>
+  </div>
+</div>
+
+{% if not main_categories %}
+  <div class="alert alert-warning">
+    ยังไม่มีหัวข้อคะแนนสำหรับปีการศึกษา {{ year }}
+    {% if user.role == 'admin' %}· <a href="{% url 'food:score_categories' %}?year={{ year }}" class="fw-bold">คลิกเพื่อตั้งค่ากำหนดคะแนนและสัดส่วน</a>{% endif %}
+  </div>
+{% else %}
+<!-- แท็บเลือกหัวข้อใหญ่ + ตัวกรอง -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-center" method="get">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ปีการศึกษา</label>
+        <select class="form-select form-select-sm fw-semibold" name="year" onchange="if(this.form.main_id){this.form.main_id.disabled=true;} this.form.submit();" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปี {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold mb-1">เลือกหัวข้อคะแนนใหญ่</label>
+        <select class="form-select form-select-sm fw-semibold" name="main_id" onchange="this.form.submit()">
+          {% for mc in main_categories %}
+          <option value="{{ mc.pk }}" {% if selected_main.pk == mc.pk %}selected{% endif %}>
+            {{ mc.main_no }}. {{ mc.name }} (สัดส่วน {{ mc.weight|floatformat:2 }} · เต็ม {{ mc.default_max_score|floatformat:2 }} · {{ mc.sub_list|length|default:1 }} คอลัมน์){% if not mc.is_currently_open %} [ปิดกรอก]{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">ค้นหา</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="รหัส/ชื่อ">
+      </div>
+      <div class="col-md-1 align-self-end">
+        <button class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> แสดง</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if is_year_approved %}
+<div class="alert alert-warning d-flex align-items-center gap-2 py-2" id="scores-approved-lock-banner">
+  <i class="bi bi-lock-fill fs-5 text-warning"></i>
+  <div>
+    <strong>ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว — ล็อกการแก้ไขและนำเข้าคะแนน</strong>
+    <span class="small d-block text-muted">สามารถดูและ Export คะแนนได้เท่านั้น
+      {% if user.role == 'admin' %}· หากต้องการแก้ไข กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; ยกเลิกประกาศผล</a>{% endif %}
+    </span>
+  </div>
+</div>
+{% elif not is_open %}
+<div class="alert alert-warning py-2">
+  <i class="bi bi-lock-fill me-1"></i>หัวข้อคะแนน <strong>{{ selected_main.name }}</strong> ปิดการกรอกคะแนนหรืออยู่นอกเวลาที่กำหนด
+  {% if user.role == 'admin' %}(คุณเป็น Admin จึงยังสามารถแก้ไขได้ หรือไปปรับเวลาเปิด-ปิดได้ที่ <a href="{% url 'food:score_categories' %}?year={{ year }}">ตั้งค่าคะแนน</a>){% endif %}
+</div>
+{% endif %}
+
+{% if not is_year_approved %}
+<div class="d-md-none mb-2">
+  <button type="button" class="btn btn-outline-primary btn-sm w-100 d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#scoreImportToolsCollapse" aria-expanded="false">
+    <span><i class="bi bi-file-earmark-excel me-1"></i>เครื่องมือนำเข้า Excel / วางคะแนน</span>
+    <i class="bi bi-chevron-down"></i>
+  </button>
+</div>
+<div id="scoreImportToolsCollapse" class="collapse d-md-block">
+<!-- เครื่องมือนำเข้า Excel และ Copy-Paste จาก Excel / Google Sheets -->
+<div class="row g-3 mb-3">
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-header py-2">
+        <i class="bi bi-file-earmark-excel me-2 text-success"></i>นำเข้าคะแนนด้วยไฟล์ Excel (.xlsx)
+        <span class="fw-bold text-primary">— คะแนน{{ selected_main.name }}</span>
+        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle ms-1">หัวข้อ {{ selected_main.main_no }}</span>
+        {% info_tip "คะแนนในไฟล์จะถูกบันทึกเป็น " selected_main.main_no ". " selected_main.name " · จับคู่นักเรียนด้วย รหัสค่าย 1 หรือ ชื่อ-นามสกุล\nไฟล์มีหัวตารางหรือไม่มีก็ได้ (ถ้าไม่มีจะจับคู่ตามลำดับคอลัมน์)\nดาวน์โหลดแบบฟอร์มได้จากปุ่ม Export คะแนนหัวข้อนี้" %}
+      </div>
+      <div class="card-body py-2">
+        {% if pending_import %}
+        <div class="alert alert-warning py-1 px-2 small mb-2">
+          <i class="bi bi-hourglass-split me-1"></i>มีไฟล์ <strong>{{ pending_import.file_name }}</strong> ที่ตรวจสอบแล้วแต่ยังไม่ได้ยืนยันนำเข้า
+          (หัวข้อ <strong>{{ pending_import.main_label }}</strong>)
+          · <a href="?year={{ pending_import.year }}&main_id={{ pending_import.main_id }}#import-preview-section" class="fw-bold">กลับไปดำเนินการต่อ</a>
+        </div>
+        {% endif %}
+        <form method="post" enctype="multipart/form-data" class="row g-2 align-items-center">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="import_excel">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="main_id" value="{{ selected_main.pk }}">
+          <div class="col">
+            <input type="file" name="excel_file" class="form-control form-control-sm" accept=".xlsx" required>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-shield-check me-1"></i>ตรวจสอบและ Preview ไฟล์ Excel</button>
+          </div>
+        </form>
+        <div class="mt-2 d-flex flex-wrap gap-1 align-items-center small">
+          <span class="text-muted">คอลัมน์ ({{ sub_cols|length }}):</span>
+          {% for sc in sub_cols %}<span class="badge bg-light text-dark border">{{ sc.display_label }} ({{ sc.default_max_score|floatformat:"-2" }})</span>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card h-100">
+      <div class="card-header py-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-clipboard-check me-2 text-primary"></i>คัดลอกจาก Excel / Google Sheets มาวาง <span class="fw-semibold text-primary">— คะแนน{{ selected_main.name }}</span>
+          {% info_tip "คลิกที่ช่องในตารางแล้วกด Ctrl+V เพื่อวางคะแนนได้ทันที หรือวางในกล่องด้านล่าง" %}
+        </span>
+      </div>
+      <div class="card-body py-2">
+        <form method="post" id="form-paste-excel">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="paste_excel">
+          <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="main_id" value="{{ selected_main.pk }}">
+          <input type="hidden" name="exam_no" value="{{ exam_no }}">
+          <div class="row g-2 mb-2">
+            <div class="col-sm-5">
+              <label class="form-label small mb-1 fw-semibold">ทิศทางข้อมูล</label>
+              <select name="paste_orientation" id="box-paste-orientation" class="form-select form-select-sm">
+                <option value="auto">อัตโนมัติ (ตรวจจับแนวตั้ง/แนวนอน)</option>
+                <option value="vertical">วางแนวตั้ง (ลงตามรายชื่อนักเรียน)</option>
+                <option value="horizontal">วางแนวนอน (ข้ามหัวข้อย่อย)</option>
+              </select>
+            </div>
+            <div class="col-sm-7">
+              <label class="form-label small mb-1 fw-semibold">เริ่มที่หัวข้อย่อย</label>
+              <select name="category" id="box-paste-category" class="form-select form-select-sm">
+                {% for sc in sub_cols %}
+                  <option value="{{ sc.pk }}">{{ forloop.counter }}. {{ sc.name }} (เต็ม {{ sc.default_max_score|floatformat:2 }})</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <textarea name="paste_data" id="box-paste-data" class="form-control form-control-sm code" rows="2"
+                      placeholder="วางคะแนนที่คัดลอกมาจาก Excel ได้ทั้งแนวตั้ง (คอลัมน์) หรือแนวนอน (แถว) เช่น 10 9 8.5 7 หรือพร้อมรหัส 69DS01 [Tab] 10" required></textarea>
+          </div>
+          <div class="d-flex gap-2 flex-wrap justify-content-end">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="pasteFromBoxToGrid()">
+              <i class="bi bi-table me-1"></i>หยอดลงตาราง (ดูในตารางก่อนบันทึก)
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-floppy me-1"></i>บันทึกลงระบบทันที
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+{% endif %}
+
+{% if score_import_preview %}
+<!-- ตาราง Preview ผลการตรวจสอบไฟล์ Excel ก่อนกดยืนยันนำเข้า -->
+<div class="card border-primary shadow-sm mb-4" id="import-preview-section">
+  <div class="card-header bg-primary bg-opacity-10 py-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0 fw-bold text-primary">
+        <i class="bi bi-clipboard2-check me-2"></i>ผลการตรวจสอบไฟล์คะแนน Excel ก่อนนำเข้า (Preview)
+      </h5>
+      <small class="text-muted">
+        ไฟล์: <strong>{{ score_import_preview.file_name|default:"-" }}</strong> ·
+        นำเข้าเป็นคะแนนหัวข้อ: <strong class="text-primary">{{ selected_main.main_no }}. {{ selected_main.name }}</strong> · พบข้อมูลทั้งหมด {{ score_import_preview.total_rows }} แถว
+      </small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>นำเข้าได้: {{ score_import_preview.valid_count }} คน</span>
+      {% if score_import_preview.invalid_count > 0 %}
+        <span class="badge bg-danger fs-6 px-3 py-2"><i class="bi bi-exclamation-triangle me-1"></i>พบปัญหา: {{ score_import_preview.invalid_count }} คน</span>
+      {% endif %}
+      {% if score_import_preview.skipped_count > 0 %}
+        <span class="badge bg-secondary fs-6 px-3 py-2"><i class="bi bi-dash-circle me-1"></i>ไม่มีคะแนน (ข้าม): {{ score_import_preview.skipped_count }} คน</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+    <!-- รายงานการตรวจสอบคอลัมน์เทียบกับหัวข้อย่อย -->
+    <div class="mb-3 p-3 rounded bg-light border">
+      <h6 class="fw-bold mb-2"><i class="bi bi-layout-three-columns me-2 text-primary"></i>ผลการตรวจสอบคอลัมน์ในไฟล์ Excel เทียบกับหัวข้อย่อยในระบบ:</h6>
+      {% if score_import_preview.identity_info %}
+      <div class="small mb-2">
+        <i class="bi bi-person-badge me-1 text-primary"></i>คอลัมน์ระบุตัวนักเรียน:
+        {% if score_import_preview.identity_info.code_col %}รหัสค่าย = <strong>{{ score_import_preview.identity_info.code_col }}</strong>{% endif %}
+        {% if score_import_preview.identity_info.name_col %}{% if score_import_preview.identity_info.code_col %} · {% endif %}ชื่อ-นามสกุล = <strong>{{ score_import_preview.identity_info.name_col }}</strong>{% endif %}
+        {% if not score_import_preview.identity_info.code_col and not score_import_preview.identity_info.name_col %}<strong class="text-danger">ไม่พบ</strong>{% endif %}
+        · แถวหัวตาราง: <strong>{% if score_import_preview.has_header %}มี{% else %}ไม่มี (จับคู่ตามลำดับคอลัมน์){% endif %}</strong>
+      </div>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        {% for mc in score_import_preview.matched_cols %}
+          <span class="badge {% if mc.method == 'name' %}bg-success bg-opacity-10 text-success border border-success-subtle{% else %}bg-warning bg-opacity-10 text-dark border border-warning-subtle{% endif %} p-2 text-start">
+            <i class="bi bi-check2-circle me-1"></i>คอลัมน์ {{ mc.col_letter }}{% if mc.method == 'name' %} "{{ mc.header }}"{% endif %} ➔ <strong>{{ mc.sub_col_name }}</strong> (เต็ม {{ mc.max_score|floatformat:"-2" }}){% if mc.method == 'order' %} <small>(ตามลำดับ)</small>{% endif %}
+          </span>
+        {% endfor %}
+      </div>
+      {% if score_import_preview.column_issues %}
+        <div class="alert alert-warning py-2 px-3 small mb-2">
+          {% for issue in score_import_preview.column_issues %}
+            <div><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ issue }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if score_import_preview.ignored_cols %}
+        <div class="small text-muted mt-2">
+          <em>คอลัมน์ในไฟล์ Excel ที่ไม่ตรงกับหัวข้อคะแนน (ระบบจะข้าม):</em>
+          {% for ic in score_import_preview.ignored_cols %}
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border me-1">{{ ic.header }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- ตารางแสดงรายละเอียดแถวนักเรียนและคะแนน -->
+    <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+      <table class="table table-sm table-hover mb-0" style="font-size: 0.86rem;">
+        <thead class="table-light sticky-top">
+          <tr>
+            <th class="text-center" style="width: 50px;">แถว</th>
+            <th>รหัสค่าย 1</th>
+            <th>ชื่อ-นามสกุล (ในระบบ)</th>
+            <th>ข้อมูลในไฟล์ Excel</th>
+            <th class="text-center">วิธีจับคู่</th>
+            {% for sc in sub_cols %}
+              <th class="text-center">{{ sc.display_label }}<br><small class="text-muted">(เต็ม {{ sc.default_max_score|floatformat:2 }})</small></th>
+            {% endfor %}
+            <th class="text-center">สถานะ</th>
+            <th>ปัญหา / รายละเอียด</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in score_import_preview.rows %}
+          <tr class="{% if r.is_valid %}table-success bg-opacity-10{% elif r.is_skipped %}table-secondary bg-opacity-10{% else %}table-danger bg-opacity-10{% endif %}">
+            <td class="text-center text-muted">{{ r.rownum }}</td>
+            <td class="code fw-bold">
+              {% if r.user %}
+                <span class="{% if r.user.is_current_cohort %}code-blue{% else %}code-green{% endif %}">{{ r.user.camp1_code }}</span>
+              {% else %}
+                <span class="text-danger">{{ r.raw_code|default:"-" }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.user %}
+                {{ r.user_name|default:"-" }}
+              {% elif r.can_override %}
+                <div class="text-danger small">{{ r.user_name|default:"-" }}</div>
+                <select name="override_user_{{ r.rownum }}" form="confirm-import-form"
+                        class="form-select form-select-sm mt-1 preview-override-select" style="min-width: 210px;">
+                  <option value="">-- ข้ามแถวนี้ (ไม่นำเข้า) --</option>
+                  {% if r.suggestions %}
+                  <optgroup label="ชื่อใกล้เคียงในระบบ">
+                    {% for sg in r.suggestions %}
+                      <option value="{{ sg.pk }}">{{ sg.code }} {{ sg.name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                  {% if all_year_members %}
+                  <optgroup label="รายชื่อนักเรียนทั้งหมดในปี {{ year }}">
+                    {% for ym in all_year_members %}
+                      <option value="{{ ym.pk }}">{{ ym.camp1_code }} {{ ym.get_full_name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
+                </select>
+              {% else %}
+                {{ r.user_name|default:"-" }}
+              {% endif %}
+            </td>
+            <td class="small text-muted">
+              {% if r.raw_code %}รหัส: <code>{{ r.raw_code }}</code>{% endif %}
+              {% if r.raw_name %}{% if r.raw_code %}<br>{% endif %}ชื่อ: {{ r.raw_name }}{% endif %}
+            </td>
+            <td class="text-center">
+              {% if r.match_by == 'code' %}
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">รหัสค่าย 1</span>
+              {% elif r.match_by == 'name' %}
+                <span class="badge bg-info bg-opacity-10 text-dark border border-info-subtle">ชื่อ-นามสกุล</span>
+              {% else %}
+                <span class="badge bg-danger">ไม่พบในระบบ</span>
+              {% endif %}
+            </td>
+            {% for sc in sub_cols %}
+              <td class="text-center">
+                {% with sc_item=r.scores|get_item:sc.pk %}
+                  {% if sc_item.status == 'valid' %}
+                    <span class="fw-semibold text-success">{{ sc_item.value }}</span>
+                  {% elif sc_item.status == 'exceeded' %}
+                    <span class="fw-bold text-danger" title="{{ sc_item.error }}">{{ sc_item.raw_value }} <i class="bi bi-exclamation-circle-fill text-danger"></i></span>
+                  {% elif sc_item.status == 'error' %}
+                    <span class="fw-bold text-danger" title="{{ sc_item.error }}">{{ sc_item.raw_value }} <i class="bi bi-x-circle-fill text-danger"></i></span>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+            {% endfor %}
+            <td class="text-center text-nowrap">
+              {% if r.is_valid %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>พร้อมนำเข้า</span>
+              {% elif r.is_skipped %}
+                <span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>ข้าม</span>
+              {% else %}
+                <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>พบปัญหา</span>
+              {% endif %}
+            </td>
+            <td class="small {% if r.is_valid %}text-success{% elif r.is_skipped %}text-muted{% else %}text-danger fw-semibold{% endif %}">
+              {% if r.errors %}
+                <div><i class="bi bi-x-octagon-fill text-danger me-1"></i>{{ r.errors|join:"; " }}</div>
+              {% endif %}
+              {% if r.warnings %}
+                <div class="text-warning text-opacity-75"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>{{ r.warnings|join:"; " }}</div>
+              {% endif %}
+              {% if not r.errors and not r.warnings %}
+                <i class="bi bi-check-lg text-success"></i> ข้อมูลถูกต้อง
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2 justify-content-between align-items-center bg-light">
+    <div class="small text-muted">
+      เมื่อกดยืนยัน ระบบจะนำเข้าเฉพาะแถวที่ผ่านการตรวจสอบ <strong id="preview-confirm-summary-count">{{ score_import_preview.valid_count }} คน</strong> (รวมแถวที่เลือกจับคู่เพิ่มเอง · แถวที่มีปัญหาที่ไม่ได้จับคู่จะถูกข้าม)
+    </div>
+    <div class="d-flex gap-2">
+      <form method="post" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="cancel_import_preview">
+        <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="main_id" value="{{ selected_main.pk }}">
+        <input type="hidden" name="exam_no" value="{{ exam_no }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg me-1"></i>ยกเลิก</button>
+      </form>
+      {% if score_import_preview.valid_count > 0 or score_import_preview.has_resolvable_unmatched %}
+      <form method="post" id="confirm-import-form" class="d-inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm_import_excel">
+        <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="main_id" value="{{ selected_main.pk }}">
+        <input type="hidden" name="exam_no" value="{{ exam_no }}">
+        <button type="submit" id="btn-confirm-import" class="btn btn-success btn-sm fw-bold"
+                data-base-valid="{{ score_import_preview.valid_count }}"
+                {% if score_import_preview.valid_count == 0 %}disabled{% endif %}>
+          <i class="bi bi-check2-circle me-1"></i>ยืนยันนำเข้าคะแนน (<span id="confirm-import-count">{{ score_import_preview.valid_count }}</span> คน)
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if not is_year_approved %}
+<!-- แจ้งเตือนกรณีกำลังกรอกคะแนนค้างไว้ก่อนหน้านี้แล้วย้อนกลับมา -->
+<div id="draft-restore-banner" class="alert alert-info py-2 px-3 mb-2 d-none d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <i class="bi bi-arrow-counterclockwise me-1"></i>พบคะแนนที่กรอกค้างไว้ยังไม่ได้บันทึก (<strong id="draft-restore-count">0</strong> ช่อง) สำหรับหัวข้อนี้
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-primary btn-sm" id="btn-restore-draft"><i class="bi bi-check2 me-1"></i>กู้คืนค่าที่กรอกค้างไว้</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-discard-draft"><i class="bi bi-trash me-1"></i>ลบทิ้ง</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- ตารางกรอกคะแนนแบบ Excel (แสดงทุกหัวข้อย่อยพร้อมกัน) -->
+<form method="post" id="spreadsheet-score-form">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="save_manual">
+  <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="main_id" value="{{ selected_main.pk }}">
+  <input type="hidden" name="exam_no" value="{{ exam_no }}">
+  <div class="card">
+    <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <div>
+        <span>
+          ตารางกรอกคะแนน — <strong>{{ selected_main.main_no }}. {{ selected_main.name }}</strong> (สัดส่วน {{ selected_main.weight|floatformat:2 }} · เต็มรวม {{ selected_main.default_max_score|floatformat:2 }})
+          {% info_tip "คลิกที่ ชื่อ-นามสกุล เพื่อดู/ซ่อนรายละเอียดส่วนตัวของนักเรียน\nรองรับคีย์ลัด: Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Y, Ctrl+A, Delete และปุ่มลูกศร ▲ ▼ ◀ ▶ / Enter เพื่อเลื่อนช่อง · เว้นว่าง = ลบคะแนนช่องนั้น" %}
+        </span>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span id="unsaved-draft-badge" class="badge bg-warning text-dark d-none">ยังไม่บันทึก (0 ช่อง)</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-undo" title="ย้อนกลับ (Ctrl+Z)" disabled><i class="bi bi-arrow-counterclockwise"></i> Undo</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-redo" title="ทำซ้ำ (Ctrl+Y)" disabled><i class="bi bi-arrow-clockwise"></i> Redo</button>
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold" {% if is_year_approved %}disabled{% endif %}><i class="bi bi-floppy me-1"></i>{% if is_year_approved %}ล็อกแล้ว (ประกาศผลแล้ว){% else %}บันทึกคะแนนทั้งหมด{% endif %}</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered table-hover align-middle mb-0" id="excel-score-grid" style="font-size:0.85rem;">
+        <thead class="table-light text-center">
+          <tr>
+            <th style="width:45px;">#</th>
+            <th style="width:100px;">รหัสค่าย 1</th>
+            <th class="text-start" style="min-width:210px;">ชื่อ-นามสกุล {% info_tip "คลิกที่ชื่อเพื่อดู/ซ่อนรายละเอียดส่วนตัวของนักเรียน" %}</th>
+            {% for sc in sub_cols %}
+            <th style="min-width:95px;">
+              <div class="fw-bold text-primary">{{ sc.display_label }}</div>
+              <small class="text-muted">(เต็ม {{ sc.default_max_score|floatformat:2 }})</small>
+            </th>
+            {% endfor %}
+            <th style="width:95px;" class="bg-light">รวม<br><small class="text-muted">({{ selected_main.default_max_score|floatformat:2 }})</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr data-row-idx="{{ forloop.counter0 }}">
+            <td class="text-center text-muted">{{ forloop.counter }}</td>
+            <td class="text-center code">
+              <span class="{% if r.is_current_cohort %}code-blue{% else %}code-green{% endif %}"
+                    title="{% if r.is_current_cohort %}นักเรียนปัจจุบัน{% else %}นักเรียนใช้สิทธิ์{% endif %}">{{ r.user.camp1_code }}</span>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-1">
+                <a href="javascript:void(0)" class="fw-semibold text-decoration-none student-detail-toggle" data-target="st-detail-{{ r.user.pk }}" title="คลิกเพื่อแสดง/ซ่อนรายละเอียดส่วนตัว">
+                  <i class="bi bi-chevron-right small me-1 toggle-st-icon"></i>{{ r.user.get_full_name }}
+                </a>
+              </div>
+              <div id="st-detail-{{ r.user.pk }}" class="d-none mt-1 p-2 rounded bg-light border small text-muted">
+                <div><strong>โรงเรียน:</strong> {{ r.user.school_name|default:"-" }} · <strong>ระดับชั้น:</strong> {{ r.user.display_level|default:r.user.current_level|default:"-" }}</div>
+                <div><strong>เบอร์โทรนักเรียน:</strong> {{ r.user.student_phone|default:"-" }} · <strong>เบอร์โทรผู้ปกครอง:</strong> {{ r.user.parent_phone|default:"-" }}</div>
+                <div><strong>อีเมล:</strong> {{ r.user.email|default:"-" }} · <strong>วันเกิด:</strong> {{ r.user.birth_date|date:"d/m/Y"|default:"-" }}</div>
+                {% if r.user.chronic_disease or r.user.food_allergy %}
+                <div class="mt-1">
+                  {% if r.user.chronic_disease %}<span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle me-1">โรคประจำตัว: {{ r.user.chronic_disease }}</span>{% endif %}
+                  {% if r.user.food_allergy %}<span class="badge text-dark border me-1" style="background-color:#ede7f6 !important; border-color:#d1c4e9 !important;">แพ้อาหาร: {{ r.user.food_allergy }}</span>{% endif %}
+                </div>
+                {% endif %}
+              </div>
+            </td>
+            {% for cell in r.cells %}
+            <td class="p-1">
+              <input class="form-control form-control-sm text-center excel-cell-input"
+                     data-row="{{ forloop.parentloop.counter0 }}"
+                     data-col="{{ forloop.counter0 }}"
+                     data-max="{{ cell.category.default_max_score }}"
+                     name="score_{{ r.user.pk }}_{{ cell.category.pk }}"
+                     value="{% if cell.score %}{{ cell.score.score|floatformat:2 }}{% endif %}"
+                     inputmode="decimal" placeholder="-" autocomplete="off"
+                     {% if is_year_approved %}disabled readonly{% endif %}>
+            </td>
+            {% endfor %}
+            <td class="text-center fw-bold bg-light row-total-cell" id="row-sum-{{ forloop.counter0 }}">
+              {% if r.row_sum is not None %}{{ r.row_sum|floatformat:2 }}{% else %}-{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="25" class="text-center text-muted py-4">ไม่พบรายชื่อนักเรียนในปีการศึกษา {{ year }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<!-- Toast แจ้งเตือนผลการวางและปุ่มสลับทิศทาง (แนวตั้ง/แนวนอน) -->
+<div id="paste-toast" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1090; display: none;">
+  <div class="toast show align-items-center text-bg-dark border-0 shadow-lg" role="alert">
+    <div class="d-flex align-items-center">
+      <div class="toast-body d-flex align-items-center gap-2">
+        <i class="bi bi-clipboard-check-fill text-success fs-5"></i>
+        <span id="paste-toast-msg">วางคะแนนสำเร็จ</span>
+        <button type="button" id="btn-toggle-orientation" class="btn btn-warning btn-sm py-0 px-2 fw-semibold" style="font-size:0.75rem;">
+          <i class="bi bi-arrow-repeat me-1"></i>สลับทิศทาง (แนวตั้ง ⇋ แนวนอน)
+        </button>
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('paste-toast').style.display='none'"></button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var IS_YEAR_APPROVED = {% if is_year_approved %}true{% else %}false{% endif %};
+  // 0. คลิกที่ชื่อ-นามสกุลนักเรียน เพื่อแสดง/ซ่อนรายละเอียดส่วนตัวของนักเรียนคนนั้น
+  document.querySelectorAll('.student-detail-toggle').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var targetId = link.getAttribute('data-target');
+      var box = document.getElementById(targetId);
+      if (!box) return;
+      var hidden = box.classList.toggle('d-none');
+      var icon = link.querySelector('.toggle-st-icon');
+      if (icon) {
+        icon.className = hidden ? 'bi bi-chevron-right small me-1 toggle-st-icon' : 'bi bi-chevron-down small me-1 toggle-st-icon';
+      }
+    });
+  });
+
+  // 0.1 อัปเดตจำนวนที่จะนำเข้าเมื่อผู้ใช้เลือกจับคู่นักเรียนเองในตาราง Preview
+  var confirmBtn = document.getElementById('btn-confirm-import');
+  if (confirmBtn) {
+    var baseValid = parseInt(confirmBtn.getAttribute('data-base-valid') || '0', 10);
+    var countSpan = document.getElementById('confirm-import-count');
+    var summarySpan = document.getElementById('preview-confirm-summary-count');
+    function updatePreviewConfirmCount() {
+      var extra = 0;
+      document.querySelectorAll('.preview-override-select').forEach(function (sel) {
+        if (sel.value) extra++;
+      });
+      var total = baseValid + extra;
+      if (countSpan) countSpan.textContent = String(total);
+      if (summarySpan) summarySpan.textContent = total + ' คน';
+      confirmBtn.disabled = (total <= 0);
+    }
+    document.querySelectorAll('.preview-override-select').forEach(function (sel) {
+      sel.addEventListener('change', updatePreviewConfirmCount);
+    });
+  }
+
+  var grid = document.getElementById('excel-score-grid');
+  if (!grid) return;
+  var TOTAL_ROWS = {{ rows|length }};
+  var TOTAL_COLS = {{ sub_cols|length }};
+  var COLS_META = [
+    {% for sc in sub_cols %}{id: "{{ sc.pk }}", name: "{{ sc.name|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}
+  ];
+
+  function getCell(r, c) {
+    return grid.querySelector('.excel-cell-input[data-row="' + r + '"][data-col="' + c + '"]');
+  }
+
+  function recalcRowSum(r) {
+    var rowInputs = grid.querySelectorAll('.excel-cell-input[data-row="' + r + '"]');
+    var sum = 0, hasAny = false;
+    rowInputs.forEach(function (inp) {
+      var valStr = (inp.value || '').trim().replace(/,/g, '');
+      if (valStr !== '') {
+        var v = parseFloat(valStr);
+        var mx = parseFloat(inp.getAttribute('data-max') || '0');
+        if (!isNaN(v) && /^-?\d+(\.\d+)?$/.test(valStr)) {
+          sum += v;
+          hasAny = true;
+          if (v < 0 || (mx > 0 && v > mx)) {
+            inp.classList.add('is-invalid');
+          } else {
+            inp.classList.remove('is-invalid');
+          }
+        } else {
+          inp.classList.add('is-invalid');
+        }
+      } else {
+        inp.classList.remove('is-invalid');
+      }
+    });
+    var sumCell = document.getElementById('row-sum-' + r);
+    if (sumCell) {
+      sumCell.textContent = hasAny ? sum.toFixed(2) : '-';
+    }
+  }
+
+  function recalcAllRows() {
+    var rowsSet = {};
+    grid.querySelectorAll('.excel-cell-input').forEach(function (inp) {
+      rowsSet[inp.getAttribute('data-row')] = true;
+    });
+    Object.keys(rowsSet).forEach(function (r) { recalcRowSum(parseInt(r, 10)); });
+  }
+
+  // ระบบ Undo / Redo (Ctrl+Z / Ctrl+Y) สำหรับตารางคะแนนทั้งหมด
+  var historyStack = [];
+  var redoStack = [];
+  var btnUndo = document.getElementById('btn-undo');
+  var btnRedo = document.getElementById('btn-redo');
+
+  function snapshotGrid() {
+    var state = {};
+    grid.querySelectorAll('.excel-cell-input').forEach(function (inp) {
+      state[inp.name] = inp.value;
+    });
+    return state;
+  }
+
+  function applySnapshot(state) {
+    if (!state) return;
+    grid.querySelectorAll('.excel-cell-input').forEach(function (inp) {
+      if (state.hasOwnProperty(inp.name)) {
+        inp.value = state[inp.name];
+      }
+    });
+    recalcAllRows();
+  }
+
+  var DRAFT_KEY = 'score_draft:{{ year }}:{{ selected_main.pk }}:{{ exam_no }}';
+  var initialState = snapshotGrid();
+  var unsavedBadge = document.getElementById('unsaved-draft-badge');
+
+  function syncDraftState() {
+    var diff = {};
+    var changed = 0;
+    grid.querySelectorAll('.excel-cell-input').forEach(function (inp) {
+      var initV = initialState.hasOwnProperty(inp.name) ? initialState[inp.name] : '';
+      if (inp.value !== initV) {
+        diff[inp.name] = inp.value;
+        changed++;
+      }
+    });
+    if (changed > 0) {
+      if (typeof _dsStoreSet === 'function') _dsStoreSet(DRAFT_KEY, JSON.stringify(diff));
+      if (unsavedBadge) {
+        unsavedBadge.textContent = 'ยังไม่บันทึก (' + changed + ' ช่อง)';
+        unsavedBadge.classList.remove('d-none');
+      }
+    } else {
+      if (typeof _dsStoreDel === 'function') _dsStoreDel(DRAFT_KEY);
+      if (unsavedBadge) unsavedBadge.classList.add('d-none');
+    }
+  }
+
+  function clearDraft() {
+    if (typeof _dsStoreDel === 'function') _dsStoreDel(DRAFT_KEY);
+    if (unsavedBadge) unsavedBadge.classList.add('d-none');
+  }
+
+  // ตรวจสอบว่ามีร่างคะแนนที่ยังไม่ได้บันทึกจากครั้งก่อนหน้าหรือไม่
+  (function checkPendingDraft() {
+    if (IS_YEAR_APPROVED) return;
+    if (typeof _dsStoreGet !== 'function') return;
+    try {
+      var raw = _dsStoreGet(DRAFT_KEY);
+      if (!raw) return;
+      var draft = JSON.parse(raw);
+      var diffKeys = Object.keys(draft).filter(function (k) {
+        return initialState.hasOwnProperty(k) && draft[k] !== initialState[k];
+      });
+      if (!diffKeys.length) { clearDraft(); return; }
+      var banner = document.getElementById('draft-restore-banner');
+      var cntEl = document.getElementById('draft-restore-count');
+      if (cntEl) cntEl.textContent = String(diffKeys.length);
+      if (banner) banner.classList.remove('d-none');
+      var btnRestore = document.getElementById('btn-restore-draft');
+      var btnDiscard = document.getElementById('btn-discard-draft');
+      if (btnRestore) {
+        btnRestore.addEventListener('click', function () {
+          applySnapshot(draft);
+          pushHistory();
+          syncDraftState();
+          if (banner) banner.classList.add('d-none');
+        });
+      }
+      if (btnDiscard) {
+        btnDiscard.addEventListener('click', function () {
+          clearDraft();
+          if (banner) banner.classList.add('d-none');
+        });
+      }
+    } catch (e) {}
+  })();
+
+  ['spreadsheet-score-form', 'confirm-import-form', 'form-paste-excel'].forEach(function (fid) {
+    var f = document.getElementById(fid);
+    if (f) f.addEventListener('submit', clearDraft);
+  });
+
+  function updateUndoRedoBtns() {
+    if (btnUndo) btnUndo.disabled = (historyStack.length <= 1);
+    if (btnRedo) btnRedo.disabled = (redoStack.length === 0);
+  }
+
+  function pushHistory() {
+    if (IS_YEAR_APPROVED) return;
+    var current = snapshotGrid();
+    if (historyStack.length > 0) {
+      var top = historyStack[historyStack.length - 1];
+      if (JSON.stringify(top) === JSON.stringify(current)) return;
+    }
+    historyStack.push(current);
+    if (historyStack.length > 50) historyStack.shift();
+    redoStack = [];
+    updateUndoRedoBtns();
+    if (historyStack.length > 1) syncDraftState();
+  }
+
+  function doUndo() {
+    if (IS_YEAR_APPROVED) return;
+    if (historyStack.length <= 1) return;
+    var current = historyStack.pop();
+    redoStack.push(current);
+    applySnapshot(historyStack[historyStack.length - 1]);
+    updateUndoRedoBtns();
+    syncDraftState();
+  }
+
+  function doRedo() {
+    if (IS_YEAR_APPROVED) return;
+    if (redoStack.length === 0) return;
+    var nextState = redoStack.pop();
+    historyStack.push(nextState);
+    applySnapshot(nextState);
+    updateUndoRedoBtns();
+    syncDraftState();
+  }
+
+  pushHistory(); // บันทึกสถานะเริ่มต้น
+
+  if (btnUndo) btnUndo.addEventListener('click', doUndo);
+  if (btnRedo) btnRedo.addEventListener('click', doRedo);
+
+  grid.querySelectorAll('.excel-cell-input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      recalcRowSum(parseInt(inp.getAttribute('data-row'), 10));
+      syncDraftState();
+    });
+    inp.addEventListener('change', function () {
+      pushHistory();
+    });
+  });
+
+  // 1. เลื่อนช่องกรอกด้วยลูกศร 4 ทิศทาง (ขึ้น ลง ซ้าย ขวา), Enter, Tab และรองรับคีย์ลัด Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+A, Delete
+  grid.addEventListener('keydown', function (e) {
+    var target = e.target;
+    if (!target || !target.classList.contains('excel-cell-input')) return;
+
+    var isCtrl = e.ctrlKey || e.metaKey;
+    var keyLower = (e.key || '').toLowerCase();
+
+    // Ctrl+Z (Undo) / Ctrl+Y หรือ Ctrl+Shift+Z (Redo)
+    if (isCtrl && keyLower === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      doUndo();
+      return;
+    }
+    if ((isCtrl && keyLower === 'y') || (isCtrl && keyLower === 'z' && e.shiftKey)) {
+      e.preventDefault();
+      doRedo();
+      return;
+    }
+    // Ctrl+S บันทึกฟอร์มทันที
+    if (isCtrl && keyLower === 's') {
+      e.preventDefault();
+      if (IS_YEAR_APPROVED) return;
+      var form = document.getElementById('spreadsheet-score-form');
+      if (form) { clearDraft(); form.submit(); }
+      return;
+    }
+    // ปล่อยให้ Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A ทำงานตามปกติโดยไม่ถูกบล็อก
+    if (isCtrl) return;
+
+    var r = parseInt(target.getAttribute('data-row'), 10);
+    var c = parseInt(target.getAttribute('data-col'), 10);
+    var next = null;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      next = getCell(r + 1, c);
+    } else if (e.key === 'ArrowUp') {
+      next = getCell(r - 1, c);
+    } else if (e.key === 'ArrowDown') {
+      next = getCell(r + 1, c);
+    } else if (e.key === 'ArrowLeft' && ((target.selectionStart === 0 && (target.selectionEnd === 0 || target.selectionEnd === target.value.length)) || target.value === '')) {
+      next = getCell(r, c - 1);
+    } else if (e.key === 'ArrowRight' && (target.selectionStart === target.value.length || target.value === '')) {
+      next = getCell(r, c + 1);
+    }
+    if (next) {
+      e.preventDefault();
+      next.focus();
+      if (typeof next.select === 'function') next.select();
+    }
+  });
+
+  // 2. รองรับการ Copy จาก Excel / Google Sheets แล้วกด Ctrl+V วางลงในช่องตารางโดยตรง (ทั้งแบบแนวตั้งและแนวนอน)
+  var lastPasteAction = null;
+
+  function showPasteToast(msg, canSwitch) {
+    var toastEl = document.getElementById('paste-toast');
+    var msgEl = document.getElementById('paste-toast-msg');
+    var btnSwitch = document.getElementById('btn-toggle-orientation');
+    if (!toastEl || !msgEl) return;
+    msgEl.textContent = msg;
+    if (btnSwitch) {
+      btnSwitch.style.display = canSwitch ? 'inline-block' : 'none';
+    }
+    toastEl.style.display = 'block';
+    clearTimeout(toastEl._timer);
+    toastEl._timer = setTimeout(function () {
+      toastEl.style.display = 'none';
+    }, 7000);
+  }
+
+  function applyMatrixPaste(startRow, startCol, matrix, isTransposed) {
+    if (!matrix || matrix.length === 0) return 0;
+    var pastedCount = 0;
+    var affectedRows = {};
+    var appliedCells = [];
+
+    if (isTransposed) {
+      // แถวสลับเป็นคอลัมน์ -> หยอดแนวตั้งลงตามรายชื่อนักเรียน
+      var flatVals = [];
+      matrix.forEach(function (r) {
+        r.forEach(function (v) {
+          if (v !== undefined) flatVals.push(v);
+        });
+      });
+      flatVals.forEach(function (val, idx) {
+        var r = startRow + idx;
+        if (r < TOTAL_ROWS) {
+          var cell = getCell(r, startCol);
+          if (cell) {
+            appliedCells.push({ r: r, c: startCol, oldVal: cell.value, newVal: val.trim() });
+            cell.value = val.trim();
+            pastedCount++;
+            affectedRows[r] = true;
+          }
+        }
+      });
+    } else {
+      // วางตามโครงสร้างแถว x คอลัมน์เดิม (ทั้งแนวนอน และตาราง 2D)
+      matrix.forEach(function (rowVals, rOffset) {
+        var r = startRow + rOffset;
+        if (r < TOTAL_ROWS) {
+          rowVals.forEach(function (val, cOffset) {
+            var c = startCol + cOffset;
+            if (c < TOTAL_COLS) {
+              var cell = getCell(r, c);
+              if (cell) {
+                appliedCells.push({ r: r, c: c, oldVal: cell.value, newVal: val.trim() });
+                cell.value = val.trim();
+                pastedCount++;
+                affectedRows[r] = true;
+              }
+            }
+          });
+        }
+      });
+    }
+
+    Object.keys(affectedRows).forEach(function (r) {
+      recalcRowSum(parseInt(r, 10));
+    });
+    pushHistory();
+
+    lastPasteAction = {
+      startRow: startRow,
+      startCol: startCol,
+      matrix: matrix,
+      isTransposed: isTransposed,
+      appliedCells: appliedCells
+    };
+
+    var dirName = isTransposed ? 'แนวตั้ง (ลงตามรายชื่อนักเรียน)' : (matrix.length === 1 && matrix[0].length > 1 ? 'แนวนอน (ข้ามหัวข้อย่อย)' : 'ตามตาราง Excel');
+    showPasteToast('วางคะแนนสำเร็จ ' + pastedCount + ' ช่อง (' + dirName + ')', true);
+    return pastedCount;
+  }
+
+  // ปุ่มสลับทิศทาง (แนวตั้ง ⇋ แนวนอน) ทันที
+  var btnSwitch = document.getElementById('btn-toggle-orientation');
+  if (btnSwitch) {
+    btnSwitch.addEventListener('click', function () {
+      if (!lastPasteAction) return;
+      // ย้อนค่าของช่องที่เพิ่งวางไป
+      lastPasteAction.appliedCells.forEach(function (item) {
+        var cell = getCell(item.r, item.c);
+        if (cell) cell.value = item.oldVal;
+      });
+      // สลับทิศทางแล้ววางใหม่
+      var newTransposed = !lastPasteAction.isTransposed;
+      applyMatrixPaste(lastPasteAction.startRow, lastPasteAction.startCol, lastPasteAction.matrix, newTransposed);
+    });
+  }
+
+  // ดักจับ Ctrl+V บนช่องคะแนนในตารางโดยตรง
+  grid.addEventListener('paste', function (e) {
+    if (IS_YEAR_APPROVED) return;
+    var target = e.target;
+    if (!target || !target.classList.contains('excel-cell-input')) return;
+    var clip = (e.clipboardData || window.clipboardData);
+    if (!clip) return;
+    var text = clip.getData('text');
+    if (!text) return;
+
+    var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+      lines.pop();
+    }
+    if (lines.length === 0) return;
+
+    // กรณีค่าเดี่ยว (1 บรรทัด ไม่มี tab หรือช่องว่างคั่นหลายตัวเลข) ให้เบราว์เซอร์จัดการปกติ
+    if (lines.length <= 1 && lines[0].indexOf('\t') === -1 && lines[0].trim().split(/\s+/).length <= 1) {
+      setTimeout(function () {
+        recalcRowSum(parseInt(target.getAttribute('data-row'), 10));
+        pushHistory();
+      }, 10);
+      return;
+    }
+
+    e.preventDefault();
+    var startRow = parseInt(target.getAttribute('data-row'), 10);
+    var startCol = parseInt(target.getAttribute('data-col'), 10);
+
+    // แยกข้อมูลเป็น Matrix แถว x คอลัมน์
+    var matrix = lines.map(function (line) {
+      if (line.indexOf('\t') !== -1) {
+        return line.split('\t').map(function (v) { return v.trim(); });
+      }
+      var tokens = line.trim().split(/[\s,]+/);
+      return tokens.length > 1 ? tokens : [line.trim()];
+    });
+
+    var numRows = matrix.length;
+    var numCols = 0;
+    matrix.forEach(function (r) { if (r.length > numCols) numCols = r.length; });
+
+    // ตรวจสอบทิศทาง:
+    // 1) 1 คอลัมน์หลายแถว -> แนวตั้ง
+    // 2) 1 แถวหลายคอลัมน์ -> หากจำนวนคอลัมน์เกินหัวข้อย่อยที่เหลือ หรือมีคอลัมน์เดียว ให้สลับเป็นแนวตั้ง (Transpose)
+    var shouldTranspose = false;
+    if (numRows === 1 && numCols > 1) {
+      var remainingCols = TOTAL_COLS - startCol;
+      if (remainingCols <= 1 || numCols > remainingCols) {
+        shouldTranspose = true;
+      }
+    }
+
+    applyMatrixPaste(startRow, startCol, matrix, shouldTranspose);
+  });
+
+  // ฟังก์ชันหยอดคะแนนจากกล่องข้อความลงตาราง
+  window.pasteFromBoxToGrid = function () {
+    if (IS_YEAR_APPROVED) return;
+    var textarea = document.getElementById('box-paste-data');
+    if (!textarea || !textarea.value.trim()) {
+      alert('กรุณาวางข้อมูลคะแนนจาก Excel ในช่องข้อความก่อน');
+      if (textarea) textarea.focus();
+      return;
+    }
+    var text = textarea.value.trim();
+    var orient = document.getElementById('box-paste-orientation').value;
+    var catSelect = document.getElementById('box-paste-category');
+    var selectedCatId = catSelect ? catSelect.value : '';
+
+    var startCol = 0;
+    if (selectedCatId && COLS_META) {
+      var idx = COLS_META.findIndex(function (c) { return String(c.id) === String(selectedCatId); });
+      if (idx !== -1) startCol = idx;
+    }
+
+    var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+      lines.pop();
+    }
+    if (lines.length === 0) return;
+
+    var matrix = lines.map(function (line) {
+      if (line.indexOf('\t') !== -1) {
+        return line.split('\t').map(function (v) { return v.trim(); });
+      }
+      var tokens = line.trim().split(/[\s,]+/);
+      return tokens.length > 1 ? tokens : [line.trim()];
+    });
+
+    var numRows = matrix.length;
+    var numCols = 0;
+    matrix.forEach(function (r) { if (r.length > numCols) numCols = r.length; });
+
+    var isTransposed = false;
+    if (orient === 'vertical') {
+      isTransposed = true;
+    } else if (orient === 'horizontal') {
+      isTransposed = false;
+    } else {
+      // auto
+      if (numRows === 1 && numCols > 1) {
+        var remainingCols = TOTAL_COLS - startCol;
+        if (remainingCols <= 1 || numCols > remainingCols) {
+          isTransposed = true;
+        }
+      }
+    }
+
+    var count = applyMatrixPaste(0, startCol, matrix, isTransposed);
+    if (count > 0) {
+      var tableEl = document.getElementById('excel-score-grid');
+      if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+})();
+</script>
+{% endblock %}

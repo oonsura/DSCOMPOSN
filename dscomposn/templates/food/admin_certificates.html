@@ -1,0 +1,2449 @@
+{% extends 'base.html' %}
+{% load static composn_tags %}
+{% block title %}เกียรติบัตร{% endblock %}
+{% block breadcrumb %}เวลาเรียน / คะแนน / เกียรติบัตร{% endblock %}
+
+{% block extra_css %}
+<style>
+  @font-face {
+    font-family: 'THSarabunNewCert';
+    src: url("{% static 'fonts/THSarabunNew.ttf' %}") format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+  }
+  @font-face {
+    font-family: 'THSarabunNewCert';
+    src: url("{% static 'fonts/THSarabunNew-Bold.ttf' %}") format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: block;
+  }
+  #cert-preview-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 297 / 210;
+    background: #ffffff;
+    outline: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    user-select: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+  #cert-preview-stage,
+  #cert-preview-stage * {
+    font-family: 'THSarabunNewCert', 'TH Sarabun New', 'Sarabun', sans-serif !important;
+  }
+  #cert-preview-stage .pv-drag-tag {
+    font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif !important;
+  }
+  #cert-preview-stage.no-bg {
+    background: #ffffff;
+  }
+  #cert-pdf-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 297 / 210;
+    outline: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #525659;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+  #cert-preview-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+  }
+  #cert-fallback-chrome {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .cert-pv-line {
+    position: absolute;
+    left: 50%;
+    width: 91.92%;
+    transform: translateX(-50%);
+    text-align: center;
+    line-height: 1.301;
+    cursor: ns-resize;
+    touch-action: none;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 3px;
+    transition: outline-color 0.15s, background-color 0.15s;
+    white-space: nowrap;
+  }
+  .cert-pv-line:hover,
+  .cert-pv-line.dragging {
+    outline: 1px dashed rgba(26, 115, 232, 0.75);
+    background-color: rgba(26, 115, 232, 0.08);
+  }
+  .cert-pv-line .pv-drag-tag {
+    display: none;
+    position: absolute;
+    right: 4px;
+    top: -18px;
+    background: #1a73e8;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.3;
+  }
+  .cert-pv-line:hover .pv-drag-tag,
+  .cert-pv-line.dragging .pv-drag-tag {
+    display: inline-block;
+  }
+  .cert-pv-multiline {
+    position: absolute;
+    left: 50%;
+    width: 91.92%;
+    transform: translateX(-50%);
+    text-align: center;
+    line-height: 1.301;
+    cursor: ns-resize;
+    touch-action: none;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 3px;
+    transition: outline-color 0.15s, background-color 0.15s;
+  }
+  .cert-pv-multiline:hover,
+  .cert-pv-multiline.dragging {
+    outline: 1px dashed rgba(26, 115, 232, 0.75);
+    background-color: rgba(26, 115, 232, 0.08);
+  }
+  .cert-pv-multiline .pv-drag-tag {
+    display: none;
+    position: absolute;
+    right: 4px;
+    top: -18px;
+    background: #1a73e8;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.3;
+  }
+  .cert-pv-multiline:hover .pv-drag-tag,
+  .cert-pv-multiline.dragging .pv-drag-tag {
+    display: inline-block;
+  }
+  .cert-pv-subline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    line-height: 1.301;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .cert-pv-qr {
+    position: absolute;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: move;
+    background: #ffffff;
+    border-style: solid;
+    border-color: #cbd5e1;
+    transition: outline-color 0.15s;
+  }
+  .cert-pv-qr:hover,
+  .cert-pv-qr.dragging,
+  .cert-pv-qr-cap.dragging {
+    outline: 1.5px dashed #1a73e8;
+    background-color: rgba(255, 255, 255, 0.98);
+  }
+  .cert-pv-qr-cap {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.301;
+    margin: 0;
+    padding: 0;
+    cursor: move;
+    pointer-events: auto;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-award-fill me-2 text-warning"></i>เกียรติบัตร
+      {% info_tip "ปีการศึกษา " year " · รองรับนักเรียน วิทยากร คณะกรรมการ และกำหนดรูปแบบพื้นหลัง/แกน Y/ขนาดตัวอักษร TH Sarabun พร้อม QR Code ตรวจสอบ" %}
+    </h4>
+  </div>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    {% if tab != 'settings' %}
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btn-open-all-zip-modal" data-bs-toggle="modal" data-bs-target="#exportAllZipModal">
+      <i class="bi bi-file-earmark-zip-fill me-1"></i>ดาวน์โหลด ZIP (แยกไฟล์รายบุคคล)
+    </button>
+    {% endif %}
+    <a href="{% url 'food:certificate_verify_index' %}" target="_blank" class="btn btn-outline-primary btn-sm fw-semibold">
+      <i class="bi bi-qr-code-scan me-1"></i>ตรวจสอบเกียรติบัตร
+    </a>
+    <form method="get" class="d-flex align-items-center gap-2 mb-0">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label class="small fw-semibold text-muted mb-0">ปีการศึกษา:</label>
+      <select name="year" class="form-select form-select-sm fw-semibold" style="width:auto;" onchange="this.form.submit()" title="เลือกปีการศึกษา">
+        {% for y in academic_year_choices %}
+          <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+<!-- แท็บเมนูหลัก 4 แท็บ -->
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if tab == 'students' %}active{% endif %}" href="?year={{ year }}&tab=students">
+      <i class="bi bi-mortarboard-fill me-1 text-primary"></i>1. นักเรียน (สอวน. ค่าย ๑)
+      <span class="badge bg-success ms-1">{{ eligible_count }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if tab == 'lecturer' %}active{% endif %}" href="?year={{ year }}&tab=lecturer">
+      <i class="bi bi-person-video3 me-1 text-info"></i>2. รายชื่อวิทยากร
+      <span class="badge bg-secondary ms-1">{{ lecturer_count }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if tab == 'committee' %}active{% endif %}" href="?year={{ year }}&tab=committee">
+      <i class="bi bi-people-fill me-1 text-success"></i>3. รายชื่อคณะกรรมการ
+      <span class="badge bg-secondary ms-1">{{ committee_count }}</span>
+    </a>
+  </li>
+  {% if user.is_admin_role %}
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if tab == 'settings' %}active{% endif %}" href="?year={{ year }}&tab=settings">
+      <i class="bi bi-sliders2 me-1 text-warning"></i>4. ตั้งค่าเกียรติบัตร
+    </a>
+  </li>
+  {% endif %}
+</ul>
+
+{% if tab == 'students' or tab == 'settings' %}
+<div class="card mb-3 border {% if cert_year_published %}border-success bg-success bg-opacity-10{% else %}border-secondary-subtle bg-light{% endif %}" id="cert-publish-bar">
+  <div class="card-body py-2 px-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="d-flex align-items-center flex-wrap gap-2 small">
+      <i class="bi bi-award-fill {% if cert_year_published %}text-success{% else %}text-secondary{% endif %}"></i>
+      <span class="fw-semibold text-dark">สถานะการแสดงเกียรติบัตรให้นักเรียน (ปีการศึกษา {{ year }}):</span>
+      {% if cert_year_published %}
+        <span class="badge bg-success">เปิดแสดงให้นักเรียนแล้ว</span>
+      {% else %}
+        <span class="badge bg-secondary">ปิดการแสดง (ค่าเริ่มต้น)</span>
+      {% endif %}
+      {% info_tip "ค่าเริ่มต้นของแต่ละปีการศึกษาคือปิด นักเรียนจะมองเห็นและดาวน์โหลดเกียรติบัตรได้เมื่อผู้ดูแลระบบเปิดสถานะของปีการศึกษานั้นแล้วเท่านั้น" %}
+    </div>
+    {% if user.is_admin_role %}
+    <form method="post" class="mb-0">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="toggle_cert_publish">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      {% if cert_year_published %}
+        <button type="submit" class="btn btn-outline-danger btn-sm fw-semibold">
+          <i class="bi bi-eye-slash-fill me-1"></i>ปิดการแสดงเกียรติบัตร
+        </button>
+      {% else %}
+        <button type="submit" class="btn btn-success btn-sm fw-semibold">
+          <i class="bi bi-eye-fill me-1"></i>เปิดแสดงเกียรติบัตร
+        </button>
+      {% endif %}
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ========================================================================= -->
+<!-- TAB 1: นักเรียน -->
+<!-- ========================================================================= -->
+{% if tab == 'students' %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <div class="small text-muted">
+    <i class="bi bi-calendar-event me-1 text-primary"></i>วันที่บนเกียรติบัตร:
+    <strong class="text-dark">{{ rendered_date_text }}</strong>
+    {% info_tip "เกณฑ์รับเกียรติบัตร: นักเรียนปัจจุบันที่ขาดอบรมไม่เกิน " setting.max_absences " ภาคเวลา และเข้าสอบครบทุกครั้ง (นักเรียนใช้สิทธิ์ไม่พิจารณาในส่วนนี้)" %}
+    {% if user.is_admin_role %}
+      <a href="?year={{ year }}&tab=settings#cert-default-texts-card" class="ms-2 text-decoration-none"><i class="bi bi-pencil-square"></i> ตั้งค่าข้อความ / รูปแบบ / วันที่</a>
+    {% endif %}
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <form method="post" action="{% url 'food:certificates_export_zip' %}" id="cert-zip-students-form" class="d-inline">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="scope" value="students">
+      <input type="hidden" name="select_mode" value="selected">
+      <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btn-zip-selected-students" {% if not eligible_students %}disabled{% endif %}>
+        <i class="bi bi-file-earmark-zip-fill me-1"></i>ดาวน์โหลด ZIP แยกไฟล์ที่เลือก (<span id="cnt-selected-students">{{ eligible_students|length }}</span> คน)
+      </button>
+    </form>
+    <a href="{% url 'food:certificates_export_all' %}?year={{ year }}" class="btn btn-warning btn-sm fw-bold text-dark" target="_blank">
+      <i class="bi bi-file-earmark-pdf-fill me-1 text-danger"></i>ดาวน์โหลดเกียรติบัตรทั้งหมด (PDF รวมเล่ม)
+    </a>
+    <a href="?year={{ year }}&tab=students&q={{ q }}&status={{ status_filter }}&export=xlsx" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export รายชื่อ (Excel)
+    </a>
+  </div>
+</div>
+<div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 mb-3 small">
+  <div>
+    <strong class="text-primary"><i class="bi bi-chat-left-text me-1"></i>ข้อ 3 (ข้อความเริ่มต้นกลุ่มนักเรียน):</strong>
+    <span class="text-dark">{{ rendered_student_line3|linebreaksbr }}</span>
+  </div>
+  {% if user.is_admin_role %}
+  <a href="?year={{ year }}&tab=settings#cert-default-texts-card" class="btn btn-outline-primary btn-sm py-0 px-2 flex-shrink-0">
+    <i class="bi bi-sliders me-1"></i>ตั้งค่าข้อความเริ่มต้น
+  </a>
+  {% endif %}
+</div>
+
+<!-- การ์ดสรุปยอด -->
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 border-start border-4 border-primary">
+      <div class="card-body py-2">
+        <div class="small text-muted fw-semibold">
+          นักเรียนปัจจุบันทั้งหมด
+          {% info_tip "จำนวนนักเรียนปัจจุบันในปีการศึกษา " year " (ไม่รวมนักเรียนใช้สิทธิ์)" %}
+        </div>
+        <div class="fs-4 fw-bold text-primary">{{ total_current }} <span class="fs-6 fw-normal text-muted">คน</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 border-start border-4 border-success">
+      <div class="card-body py-2">
+        <div class="small text-muted fw-semibold">
+          ได้รับเกียรติบัตร
+          {% info_tip "ผ่านเกณฑ์ขาดอบรมไม่เกิน " setting.max_absences " ภาคเวลา และเข้าสอบครบทุกครั้ง" %}
+        </div>
+        <div class="fs-4 fw-bold text-success">{{ eligible_count }} <span class="fs-6 fw-normal text-muted">คน</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 border-start border-4 border-danger">
+      <div class="card-body py-2">
+        <div class="small text-muted fw-semibold">
+          ไม่ได้รับเกียรติบัตร
+          {% info_tip "ขาดอบรมเกินเกณฑ์ (" setting.max_absences " ภาคเวลา) หรือขาดสอบอย่างน้อย 1 ช่วง" %}
+        </div>
+        <div class="fs-4 fw-bold text-danger">{{ ineligible_count }} <span class="fs-6 fw-normal text-muted">คน</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 border-start border-4 border-secondary bg-light">
+      <div class="card-body py-2">
+        <div class="small text-muted fw-semibold">
+          นักเรียนใช้สิทธิ์ (ไม่พิจารณา)
+          {% info_tip "นักเรียนรุ่นก่อนหน้าที่ใช้สิทธิ์เข้าสอบ ไม่เข้าเกณฑ์พิจารณาเกียรติบัตรอบรมค่าย 1 ปีนี้" %}
+        </div>
+        <div class="fs-4 fw-bold text-secondary">{{ rights_count }} <span class="fs-6 fw-normal text-muted">คน</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-3 shadow-sm">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <input type="hidden" name="tab" value="students">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-md-4">
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>แสดงทุกกลุ่ม ({{ all_students_count }} คน)</option>
+          <option value="eligible" {% if status_filter == 'eligible' %}selected{% endif %}>นักเรียนปัจจุบัน — ได้รับเกียรติบัตร ({{ eligible_count }} คน)</option>
+          <option value="ineligible" {% if status_filter == 'ineligible' %}selected{% endif %}>นักเรียนปัจจุบัน — ไม่ได้รับเกียรติบัตร ({{ ineligible_count }} คน)</option>
+          <option value="rights" {% if status_filter == 'rights' %}selected{% endif %}>นักเรียนใช้สิทธิ์ — ไม่พิจารณาเกียรติบัตร ({{ rights_count }} คน)</option>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหารหัสค่าย / ชื่อ-นามสกุล / โรงเรียน">
+      </div>
+      <div class="col-auto d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+        {% if q or status_filter != 'all' %}
+          <a href="?year={{ year }}&tab=students" class="btn btn-outline-secondary btn-sm">ล้างค่า</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- กลุ่ม 1: นักเรียนปัจจุบัน — ได้รับเกียรติบัตร -->
+{% if status_filter == 'all' or status_filter == 'eligible' %}
+<div class="card shadow-sm mb-3 border-success border-opacity-50">
+  <div class="card-header d-flex justify-content-between align-items-center bg-success bg-opacity-10 text-success"
+       style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#cert-grp-eligible">
+    <span class="fw-bold">
+      <i class="bi bi-award-fill me-2"></i>กลุ่มนักเรียนปัจจุบัน — ได้รับเกียรติบัตร
+      {% info_tip "นักเรียนปัจจุบันที่ขาดอบรมไม่เกิน " setting.max_absences " ภาคเวลา และเข้าสอบครบทุกช่วงเวลา" %}
+    </span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge bg-success">{{ eligible_students|length }} คน</span>
+      <i class="bi bi-chevron-down"></i>
+    </span>
+  </div>
+  <div id="cert-grp-eligible" class="collapse show">
+    {% if eligible_students %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 bg-light border-bottom small">
+      <span class="text-muted">ติ๊กเลือกรายชื่อนักเรียนที่ต้องการดาวน์โหลดเป็นไฟล์ PDF แยกแต่ละคน (.zip)</span>
+      <div class="btn-group btn-group-sm">
+        <button type="button" class="btn btn-outline-primary py-0 px-2" id="btn-stu-select-all">เลือกทั้งหมด</button>
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" id="btn-stu-select-none">ยกเลิกทั้งหมด</button>
+      </div>
+    </div>
+    {% endif %}
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:38px;" class="text-center">
+              <input type="checkbox" class="form-check-input" id="chk-all-cert-students" {% if eligible_students %}checked{% endif %} title="เลือก/ยกเลิกทั้งหมด">
+            </th>
+            <th style="width:55px;" class="text-center">ลำดับ</th>
+            <th style="width:100px;" class="text-center">รหัสค่าย 1</th>
+            <th>ชื่อ - นามสกุล</th>
+            <th>โรงเรียน</th>
+            <th style="width:140px;" class="text-center">ขาดอบรม (ภาคเวลา)</th>
+            <th style="width:120px;" class="text-center">การเข้าสอบ</th>
+            <th style="width:110px;" class="text-center">ดาวน์โหลด</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in eligible_students %}
+          <tr>
+            <td class="text-center">
+              <input type="checkbox" class="form-check-input chk-cert-student" value="{{ s.user.pk }}" checked title="เลือก {{ s.user.get_full_name }}">
+            </td>
+            <td class="text-center text-muted">{{ forloop.counter }}</td>
+            <td class="text-center fw-bold code">{{ s.user.camp1_code }}</td>
+            <td class="fw-semibold">
+              {{ s.user.get_full_name }}
+              {% if s.user.nickname %}<small class="text-muted">({{ s.user.nickname }})</small>{% endif %}
+            </td>
+            <td class="small">{{ s.user.school_name }}</td>
+            <td class="text-center">
+              <span class="fw-bold text-success">{{ s.eligibility.absences }} / {{ s.eligibility.max_absences }}</span>
+            </td>
+            <td class="text-center">
+              {% if s.eligibility.total_exam_slots > 0 %}
+                <span class="badge bg-success">{{ s.eligibility.attended_exam_slots }}/{{ s.eligibility.total_exam_slots }} ช่วง</span>
+              {% else %}
+                <span class="badge bg-light text-dark border">ยังไม่มีวันสอบ</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="d-flex justify-content-center align-items-center gap-1 flex-wrap">
+                <a href="{% url 'food:certificate_download' s.user.pk %}?year={{ year }}" class="btn btn-outline-warning text-dark btn-sm py-0 px-2 fw-semibold" target="_blank" title="ดาวน์โหลดเกียรติบัตร (PDF)">
+                  <i class="bi bi-file-earmark-pdf text-danger me-1"></i>PDF
+                </a>
+                {% if s.ref_code %}
+                <a href="{% url 'food:certificate_verify' s.ref_code %}" target="_blank" class="badge bg-light text-primary border text-decoration-none" title="เลขที่อ้างอิง {{ s.ref_code }}">
+                  <i class="bi bi-qr-code me-1"></i>{{ s.ref_code }}
+                </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-3">ไม่พบนักเรียนในกลุ่มได้รับเกียรติบัตร</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- กลุ่ม 2: นักเรียนปัจจุบัน — ไม่ได้รับเกียรติบัตร -->
+{% if status_filter == 'all' or status_filter == 'ineligible' %}
+<div class="card shadow-sm mb-3 border-danger border-opacity-50">
+  <div class="card-header d-flex justify-content-between align-items-center bg-danger bg-opacity-10 text-danger"
+       style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#cert-grp-ineligible">
+    <span class="fw-bold">
+      <i class="bi bi-x-circle-fill me-2"></i>กลุ่มนักเรียนปัจจุบัน — ไม่ได้รับเกียรติบัตร
+      {% info_tip "ขาดอบรมเกิน " setting.max_absences " ภาคเวลา หรือขาดสอบอย่างน้อย 1 ช่วงเวลา" %}
+    </span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge bg-danger">{{ ineligible_students|length }} คน</span>
+      <i class="bi bi-chevron-down"></i>
+    </span>
+  </div>
+  <div id="cert-grp-ineligible" class="collapse show">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:55px;" class="text-center">ลำดับ</th>
+            <th style="width:100px;" class="text-center">รหัสค่าย 1</th>
+            <th>ชื่อ - นามสกุล</th>
+            <th>โรงเรียน</th>
+            <th style="width:140px;" class="text-center">ขาดอบรม (ภาคเวลา)</th>
+            <th style="width:120px;" class="text-center">การเข้าสอบ</th>
+            <th>สาเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in ineligible_students %}
+          <tr>
+            <td class="text-center text-muted">{{ forloop.counter }}</td>
+            <td class="text-center fw-bold code">{{ s.user.camp1_code }}</td>
+            <td class="fw-semibold">
+              {{ s.user.get_full_name }}
+              {% if s.user.nickname %}<small class="text-muted">({{ s.user.nickname }})</small>{% endif %}
+            </td>
+            <td class="small">{{ s.user.school_name }}</td>
+            <td class="text-center">
+              <span class="fw-bold {% if s.eligibility.absence_passed %}text-success{% else %}text-danger{% endif %}">
+                {{ s.eligibility.absences }} / {{ s.eligibility.max_absences }}
+              </span>
+            </td>
+            <td class="text-center">
+              {% if s.eligibility.total_exam_slots > 0 %}
+                <span class="badge {% if s.eligibility.exams_passed %}bg-success{% else %}bg-danger{% endif %}">
+                  {{ s.eligibility.attended_exam_slots }}/{{ s.eligibility.total_exam_slots }} ช่วง
+                </span>
+              {% else %}
+                <span class="badge bg-light text-dark border">ยังไม่มีวันสอบ</span>
+              {% endif %}
+            </td>
+            <td class="small text-danger">{{ s.eligibility.reason }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-3">ไม่มีนักเรียนในกลุ่มไม่ได้รับเกียรติบัตร</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- กลุ่ม 3: นักเรียนใช้สิทธิ์ — ไม่พิจารณาเกียรติบัตร -->
+{% if status_filter == 'rights' or status_filter == 'all' and rights_students %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center bg-light text-secondary"
+       style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#cert-grp-rights">
+    <span class="fw-bold">
+      <i class="bi bi-person-badge me-2"></i>กลุ่มนักเรียนใช้สิทธิ์ — ไม่พิจารณาเกียรติบัตร
+      {% info_tip "นักเรียนรุ่นก่อนหน้าที่ใช้สิทธิ์เข้าสอบ ไม่เข้าเกณฑ์พิจารณาเกียรติบัตรอบรมค่าย 1 ปีนี้" %}
+    </span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge bg-secondary">{{ rights_students|length }} คน</span>
+      <i class="bi bi-chevron-down"></i>
+    </span>
+  </div>
+  <div id="cert-grp-rights" class="collapse {% if status_filter == 'rights' or q %}show{% endif %}">
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:55px;" class="text-center">ลำดับ</th>
+            <th style="width:100px;" class="text-center">รหัสค่าย 1</th>
+            <th>ชื่อ - นามสกุล</th>
+            <th>โรงเรียน</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in rights_students %}
+          <tr>
+            <td class="text-center text-muted">{{ forloop.counter }}</td>
+            <td class="text-center fw-bold code">{{ s.user.camp1_code }}</td>
+            <td class="fw-semibold">
+              {{ s.user.get_full_name }}
+              {% if s.user.nickname %}<small class="text-muted">({{ s.user.nickname }})</small>{% endif %}
+            </td>
+            <td class="small">{{ s.user.school_name }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted py-3">ไม่พบนักเรียนใช้สิทธิ์ในปีการศึกษานี้</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ========================================================================= -->
+<!-- TAB 2 & 3: รายชื่อวิทยากร / รายชื่อคณะกรรมการ -->
+<!-- ========================================================================= -->
+{% elif tab == 'lecturer' or tab == 'committee' %}
+
+<div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 mb-3">
+  <div class="small">
+    <div class="mb-1">
+      <i class="bi bi-chat-left-text-fill text-primary me-1"></i>
+      <strong>ข้อ 3 (ข้อความเริ่มต้นกลุ่ม{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %}):</strong>
+      <span class="text-dark">{% if tab == 'lecturer' %}{{ rendered_lecturer_line3|linebreaksbr }}{% else %}{{ rendered_committee_line3|linebreaksbr }}{% endif %}</span>
+    </div>
+    <div>
+      <i class="bi bi-calendar-check-fill text-primary me-1"></i>
+      <strong>ข้อ 4 (ให้ไว้ ณ วันที่):</strong>
+      <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle fw-normal ms-1">{{ rendered_date_text }}</span>
+      {% info_tip "ตั้งค่าข้อความเริ่มต้นของทุกกลุ่มและวันที่กลางได้ที่ ตั้งค่าระบบ > เกียรติบัตร" %}
+    </div>
+  </div>
+  {% if user.is_admin_role %}
+  <a href="?year={{ year }}&tab=settings#cert-default-texts-card" class="btn btn-outline-primary btn-sm py-0 px-2 flex-shrink-0">
+    <i class="bi bi-sliders me-1"></i>ตั้งค่าข้อความเริ่มต้น / วันที่ / รูปแบบ
+  </a>
+  {% endif %}
+</div>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="openAddRecipientModal('{{ tab }}')">
+      <i class="bi bi-plus-circle me-1"></i>เพิ่มรายชื่อ{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %}
+    </button>
+    <button type="button" class="btn btn-outline-success btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#importRecipientModal">
+      <i class="bi bi-file-earmark-arrow-up me-1"></i>นำเข้ารายชื่อ (Excel / CSV)
+    </button>
+    <button type="button" class="btn btn-outline-info text-dark btn-sm fw-semibold" data-bs-toggle="modal" data-bs-target="#transferRecipientModal">
+      <i class="bi bi-arrow-repeat me-1"></i>โอนรายชื่อจากปีที่ผ่านมา
+    </button>
+    <form method="post" action="{% url 'food:certificates_export_zip' %}" id="cert-zip-recipients-form" class="d-inline">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="scope" value="{{ tab }}">
+      <input type="hidden" name="select_mode" value="selected">
+      <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btn-zip-selected-recipients" {% if not active_recipients %}disabled{% endif %}>
+        <i class="bi bi-file-earmark-zip-fill me-1"></i>ดาวน์โหลด ZIP แยกไฟล์ที่เลือก (<span id="cnt-selected-recipients">{{ active_recipients|length }}</span> คน)
+      </button>
+    </form>
+    <a href="{% url 'food:certificate_recipients_export_pdf' %}?year={{ year }}&type={{ tab }}" class="btn btn-warning btn-sm fw-bold text-dark" target="_blank">
+      <i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>ดาวน์โหลดเกียรติบัตรทั้งหมด (PDF รวมเล่ม)
+    </a>
+    <a href="{% url 'food:certificate_recipients_export_xlsx' %}?year={{ year }}&type={{ tab }}" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+    </a>
+  </div>
+  {% if tab == 'lecturer' and lecturers or tab == 'committee' and committees %}
+  <form method="post" onsubmit="return confirm('ยืนยันลบรายชื่อ{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %}ทั้งหมดในปีการศึกษา {{ year }}?');">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete_all_recipients">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="hidden" name="year" value="{{ year }}">
+    <input type="hidden" name="recipient_type" value="{{ tab }}">
+    <button type="submit" class="btn btn-outline-danger btn-sm">
+      <i class="bi bi-trash3 me-1"></i>ล้างรายชื่อทั้งหมดของปีนี้
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+<!-- ค้นหารายชื่อ -->
+<div class="card mb-3 shadow-sm">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-md-6">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหาชื่อ-นามสกุล / โรงเรียน จังหวัด / ข้อความรายละเอียด">
+      </div>
+      <div class="col-auto d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+        {% if q %}
+          <a href="?year={{ year }}&tab={{ tab }}" class="btn btn-outline-secondary btn-sm">ล้างค่า</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ตารางรายชื่อ -->
+<div class="card shadow-sm">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 bg-light">
+    <span class="fw-bold">
+      <i class="bi {% if tab == 'lecturer' %}bi-person-video3 text-info{% else %}bi-people-fill text-success{% endif %} me-2"></i>
+      รายชื่อ{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %} (ปีการศึกษา {{ year }})
+    </span>
+    <div class="d-flex align-items-center gap-2">
+      {% if active_recipients %}
+      <div class="btn-group btn-group-sm">
+        <button type="button" class="btn btn-outline-primary py-0 px-2" id="btn-rec-select-all">เลือกทั้งหมด</button>
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" id="btn-rec-select-none">ยกเลิกทั้งหมด</button>
+      </div>
+      {% endif %}
+      <span class="badge bg-secondary">
+        {% if tab == 'lecturer' %}{{ lecturers|length }}{% else %}{{ committees|length }}{% endif %} คน
+      </span>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:38px;" class="text-center">
+            <input type="checkbox" class="form-check-input" id="chk-all-cert-recipients" {% if active_recipients %}checked{% endif %} title="เลือก/ยกเลิกทั้งหมด">
+          </th>
+          <th style="width:55px;" class="text-center">ลำดับ</th>
+          <th style="width:220px;">1. ชื่อ - นามสกุล</th>
+          <th style="width:230px;">2. โรงเรียน จังหวัด</th>
+          <th>3. ข้อความรายละเอียด (ได้เข้าร่วมเป็น ...)</th>
+          <th style="width:190px;" class="text-center">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in active_recipients %}
+        <tr>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input chk-cert-recipient" value="{{ r.pk }}" checked title="เลือก {{ r.full_name }}">
+          </td>
+          <td class="text-center text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ r.full_name }}</td>
+          <td class="small">{{ r.school_province|default:"-" }}</td>
+          <td class="small">
+            {{ r.display_description|linebreaksbr }}
+            {% if not r.description %}<span class="badge bg-light text-secondary border ms-1">ใช้ค่าเริ่มต้นของกลุ่ม</span>{% endif %}
+            {% if r.ref_code %}
+            <div class="mt-1">
+              <a href="{% url 'food:certificate_verify' r.ref_code %}" target="_blank" class="badge bg-light text-primary border text-decoration-none">
+                <i class="bi bi-qr-code me-1"></i>เลขที่อ้างอิง: {{ r.ref_code }}
+              </a>
+            </div>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <a href="{% url 'food:certificate_recipient_download' r.pk %}" class="btn btn-outline-warning text-dark fw-semibold" target="_blank" title="ดาวน์โหลดเกียรติบัตร (PDF)">
+                <i class="bi bi-file-earmark-pdf text-danger me-1"></i>PDF
+              </a>
+              <button type="button" class="btn btn-outline-primary"
+                      data-id="{{ r.pk }}"
+                      data-type="{{ r.recipient_type }}"
+                      data-name="{{ r.full_name }}"
+                      data-school="{{ r.school_province }}"
+                      data-desc="{{ r.description }}"
+                      onclick="openEditRecipientModal(this)" title="แก้ไข">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="post" class="d-inline" onsubmit="return confirm('ต้องการลบรายชื่อ {{ r.full_name|escapejs }} ใช่หรือไม่?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_recipient">
+                <input type="hidden" name="year" value="{{ year }}">
+                <input type="hidden" name="recipient_id" value="{{ r.pk }}">
+                <button type="submit" class="btn btn-outline-danger" title="ลบ"><i class="bi bi-trash"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            ยังไม่มีรายชื่อ{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %}ในปีการศึกษา {{ year }} — กด "+ เพิ่มรายชื่อ{% if tab == 'lecturer' %}วิทยากร{% else %}คณะกรรมการ{% endif %}" หรือ "นำเข้ารายชื่อ (Excel / CSV)"
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: เพิ่ม / แก้ไขรายชื่อ (วิทยากร / คณะกรรมการ) -->
+<div class="modal fade" id="recipientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" id="recipientForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" id="rec-action" value="add_recipient">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="recipient_id" id="rec-id" value="">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold" id="rec-modal-title"><i class="bi bi-person-plus me-2 text-primary"></i>เพิ่มรายชื่อผู้รับเกียรติบัตร</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold small">ประเภทกลุ่ม <span class="text-danger">*</span></label>
+              <select name="recipient_type" id="rec-type" class="form-select form-select-sm" required>
+                <option value="lecturer">วิทยากร</option>
+                <option value="committee">คณะกรรมการ</option>
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold small">1. ชื่อ - นามสกุล <span class="text-danger">*</span></label>
+              <input type="text" name="full_name" id="rec-name" class="form-control form-control-sm" required placeholder="เช่น นายณัฏฐ์กวี ลืนภูเขียว">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold small">2. โรงเรียน จังหวัด</label>
+              <input type="text" name="school_province" id="rec-school" class="form-control form-control-sm" placeholder="เช่น โรงเรียนไตรมิตรวิทยาลัย กรุงเทพมหานคร">
+            </div>
+            <div class="col-12">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+                <label class="form-label fw-semibold small mb-0">
+                  3. ข้อความรายละเอียด
+                  <span id="rec-desc-mode-badge" class="badge bg-light text-secondary border ms-1">ใช้ค่าเริ่มต้นของกลุ่ม</span>
+                  {% info_tip "แสดงข้อความเริ่มต้นของกลุ่มให้อัตโนมัติ สามารถแก้ไขปรับแต่งเฉพาะบุคคลได้ หรือกดปุ่ม ใช้ค่าเริ่มต้นของกลุ่ม (รองรับตัวแปร {year} และ {year_thai})" %}
+                </label>
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="resetRecipientDescToDefault()">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>ใช้ค่าเริ่มต้นของกลุ่ม
+                </button>
+              </div>
+              <textarea name="description" id="rec-desc" class="form-control form-control-sm" rows="4"
+                        oninput="updateRecipientDescBadge()"
+                        placeholder="ข้อความเริ่มต้นของกลุ่มจะแสดงให้อัตโนมัติ สามารถแก้ไขปรับข้อความเฉพาะบุคคลได้ทันที"></textarea>
+            </div>
+            <div class="col-12">
+              <div class="small text-muted">
+                <i class="bi bi-calendar-check me-1 text-primary"></i><strong>4. ให้ไว้ ณ วันที่:</strong> {{ rendered_date_text }}
+                {% info_tip "ใช้ค่ากลางร่วมกันทุกกลุ่มจากหน้าตั้งค่าเกียรติบัตร" %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary btn-sm fw-semibold"><i class="bi bi-check2-circle me-1"></i>บันทึกรายชื่อ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: นำเข้ารายชื่อจาก Excel / CSV -->
+<div class="modal fade" id="importRecipientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="import_recipients">
+        <input type="hidden" name="year" value="{{ year }}">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-excel me-2 text-success"></i>นำเข้ารายชื่อวิทยากร / คณะกรรมการ (Excel หรือ CSV)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label fw-semibold small">กลุ่มเริ่มต้น (กรณีไฟล์ไม่มีคอลัมน์ "ประเภท")</label>
+              <select name="default_type" class="form-select form-select-sm">
+                <option value="lecturer" {% if tab == 'lecturer' %}selected{% endif %}>วิทยากร</option>
+                <option value="committee" {% if tab == 'committee' %}selected{% endif %}>คณะกรรมการ</option>
+              </select>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label fw-semibold small">เลือกไฟล์ (.xlsx หรือ .csv) <span class="text-danger">*</span></label>
+              <input type="file" name="import_file" class="form-control form-control-sm" accept=".xlsx,.csv" required>
+            </div>
+            <div class="col-12">
+              <div class="alert alert-info small mb-0">
+                <div class="fw-bold mb-1"><i class="bi bi-table me-1"></i>คอลัมน์ที่รองรับในไฟล์นำเข้า:</div>
+                <ul class="mb-2 ps-3">
+                  <li><code>ประเภท</code> (วิทยากร / คณะกรรมการ — ถ้าไม่มีจะใช้กลุ่มเริ่มต้นด้านบน)</li>
+                  <li><code>ชื่อ-นามสกุล</code> (หรือแยกคอลัมน์ <code>ชื่อ</code>, <code>นามสกุล</code>)</li>
+                  <li><code>โรงเรียน จังหวัด</code> (หรือแยก <code>โรงเรียน</code> กับ <code>จังหวัด</code>)</li>
+                  <li><code>รายละเอียด</code> (ข้อ 3 — หากเว้นว่างจะใช้ข้อความเริ่มต้นของกลุ่มจากหน้าตั้งค่าเกียรติบัตร)</li>
+                </ul>
+                <a href="{% url 'food:certificate_recipients_template' %}" class="btn btn-outline-primary btn-sm">
+                  <i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ตัวอย่าง (.xlsx)
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-success btn-sm fw-semibold"><i class="bi bi-upload me-1"></i>นำเข้าข้อมูล</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: โอนรายชื่อวิทยากร / คณะกรรมการจากปีที่ผ่านมา -->
+<div class="modal fade" id="transferRecipientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="transfer_recipients">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-arrow-repeat me-2 text-info"></i>โอนรายชื่อจากปีที่ผ่านมา (เข้าสู่ปี {{ year }})
+            {% info_tip "ระบบจะคัดลอกรายชื่อจากปีต้นทางมายังปีการศึกษา " year " โดยไม่ลบข้อมูลปีต้นทาง และข้อ 4 (ให้ไว้ ณ วันที่) จะใช้ค่ากลางจากหน้าตั้งค่าเกียรติบัตร" %}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          {% if transfer_source_years %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">เลือกปีการศึกษาต้นทาง <span class="text-danger">*</span></label>
+              <select name="source_year" class="form-select form-select-sm" required>
+                {% for sy in transfer_source_years %}
+                  <option value="{{ sy.year }}">ปีการศึกษา {{ sy.year }} (วิทยากร {{ sy.lecturer_count }} คน · คณะกรรมการ {{ sy.committee_count }} คน)</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small">กลุ่มที่ต้องการโอน</label>
+              <select name="transfer_scope" class="form-select form-select-sm">
+                <option value="lecturer" {% if tab == 'lecturer' %}selected{% endif %}>เฉพาะรายชื่อวิทยากร</option>
+                <option value="committee" {% if tab == 'committee' %}selected{% endif %}>เฉพาะรายชื่อคณะกรรมการ</option>
+                <option value="both">โอนทั้งวิทยากรและคณะกรรมการพร้อมกัน</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="skip_duplicates" value="1" id="chkTransferSkipDup" checked>
+                <label class="form-check-label small fw-semibold" for="chkTransferSkipDup">
+                  ข้ามรายชื่อที่ซ้ำกับที่มีอยู่แล้วในปีการศึกษา {{ year }}
+                </label>
+              </div>
+              <div class="form-check mt-1">
+                <input class="form-check-input" type="checkbox" name="reset_description" value="1" id="chkTransferResetDesc">
+                <label class="form-check-label small fw-semibold" for="chkTransferResetDesc">
+                  ล้างข้อความรายละเอียด (ข้อ 3) เฉพาะบุคคล เพื่อให้ใช้ค่าเริ่มต้นของปีใหม่
+                </label>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="alert alert-warning mb-0 small">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>ยังไม่มีรายชื่อวิทยากรหรือคณะกรรมการในปีการศึกษาอื่นให้โอนเข้ามาในปีการศึกษา {{ year }}
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-info text-dark btn-sm fw-semibold" {% if not transfer_source_years %}disabled{% endif %}>
+            <i class="bi bi-arrow-repeat me-1"></i>โอนรายชื่อมายังปีการศึกษา {{ year }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- TAB 4: ตั้งค่าเกียรติบัตร (Admin Only) -->
+<!-- ========================================================================= -->
+{% elif tab == 'settings' and user.is_admin_role %}
+<div class="row g-3">
+  <!-- ฝั่งซ้าย / บน: Live Interactive Preview A4 แนวนอน -->
+  <div class="col-xl-7">
+    <div class="card shadow-sm sticky-xl-top" style="top: 16px; z-index: 10;">
+      <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span class="fw-bold">
+          <i class="bi bi-eye-fill me-2 text-primary"></i>ตัวอย่างเกียรติบัตร A4 แนวนอน
+          {% info_tip "ฟอนต์ TH Sarabun ตรงตามไฟล์ PDF จริง 1:1 · คลิกแล้วลากข้อความขึ้น-ลงบนรูป หรือสลับดูตัวอย่าง PDF จริงในหน้านี้ได้ทันที" %}
+        </span>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="โหมดแสดงตัวอย่าง">
+            <button type="button" class="btn btn-dark" id="btn-pv-mode-wysiwyg" onclick="setPreviewMode('wysiwyg')">
+              <i class="bi bi-arrows-move me-1"></i>จัดวางบนภาพ (ลากได้ · 1:1)
+            </button>
+            <button type="button" class="btn btn-outline-danger" id="btn-pv-mode-pdf" onclick="setPreviewMode('pdf')">
+              <i class="bi bi-file-earmark-pdf-fill me-1"></i>ตัวอย่าง PDF จริง (100%)
+            </button>
+          </div>
+          <div class="btn-group btn-group-sm" role="group" aria-label="กลุ่มตัวอย่าง">
+            <button type="button" class="btn btn-primary" data-pv-group="student" onclick="setPreviewGroup('student', this)">นักเรียน</button>
+            <button type="button" class="btn btn-outline-primary" data-pv-group="lecturer" onclick="setPreviewGroup('lecturer', this)">วิทยากร</button>
+            <button type="button" class="btn btn-outline-primary" data-pv-group="committee" onclick="setPreviewGroup('committee', this)">คณะกรรมการ</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="cert-preview-stage" class="{% if not cert_setting.background_image %}no-bg{% endif %}">
+          {% if cert_setting.background_image %}
+            <img id="cert-preview-bg" src="{{ cert_setting.background_image.url }}" data-saved-src="{{ cert_setting.background_image.url }}" alt="พื้นหลังเกียรติบัตร">
+          {% else %}
+            <img id="cert-preview-bg" src="" data-saved-src="" alt="พื้นหลังเกียรติบัตร" style="display:none;">
+          {% endif %}
+
+          <!-- Fallback กรอบ/โลโก้/ลายเซ็น เมื่อไม่มีรูปพื้นหลัง (เหมือน PDF 1:1) -->
+          <div id="cert-fallback-chrome" style="{% if cert_setting.background_image %}display:none;{% endif %}">
+            <div id="cert-fb-outer" style="position:absolute;box-sizing:border-box;border-style:solid;border-color:#b8860b;"></div>
+            <div id="cert-fb-inner" style="position:absolute;box-sizing:border-box;border-style:solid;border-color:#0f4c5c;"></div>
+            <div id="cert-fb-c0" style="position:absolute;box-sizing:border-box;border-color:#b8860b;border-style:solid;border-right:0;border-bottom:0;"></div>
+            <div id="cert-fb-c1" style="position:absolute;box-sizing:border-box;border-color:#b8860b;border-style:solid;border-left:0;border-bottom:0;"></div>
+            <div id="cert-fb-c2" style="position:absolute;box-sizing:border-box;border-color:#b8860b;border-style:solid;border-right:0;border-top:0;"></div>
+            <div id="cert-fb-c3" style="position:absolute;box-sizing:border-box;border-color:#b8860b;border-style:solid;border-left:0;border-top:0;"></div>
+            <div id="cert-fallback-logos" style="position:absolute;inset:0;">
+              {% if setting.logo_school %}<img class="cert-fb-logo" src="{{ setting.logo_school.url }}" alt="ตราโรงเรียน" style="position:absolute;object-fit:contain;background:transparent;">{% endif %}
+              {% if setting.logo_obec %}<img class="cert-fb-logo" src="{{ setting.logo_obec.url }}" alt="สพฐ." style="position:absolute;object-fit:contain;background:transparent;">{% endif %}
+              {% if setting.logo_posn %}<img class="cert-fb-logo" src="{{ setting.logo_posn.url }}" alt="สอวน." style="position:absolute;object-fit:contain;background:transparent;">{% endif %}
+              {% if setting.logo_center %}<img class="cert-fb-logo" src="{{ setting.logo_center.url }}" alt="ศูนย์อบรม" style="position:absolute;object-fit:contain;background:transparent;">{% endif %}
+            </div>
+            <div id="cert-fallback-sig" style="position:absolute;inset:0;text-align:center;">
+              <div id="cert-fb-sig-name" style="position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;line-height:1.301;color:#111111;font-weight:700;">({{ setting.announcement_director_name }})</div>
+              <div id="cert-fb-sig-pos1" style="position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;line-height:1.301;color:#444444;font-weight:400;"></div>
+              <div id="cert-fb-sig-pos2" style="position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;line-height:1.301;color:#444444;font-weight:400;"></div>
+            </div>
+          </div>
+
+          <!-- ส่วนหัว 1: มูลนิธิ / ศูนย์อบรม (หลายบรรทัด) -->
+          <div id="pv-header1" class="cert-pv-multiline" data-y-input="inp-header1-y" data-lbl-id="lbl-yh1" data-acc-target="collapse-cert-header1">
+            <span class="pv-drag-tag" id="tag-header1">หัว 1. Y={{ cert_setting.header1_y }}mm</span>
+            <div id="pv-header1-lines"></div>
+          </div>
+
+          <!-- ส่วนหัว 2: ขอมอบเกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า -->
+          <div id="pv-header2" class="cert-pv-line" data-y-input="inp-header2-y" data-lbl-id="lbl-yh2" data-acc-target="collapse-cert-header2">
+            <span class="pv-drag-tag" id="tag-header2">หัว 2. Y={{ cert_setting.header2_y }}mm</span>
+            <span id="pv-header2-text">{{ cert_setting.header2_text }}</span>
+          </div>
+
+          <!-- ข้อ 1: ชื่อ นามสกุล -->
+          <div id="pv-line1" class="cert-pv-line" data-y-input="inp-line1-y" data-lbl-id="lbl-y1" data-acc-target="collapse-cert-line1">
+            <span class="pv-drag-tag" id="tag-line1">1. Y={{ cert_setting.line1_y }}mm</span>
+            <span id="pv-line1-text">{{ sample_student_name }}</span>
+          </div>
+
+          <!-- ข้อ 2: โรงเรียน จังหวัด -->
+          <div id="pv-line2" class="cert-pv-line" data-y-input="inp-line2-y" data-lbl-id="lbl-y2" data-acc-target="collapse-cert-line2">
+            <span class="pv-drag-tag" id="tag-line2">2. Y={{ cert_setting.line2_y }}mm</span>
+            <span id="pv-line2-text">{{ sample_student_school }}</span>
+          </div>
+
+          <!-- ข้อ 3: รายละเอียด (หลายบรรทัด) -->
+          <div id="pv-line3" class="cert-pv-multiline" data-y-input="inp-line3-y" data-lbl-id="lbl-y3" data-acc-target="collapse-cert-line3">
+            <span class="pv-drag-tag" id="tag-line3">3. Y={{ cert_setting.line3_y }}mm</span>
+            <div id="pv-line3-lines"></div>
+          </div>
+
+          <!-- ข้อ 4: ให้ไว้ ณ วันที่ -->
+          <div id="pv-line4" class="cert-pv-line" data-y-input="inp-line4-y" data-lbl-id="lbl-y4" data-acc-target="collapse-cert-line4">
+            <span class="pv-drag-tag" id="tag-line4">4. Y={{ cert_setting.line4_y }}mm</span>
+            <span id="pv-line4-text">{{ rendered_date_text }}</span>
+          </div>
+
+          <!-- QR Code (ยึดขอบกล่อง QR + quiet zone 1.5mm) และข้อความ 2 บรรทัดใต้ QR -->
+          <div id="pv-qr-box" class="cert-pv-qr" data-acc-target="collapse-cert-qr" title="ลากย้ายตำแหน่ง QR Code ตรวจสอบเกียรติบัตร">
+            <svg viewBox="0 0 25 25" style="width:100%;height:100%;display:block;" shape-rendering="crispEdges" aria-hidden="true">
+              <rect width="25" height="25" fill="#ffffff"/>
+              <path fill="#111111" d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM18 0h7v7h-7zM19 1v5h5V1zM20 2h3v3h-3zM0 18h7v7H0zM1 19v5h5v-5zM2 20h3v3H2zM9 1h2v2H9zM13 0h2v3h-2zM11 4h2v2h-2zM9 7h2v2H9zM13 7h3v2h-3zM1 9h2v2H1zM5 9h3v2H5zM10 10h2v2h-2zM14 10h2v3h-2zM18 9h2v2h-2zM22 9h3v2h-3zM0 13h3v2H0zM4 13h2v3H4zM8 13h2v2H8zM12 13h2v2h-2zM16 14h3v2h-3zM21 13h2v2h-2zM9 17h2v2H9zM13 17h2v2h-2zM17 17h3v3h-3zM22 17h2v2h-2zM9 21h3v2H9zM14 20h2v2h-2zM17 22h2v3h-2zM21 21h4v2h-4zM23 23h2v2h-2z"/>
+            </svg>
+          </div>
+          <div id="pv-qr-cap1" class="cert-pv-qr-cap" data-acc-target="collapse-cert-qr">สแกนตรวจสอบเกียรติบัตร</div>
+          <div id="pv-qr-cap2" class="cert-pv-qr-cap" data-acc-target="collapse-cert-qr">เลขที่อ้างอิง: DSPOSN-{{ year }}-PREVIEW-000000</div>
+        </div>
+
+        <!-- โหมดตัวอย่าง PDF จริง (Render จาก ReportLab เหมือนไฟล์ดาวน์โหลด 100%) -->
+        <div id="cert-pdf-stage" style="display:none;">
+          <div id="cert-pdf-loading" class="position-absolute top-50 start-50 translate-middle badge bg-dark bg-opacity-75 px-3 py-2" style="z-index:2; display:none;">
+            <span class="spinner-border spinner-border-sm me-1"></span>กำลังสร้างตัวอย่าง PDF จริง...
+          </div>
+          <iframe id="cert-pdf-iframe" title="ตัวอย่างเกียรติบัตร PDF จริง" style="width:100%;height:100%;border:0;display:block;"></iframe>
+        </div>
+        <div id="cert-pdf-unsaved-bg-note" class="alert alert-warning py-1 px-2 small mt-2 mb-0" style="display:none;">
+          <i class="bi bi-info-circle-fill me-1"></i>รูปพื้นหลังที่เลือกใหม่จะปรากฏใน PDF จริงหลังจากกดปุ่ม <strong>บันทึกการตั้งค่าเกียรติบัตร</strong>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+          <small class="text-muted">โหมด <strong>จัดวางบนภาพ</strong> ใช้ฟอนต์และระยะเดียวกับ ReportLab 1:1 · โหมด <strong>ตัวอย่าง PDF จริง</strong> แสดงไฟล์ PDF ที่ระบบสร้างจริง</small>
+          <a id="btn-open-pdf-preview" href="{% url 'food:certificate_preview_pdf' %}?year={{ year }}&group=student" target="_blank" class="btn btn-outline-danger btn-sm fw-semibold">
+            <i class="bi bi-file-earmark-pdf-fill me-1"></i>เปิด PDF เต็มจอ
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ฝั่งขวา / ล่าง: ฟอร์มตั้งค่าทั้งหมด (จัดเป็น Dropdown Accordion เลือกเปิดทีละส่วนได้สะดวก) -->
+  <div class="col-xl-5">
+    <form method="post" enctype="multipart/form-data" id="cert-settings-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_settings">
+      <input type="hidden" name="tab" value="settings">
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="has_header_fields" value="1">
+      <input type="hidden" name="has_qr_fields" value="1">
+
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <span class="small fw-bold text-primary">
+          <i class="bi bi-sliders2-vertical me-1"></i>ส่วนประกอบออกแบบเกียรติบัตร
+          {% info_tip "คลิกเลือกแต่ละส่วนเพื่อเปิดปรับแต่ง หรือคลิกลากข้อความบนตัวอย่างด้านซ้ายเพื่อเปิดส่วนนั้นอัตโนมัติ" %}
+        </span>
+        <div class="btn-group btn-group-sm">
+          <button type="button" class="btn btn-outline-secondary py-0 px-2" id="btn-cert-expand-all">
+            <i class="bi bi-arrows-expand me-1"></i>ขยายทั้งหมด
+          </button>
+          <button type="button" class="btn btn-outline-secondary py-0 px-2" id="btn-cert-collapse-all">
+            <i class="bi bi-arrows-collapse me-1"></i>ยุบทั้งหมด
+          </button>
+        </div>
+      </div>
+
+      <div class="accordion shadow-sm mb-3" id="cert-settings-accordion">
+        <!-- 1. ด้านบนสุด: ส่วนหัวที่ 1 มูลนิธิ / ศูนย์อบรม -->
+        <div class="accordion-item" id="cert-header1-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button py-2 px-3 fw-bold bg-info bg-opacity-10 text-dark" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-header1" aria-expanded="true" aria-controls="collapse-cert-header1">
+              <i class="bi bi-bank2 me-2 text-info"></i>ส่วนหัว 1. มูลนิธิ / ศูนย์อบรม
+              <span class="badge bg-info text-dark ms-auto me-2">บนสุด</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-header1" class="accordion-collapse collapse show" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">
+                    ข้อความส่วนหัวที่ 1
+                    {% info_tip "ปรับแต่งข้อความส่วนหัวด้านบนสุด (รองรับหลายบรรทัด และตัวแปร {year}/{year_thai}) · หากรูปพื้นหลังมีข้อความนี้แล้ว ให้เว้นว่างไว้เพื่อไม่ให้พิมพ์ซ้ำ" %}
+                  </label>
+                  <textarea name="header1_text" id="inp-header1-text" class="form-control form-control-sm fw-semibold" rows="2" oninput="renderPreview()">{{ cert_setting.header1_text }}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y บรรทัดแรก (mm จากขอบบน: <span id="lbl-yh1">{{ cert_setting.header1_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="5" max="150" step="0.5" id="rng-header1-y" value="{{ cert_setting.header1_y }}" oninput="syncPair('rng-header1-y','inp-header1-y','lbl-yh1')">
+                    <input type="number" step="0.5" min="0" max="210" name="header1_y" id="inp-header1-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.header1_y }}" oninput="syncPair('inp-header1-y','rng-header1-y','lbl-yh1')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="54" step="0.5" id="rng-header1-fs" value="{{ cert_setting.header1_font_size }}" oninput="syncPair('rng-header1-fs','inp-header1-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="header1_font_size" id="inp-header1-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.header1_font_size }}" oninput="syncPair('inp-header1-fs','rng-header1-fs')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ระยะห่างบรรทัด (mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="4" max="25" step="0.5" id="rng-header1-sp" value="{{ cert_setting.header1_line_spacing }}" oninput="syncPair('rng-header1-sp','inp-header1-sp')">
+                    <input type="number" step="0.5" min="4" max="30" name="header1_line_spacing" id="inp-header1-sp" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.header1_line_spacing }}" oninput="syncPair('inp-header1-sp','rng-header1-sp')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="header1_color" id="inp-header1-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.header1_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-6 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="header1_bold" value="1" id="inp-header1-bold" {% if cert_setting.header1_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-header1-bold">ตัวหนา</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. ส่วนหัวที่ 2: ขอมอบเกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า -->
+        <div class="accordion-item" id="cert-header2-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold bg-info bg-opacity-10 text-dark" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-header2" aria-expanded="false" aria-controls="collapse-cert-header2">
+              <i class="bi bi-type-h2 me-2 text-info"></i>ส่วนหัว 2. ขอมอบเกียรติบัตรฉบับนี้ฯ
+              <span class="badge bg-info text-dark ms-auto me-2">ใต้ส่วนหัว 1</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-header2" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">
+                    ข้อความส่วนหัวที่ 2
+                    {% info_tip "แก้ไขคำมอบเกียรติบัตร ปรับแกน Y ขนาด สี และตัวหนาได้เช่นเดียวกับข้อความอื่นๆ (เว้นว่างถ้ามีในพื้นหลังแล้ว)" %}
+                  </label>
+                  <input type="text" name="header2_text" id="inp-header2-text" class="form-control form-control-sm fw-semibold" value="{{ cert_setting.header2_text }}" oninput="renderPreview()">
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y (mm จากขอบบน: <span id="lbl-yh2">{{ cert_setting.header2_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="170" step="0.5" id="rng-header2-y" value="{{ cert_setting.header2_y }}" oninput="syncPair('rng-header2-y','inp-header2-y','lbl-yh2')">
+                    <input type="number" step="0.5" min="0" max="210" name="header2_y" id="inp-header2-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.header2_y }}" oninput="syncPair('inp-header2-y','rng-header2-y','lbl-yh2')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="54" step="0.5" id="rng-header2-fs" value="{{ cert_setting.header2_font_size }}" oninput="syncPair('rng-header2-fs','inp-header2-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="header2_font_size" id="inp-header2-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.header2_font_size }}" oninput="syncPair('inp-header2-fs','rng-header2-fs')">
+                  </div>
+                </div>
+                <div class="col-3">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="header2_color" id="inp-header2-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.header2_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-3 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="header2_bold" value="1" id="inp-header2-bold" {% if cert_setting.header2_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-header2-bold">ตัวหนา</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. รูปพื้นหลังเกียรติบัตร -->
+        <div class="accordion-item" id="cert-bg-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-bg" aria-expanded="false" aria-controls="collapse-cert-bg">
+              <i class="bi bi-image me-2 text-primary"></i>รูปพื้นหลังเกียรติบัตร (A4 แนวนอน · 297 × 210 mm)
+            </button>
+          </h2>
+          <div id="collapse-cert-bg" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <label class="form-label small fw-semibold mb-1">
+                อัปโหลดรูปพื้นหลัง
+                {% info_tip "อัปโหลดไฟล์ PNG/JPG ที่มีโลโก้ กรอบ และลายเซ็นเรียบร้อยแล้ว ระบบจะพิมพ์ทับเฉพาะส่วนที่ตั้งค่าไว้ด้วยฟอนต์ TH Sarabun" %}
+              </label>
+              <input type="file" name="background_image" id="inp-bg-image" class="form-control form-control-sm" accept="image/*">
+              {% if cert_setting.background_image %}
+              <div class="d-flex align-items-center justify-content-between border rounded p-2 mt-2 bg-light">
+                <div class="d-flex align-items-center gap-2">
+                  <img src="{{ cert_setting.background_image.url }}" alt="พื้นหลังปัจจุบัน" style="height:44px;border-radius:4px;border:1px solid #ddd;">
+                  <span class="small text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>ตั้งค่ารูปพื้นหลังแล้ว</span>
+                </div>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" name="clear_background_image" value="1" id="clearBgImg">
+                  <label class="form-check-label small text-danger" for="clearBgImg">ลบรูปพื้นหลัง</label>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. ข้อความรายละเอียดเริ่มต้นแยกตามทุกประเภทเกียรติบัตร (นักเรียน / วิทยากร / คณะกรรมการ) -->
+        <div class="accordion-item" id="cert-default-texts-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold bg-primary bg-opacity-10 text-primary" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-defaults" aria-expanded="false" aria-controls="collapse-cert-defaults">
+              <i class="bi bi-chat-square-text-fill me-2"></i>ข้อความรายละเอียดเริ่มต้น (ข้อ 3) แยกตามประเภท
+              <span class="badge bg-primary ms-auto me-2">ทุกประเภท</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-defaults" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="small text-muted mb-2">
+                รองรับตัวแปร <code>{year}</code> และ <code>{year_thai}</code>
+                {% info_tip "รายชื่อที่ไม่ได้กำหนดข้อความเฉพาะบุคคลจะใช้ค่าเริ่มต้นของกลุ่มเหล่านี้" %}
+              </div>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">
+                    <span class="badge bg-primary me-1">1. นักเรียน</span>ข้อความเริ่มต้นกลุ่มนักเรียน
+                  </label>
+                  <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;"
+                          onclick="setPreviewGroup('student', document.querySelector('[data-pv-group=&quot;student&quot;]'))">ดูตัวอย่าง</button>
+                </div>
+                <textarea name="student_line3_text" id="inp-stu-l3" class="form-control form-control-sm" rows="2" oninput="renderPreview()">{{ cert_setting.student_line3_text }}</textarea>
+              </div>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">
+                    <span class="badge bg-info text-dark me-1">2. วิทยากร</span>ข้อความเริ่มต้นกลุ่มวิทยากร
+                  </label>
+                  <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;"
+                          onclick="setPreviewGroup('lecturer', document.querySelector('[data-pv-group=&quot;lecturer&quot;]'))">ดูตัวอย่าง</button>
+                </div>
+                <textarea name="lecturer_line3_text" id="inp-lec-l3" class="form-control form-control-sm" rows="2" oninput="renderPreview()">{{ cert_setting.lecturer_line3_text }}</textarea>
+              </div>
+              <div class="mb-1">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-semibold mb-0">
+                    <span class="badge bg-success me-1">3. คณะกรรมการ</span>ข้อความเริ่มต้นกลุ่มคณะกรรมการ
+                  </label>
+                  <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;"
+                          onclick="setPreviewGroup('committee', document.querySelector('[data-pv-group=&quot;committee&quot;]'))">ดูตัวอย่าง</button>
+                </div>
+                <textarea name="committee_line3_text" id="inp-com-l3" class="form-control form-control-sm" rows="3" oninput="renderPreview()">{{ cert_setting.committee_line3_text }}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. ข้อ 1: ชื่อ นามสกุล -->
+        <div class="accordion-item" id="cert-line1-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-line1" aria-expanded="false" aria-controls="collapse-cert-line1">
+              <span>1. ชื่อ นามสกุล</span>
+              <span class="badge bg-primary ms-auto me-2">ตำแหน่ง &amp; ขนาด</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-line1" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y (mm จากขอบบน: <span id="lbl-y1">{{ cert_setting.line1_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="200" step="0.5" id="rng-line1-y" value="{{ cert_setting.line1_y }}" oninput="syncPair('rng-line1-y','inp-line1-y','lbl-y1')">
+                    <input type="number" step="0.5" min="0" max="210" name="line1_y" id="inp-line1-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.line1_y }}" oninput="syncPair('inp-line1-y','rng-line1-y','lbl-y1')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="72" step="0.5" id="rng-line1-fs" value="{{ cert_setting.line1_font_size }}" oninput="syncPair('rng-line1-fs','inp-line1-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="line1_font_size" id="inp-line1-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.line1_font_size }}" oninput="syncPair('inp-line1-fs','rng-line1-fs')">
+                  </div>
+                </div>
+                <div class="col-3">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="line1_color" id="inp-line1-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.line1_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-3 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="line1_bold" value="1" id="inp-line1-bold" {% if cert_setting.line1_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-line1-bold">ตัวหนา</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. ข้อ 2: โรงเรียน จังหวัด -->
+        <div class="accordion-item" id="cert-line2-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-line2" aria-expanded="false" aria-controls="collapse-cert-line2">
+              <span>2. โรงเรียน จังหวัด</span>
+              <span class="badge bg-info text-dark ms-auto me-2">ตำแหน่ง &amp; ขนาด</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-line2" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y (mm จากขอบบน: <span id="lbl-y2">{{ cert_setting.line2_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="200" step="0.5" id="rng-line2-y" value="{{ cert_setting.line2_y }}" oninput="syncPair('rng-line2-y','inp-line2-y','lbl-y2')">
+                    <input type="number" step="0.5" min="0" max="210" name="line2_y" id="inp-line2-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.line2_y }}" oninput="syncPair('inp-line2-y','rng-line2-y','lbl-y2')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="64" step="0.5" id="rng-line2-fs" value="{{ cert_setting.line2_font_size }}" oninput="syncPair('rng-line2-fs','inp-line2-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="line2_font_size" id="inp-line2-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.line2_font_size }}" oninput="syncPair('inp-line2-fs','rng-line2-fs')">
+                  </div>
+                </div>
+                <div class="col-3">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="line2_color" id="inp-line2-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.line2_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-3 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="line2_bold" value="1" id="inp-line2-bold" {% if cert_setting.line2_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-line2-bold">ตัวหนา</label>
+                  </div>
+                </div>
+                <div class="col-12 mt-2">
+                  <label class="form-label small fw-semibold mb-1">
+                    จังหวัดต่อท้ายโรงเรียนนักเรียน
+                    {% info_tip "กรณีในฐานข้อมูลโรงเรียนยังไม่มีชื่อจังหวัดต่อท้าย (เว้นว่างถ้าไม่ต่อท้าย)" %}
+                  </label>
+                  <input type="text" name="student_default_province" id="inp-stu-prov" class="form-control form-control-sm" value="{{ cert_setting.student_default_province }}" placeholder="เช่น กรุงเทพมหานคร" oninput="renderPreview()">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. ข้อ 3: รูปแบบข้อความรายละเอียด (แกน Y / ขนาด / ระยะบรรทัด / สี) -->
+        <div class="accordion-item" id="cert-line3-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-line3" aria-expanded="false" aria-controls="collapse-cert-line3">
+              <span>3. รายละเอียด (รูปแบบ &amp; ตำแหน่ง)</span>
+              <span class="badge bg-success ms-auto me-2">หลายบรรทัด</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-line3" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y บรรทัดแรก (mm จากขอบบน: <span id="lbl-y3">{{ cert_setting.line3_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="200" step="0.5" id="rng-line3-y" value="{{ cert_setting.line3_y }}" oninput="syncPair('rng-line3-y','inp-line3-y','lbl-y3')">
+                    <input type="number" step="0.5" min="0" max="210" name="line3_y" id="inp-line3-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.line3_y }}" oninput="syncPair('inp-line3-y','rng-line3-y','lbl-y3')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="54" step="0.5" id="rng-line3-fs" value="{{ cert_setting.line3_font_size }}" oninput="syncPair('rng-line3-fs','inp-line3-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="line3_font_size" id="inp-line3-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.line3_font_size }}" oninput="syncPair('inp-line3-fs','rng-line3-fs')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ระยะห่างบรรทัด (mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="4" max="25" step="0.5" id="rng-line3-sp" value="{{ cert_setting.line3_line_spacing }}" oninput="syncPair('rng-line3-sp','inp-line3-sp')">
+                    <input type="number" step="0.5" min="4" max="30" name="line3_line_spacing" id="inp-line3-sp" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.line3_line_spacing }}" oninput="syncPair('inp-line3-sp','rng-line3-sp')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="line3_color" id="inp-line3-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.line3_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-6 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="line3_bold" value="1" id="inp-line3-bold" {% if cert_setting.line3_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-line3-bold">ตัวหนา</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. ข้อ 4: ให้ไว้ ณ วันที่ (ใช้ร่วมกันทั้งหมด) -->
+        <div class="accordion-item" id="cert-line4-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold bg-warning-subtle text-dark" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-line4" aria-expanded="false" aria-controls="collapse-cert-line4">
+              <span>4. ให้ไว้ ณ วันที่</span>
+              <span class="badge bg-warning text-dark ms-auto me-2">ใช้ร่วมกันทั้งหมด</span>
+            </button>
+          </h2>
+          <div id="collapse-cert-line4" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">
+                    ข้อความวันที่บนเกียรติบัตร
+                    {% info_tip "ตั้งค่าที่เดียว ใช้ร่วมกันทุกกลุ่ม (รองรับตัวแปร {year} หรือ {year_thai})" %}
+                  </label>
+                  <input type="text" name="line4_text" id="inp-line4-text" class="form-control form-control-sm fw-semibold" value="{{ cert_setting.line4_text }}" oninput="renderPreview()">
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold mb-1">ตำแหน่งแกน Y (mm จากขอบบน: <span id="lbl-y4">{{ cert_setting.line4_y }}</span> mm)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="205" step="0.5" id="rng-line4-y" value="{{ cert_setting.line4_y }}" oninput="syncPair('rng-line4-y','inp-line4-y','lbl-y4')">
+                    <input type="number" step="0.5" min="0" max="210" name="line4_y" id="inp-line4-y" class="form-control form-control-sm" style="width:82px;" value="{{ cert_setting.line4_y }}" oninput="syncPair('inp-line4-y','rng-line4-y','lbl-y4')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">ขนาดตัวอักษร (pt)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="54" step="0.5" id="rng-line4-fs" value="{{ cert_setting.line4_font_size }}" oninput="syncPair('rng-line4-fs','inp-line4-fs')">
+                    <input type="number" step="0.5" min="8" max="96" name="line4_font_size" id="inp-line4-fs" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.line4_font_size }}" oninput="syncPair('inp-line4-fs','rng-line4-fs')">
+                  </div>
+                </div>
+                <div class="col-3">
+                  <label class="form-label small fw-semibold mb-1">สีข้อความ</label>
+                  <input type="color" name="line4_color" id="inp-line4-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.line4_color }}" oninput="renderPreview()">
+                </div>
+                <div class="col-3 pt-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="line4_bold" value="1" id="inp-line4-bold" {% if cert_setting.line4_bold %}checked{% endif %} onchange="renderPreview()">
+                    <label class="form-check-label small fw-semibold" for="inp-line4-bold">ตัวหนา</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 9. QR Code และเลขที่อ้างอิงตรวจสอบเกียรติบัตร -->
+        <div class="accordion-item" id="cert-qr-card">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 fw-bold bg-success bg-opacity-10 text-success" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse-cert-qr" aria-expanded="false" aria-controls="collapse-cert-qr">
+              <i class="bi bi-qr-code me-2"></i>QR Code &amp; เลขที่อ้างอิงเกียรติบัตร
+            </button>
+          </h2>
+          <div id="collapse-cert-qr" class="accordion-collapse collapse" data-bs-parent="#cert-settings-accordion">
+            <div class="accordion-body py-2 px-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" name="show_qr_verify" value="1" id="inp-show-qr" {% if cert_setting.show_qr_verify %}checked{% endif %} onchange="renderPreview()">
+                  <label class="form-check-label small fw-semibold" for="inp-show-qr">
+                    แสดง QR Code และเลขที่อ้างอิงบนเกียรติบัตร
+                    {% info_tip "สร้างเลขที่อ้างอิงเฉพาะบุคคลและ QR Code สำหรับสแกนตรวจสอบว่าเป็นเกียรติบัตรที่ออกโดยศูนย์อบรมจริง" %}
+                  </label>
+                </div>
+                <a href="{% url 'food:certificate_verify_index' %}" target="_blank" class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:0.72rem;">หน้าตรวจสอบ</a>
+              </div>
+              <div class="row g-2 align-items-center mb-1">
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">แกน X (mm: <span id="lbl-qrx">{{ cert_setting.qr_x }}</span>)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="275" step="0.5" id="rng-qr-x" value="{{ cert_setting.qr_x }}" oninput="syncPair('rng-qr-x','inp-qr-x','lbl-qrx')">
+                    <input type="number" step="0.5" min="5" max="290" name="qr_x" id="inp-qr-x" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.qr_x }}" oninput="syncPair('inp-qr-x','rng-qr-x','lbl-qrx')">
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1">แกน Y (mm: <span id="lbl-qry">{{ cert_setting.qr_y }}</span>)</label>
+                  <div class="d-flex gap-2 align-items-center">
+                    <input type="range" class="form-range" min="10" max="195" step="0.5" id="rng-qr-y" value="{{ cert_setting.qr_y }}" oninput="syncPair('rng-qr-y','inp-qr-y','lbl-qry')">
+                    <input type="number" step="0.5" min="5" max="205" name="qr_y" id="inp-qr-y" class="form-control form-control-sm" style="width:76px;" value="{{ cert_setting.qr_y }}" oninput="syncPair('inp-qr-y','rng-qr-y','lbl-qry')">
+                  </div>
+                </div>
+                <div class="col-5">
+                  <label class="form-label small fw-semibold mb-1">ขนาด QR (mm)</label>
+                  <input type="number" step="0.5" min="10" max="60" name="qr_size" id="inp-qr-size" class="form-control form-control-sm" value="{{ cert_setting.qr_size }}" oninput="renderPreview()">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small fw-semibold mb-1">ขนาดอักษร (pt)</label>
+                  <input type="number" step="0.5" min="6" max="24" name="ref_code_font_size" id="inp-ref-fs" class="form-control form-control-sm" value="{{ cert_setting.ref_code_font_size }}" oninput="renderPreview()">
+                </div>
+                <div class="col-3">
+                  <label class="form-label small fw-semibold mb-1">สีอักษร</label>
+                  <input type="color" name="ref_code_color" id="inp-ref-color" class="form-control form-control-color form-control-sm w-100" value="{{ cert_setting.ref_code_color }}" oninput="renderPreview()">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap justify-content-between gap-2 mb-4">
+        <button type="submit" class="btn btn-primary fw-semibold flex-grow-1">
+          <i class="bi bi-floppy-fill me-1"></i>บันทึกการตั้งค่าเกียรติบัตร
+        </button>
+      </div>
+    </form>
+
+    <form method="post" onsubmit="return confirm('รีเซ็ตตำแหน่งแกน Y และขนาดตัวอักษรทั้งหมดกลับค่าเริ่มต้น (รูปพื้นหลังและข้อความจะยังคงอยู่)?');">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reset_settings">
+      <input type="hidden" name="tab" value="settings">
+      <input type="hidden" name="year" value="{{ year }}">
+      <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>รีเซ็ตตำแหน่งแกน Y และขนาดตัวอักษรกลับค่าเริ่มต้น
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal: ดาวน์โหลดเกียรติบัตรแยกไฟล์รายบุคคล (.zip) ทุกกลุ่ม -->
+<div class="modal fade" id="exportAllZipModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'food:certificates_export_zip' %}">
+        {% csrf_token %}
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="scope" value="all">
+        <input type="hidden" name="select_mode" value="all">
+        <input type="hidden" name="has_group_toggles" value="1">
+        <div class="modal-header py-2">
+          <h6 class="modal-title fw-bold mb-0">
+            <i class="bi bi-file-earmark-zip-fill text-primary me-2"></i>ดาวน์โหลดเกียรติบัตรแยกไฟล์รายบุคคล (.zip) — ปี {{ year }}
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-muted mb-2">
+            เลือกกลุ่มที่ต้องการรวมไว้ในไฟล์ <code>.zip</code> (สร้างไฟล์ PDF แยก 1 คนต่อ 1 ไฟล์ และจัดเก็บแยกโฟลเดอร์ตามกลุ่ม เปิดได้ทั้ง Windows, macOS และ WinRAR):
+          </div>
+          <div class="list-group list-group-flush border rounded mb-2">
+            <label class="list-group-item d-flex align-items-center justify-content-between" style="cursor:pointer;">
+              <span class="d-flex align-items-center gap-2">
+                <input class="form-check-input m-0" type="checkbox" name="include_students" value="1" {% if eligible_count > 0 %}checked{% endif %}>
+                <span class="fw-semibold">1. นักเรียนที่ได้รับเกียรติบัตร</span>
+              </span>
+              <span class="badge bg-success">{{ eligible_count }} คน</span>
+            </label>
+            <label class="list-group-item d-flex align-items-center justify-content-between" style="cursor:pointer;">
+              <span class="d-flex align-items-center gap-2">
+                <input class="form-check-input m-0" type="checkbox" name="include_lecturer" value="1" {% if lecturer_count > 0 %}checked{% endif %}>
+                <span class="fw-semibold">2. รายชื่อวิทยากร</span>
+              </span>
+              <span class="badge bg-info text-dark">{{ lecturer_count }} คน</span>
+            </label>
+            <label class="list-group-item d-flex align-items-center justify-content-between" style="cursor:pointer;">
+              <span class="d-flex align-items-center gap-2">
+                <input class="form-check-input m-0" type="checkbox" name="include_committee" value="1" {% if committee_count > 0 %}checked{% endif %}>
+                <span class="fw-semibold">3. รายชื่อคณะกรรมการ</span>
+              </span>
+              <span class="badge bg-primary">{{ committee_count }} คน</span>
+            </label>
+          </div>
+          <div class="small text-muted">
+            <i class="bi bi-info-circle me-1"></i>หากต้องการเลือกเฉพาะบางบุคคลในแต่ละกลุ่ม สามารถติ๊กเลือกจากตารางแล้วกด "ดาวน์โหลด ZIP แยกไฟล์ที่เลือก" ได้โดยตรง
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+            <i class="bi bi-download me-1"></i>ดาวน์โหลดไฟล์ .zip
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 1. Modal จัดการรายชื่อวิทยากร / คณะกรรมการ (ใส่ข้อความเริ่มต้นของกลุ่มให้อัตโนมัติ พร้อมแก้ไขรายบุคคลได้ทันที)
+var CERT_DEFAULT_DESC = {
+  lecturer: '{{ cert_setting.lecturer_line3_text|escapejs }}',
+  committee: '{{ cert_setting.committee_line3_text|escapejs }}'
+};
+
+function normalizeCertText(s) {
+  return String(s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+    .split('\n').map(function (ln) { return ln.replace(/\s+$/, ''); }).join('\n');
+}
+
+function updateRecipientDescBadge() {
+  var badge = document.getElementById('rec-desc-mode-badge');
+  var typeEl = document.getElementById('rec-type');
+  var descEl = document.getElementById('rec-desc');
+  if (!badge || !typeEl || !descEl) return;
+  var defTxt = CERT_DEFAULT_DESC[typeEl.value] || '';
+  var curNorm = normalizeCertText(descEl.value);
+  var isDefault = !curNorm || curNorm === normalizeCertText(defTxt);
+  badge.textContent = isDefault ? 'ใช้ค่าเริ่มต้นของกลุ่ม' : 'แก้ไขเฉพาะบุคคล';
+  badge.className = isDefault
+    ? 'badge bg-light text-secondary border ms-1'
+    : 'badge bg-warning-subtle text-dark border border-warning ms-1';
+}
+
+function resetRecipientDescToDefault() {
+  var typeEl = document.getElementById('rec-type');
+  var descEl = document.getElementById('rec-desc');
+  if (!typeEl || !descEl) return;
+  descEl.value = CERT_DEFAULT_DESC[typeEl.value] || '';
+  updateRecipientDescBadge();
+}
+
+function openAddRecipientModal(defaultType) {
+  var rtype = defaultType || 'lecturer';
+  var typeEl = document.getElementById('rec-type');
+  var descEl = document.getElementById('rec-desc');
+  document.getElementById('rec-action').value = 'add_recipient';
+  document.getElementById('rec-id').value = '';
+  typeEl.value = rtype;
+  typeEl.dataset.prevType = rtype;
+  document.getElementById('rec-name').value = '';
+  document.getElementById('rec-school').value = '';
+  descEl.value = CERT_DEFAULT_DESC[rtype] || '';
+  updateRecipientDescBadge();
+  document.getElementById('rec-modal-title').innerHTML =
+    '<i class="bi bi-person-plus me-2 text-primary"></i>เพิ่มรายชื่อ' + (rtype === 'committee' ? 'คณะกรรมการ' : 'วิทยากร');
+  new bootstrap.Modal(document.getElementById('recipientModal')).show();
+}
+
+function openEditRecipientModal(btn) {
+  var rtype = btn.dataset.type || 'lecturer';
+  var rawDesc = (btn.dataset.desc || '').trim();
+  var typeEl = document.getElementById('rec-type');
+  var descEl = document.getElementById('rec-desc');
+  document.getElementById('rec-action').value = 'edit_recipient';
+  document.getElementById('rec-id').value = btn.dataset.id || '';
+  typeEl.value = rtype;
+  typeEl.dataset.prevType = rtype;
+  document.getElementById('rec-name').value = btn.dataset.name || '';
+  document.getElementById('rec-school').value = btn.dataset.school || '';
+  descEl.value = rawDesc ? btn.dataset.desc : (CERT_DEFAULT_DESC[rtype] || '');
+  updateRecipientDescBadge();
+  document.getElementById('rec-modal-title').innerHTML =
+    '<i class="bi bi-pencil-square me-2 text-warning"></i>แก้ไขรายชื่อ';
+  new bootstrap.Modal(document.getElementById('recipientModal')).show();
+}
+
+(function () {
+  var typeEl = document.getElementById('rec-type');
+  var descEl = document.getElementById('rec-desc');
+  if (typeEl && descEl) {
+    typeEl.addEventListener('change', function () {
+      var prevType = typeEl.dataset.prevType || typeEl.value;
+      var newType = typeEl.value;
+      var curNorm = normalizeCertText(descEl.value);
+      if (!curNorm || curNorm === normalizeCertText(CERT_DEFAULT_DESC[prevType] || '')) {
+        descEl.value = CERT_DEFAULT_DESC[newType] || '';
+      }
+      typeEl.dataset.prevType = newType;
+      updateRecipientDescBadge();
+    });
+  }
+})();
+
+// 2. Live Preview (1:1 ตรงกับ PDF) & Y-axis / QR Dragging สำหรับแท็บตั้งค่าเกียรติบัตร
+(function () {
+  var stage = document.getElementById('cert-preview-stage');
+  if (!stage) return;
+
+  var PAGE_W_MM = 297.0;
+  var PAGE_H_MM = 210.0;
+  var PT_PER_MM = 72.0 / 25.4;
+  var PAGE_H_PT = 595.2755905511812;
+  var MAX_W_PT = (PAGE_W_MM - 24.0) * PT_PER_MM;
+  var WIN_ASCENT = 0.844;
+  var WIN_LH = 1.301;
+
+  var YEAR = '{{ year }}';
+  var YEAR_THAI = '{{ year|to_thai_num }}';
+  var DIRECTOR_POS_LINES = '{{ setting.announcement_director_position|escapejs }}'
+    .split(/\r?\n/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return !!s; })
+    .slice(0, 2);
+
+  var SAMPLE = {
+    student: {
+      name: '{{ sample_student_name|escapejs }}',
+      baseSchool: '{{ sample_student_base_school|escapejs }}',
+      rawSchool: '{{ sample_student_school|escapejs }}'
+    },
+    lecturer: {
+      name: '{{ sample_lecturer_name|escapejs }}',
+      rawSchool: '{{ sample_lecturer_school|escapejs }}'
+    },
+    committee: {
+      name: '{{ sample_committee_name|escapejs }}',
+      rawSchool: '{{ sample_committee_school|escapejs }}'
+    }
+  };
+  var activeGroup = 'student';
+  var activeMode = 'wysiwyg';
+  var hasUnsavedBgFile = false;
+  var lastPdfUrl = '';
+  var pdfReloadTimer = null;
+
+  var measCanvas = document.createElement('canvas');
+  var measCtx = measCanvas.getContext ? measCanvas.getContext('2d') : null;
+
+  function clamp(val, lo, hi) {
+    return Math.max(lo, Math.min(hi, val));
+  }
+
+  function renderTokens(txt) {
+    return String(txt || '').replace(/\{year_thai\}/g, YEAR_THAI).replace(/\{year\}/g, YEAR);
+  }
+
+  function fitFontSizePt(text, desiredPt, bold) {
+    var actual = Math.max(10.0, parseFloat(desiredPt) || 18.0);
+    if (!measCtx || !text) return actual;
+    var weight = bold ? '700 ' : '400 ';
+    while (actual > 10.0) {
+      measCtx.font = weight + actual + 'px "THSarabunNewCert", "Sarabun", sans-serif';
+      if (measCtx.measureText(text).width <= MAX_W_PT) break;
+      actual = Math.max(10.0, actual - 0.5);
+    }
+    return actual;
+  }
+
+  function lineTopPx(yTopMm, actualPt, pxPerMm, scale) {
+    var fsPx = actualPt * scale;
+    return (yTopMm * pxPerMm) + (0.24 - WIN_ASCENT) * fsPx;
+  }
+
+  window.syncPair = function (srcId, dstId, lblId) {
+    var src = document.getElementById(srcId);
+    var dst = document.getElementById(dstId);
+    if (src && dst) dst.value = src.value;
+    if (lblId && src) {
+      var lbl = document.getElementById(lblId);
+      if (lbl) lbl.textContent = src.value;
+    }
+    renderPreview();
+  };
+
+  window.setPreviewGroup = function (grp, btnEl) {
+    activeGroup = grp;
+    document.querySelectorAll('[data-pv-group]').forEach(function (b) {
+      b.classList.remove('btn-primary');
+      b.classList.add('btn-outline-primary');
+    });
+    if (btnEl) {
+      btnEl.classList.remove('btn-outline-primary');
+      btnEl.classList.add('btn-primary');
+    }
+    renderPreview();
+  };
+
+  window.setPreviewMode = function (mode) {
+    activeMode = (mode === 'pdf') ? 'pdf' : 'wysiwyg';
+    var pdfStage = document.getElementById('cert-pdf-stage');
+    var btnW = document.getElementById('btn-pv-mode-wysiwyg');
+    var btnP = document.getElementById('btn-pv-mode-pdf');
+    var bgNote = document.getElementById('cert-pdf-unsaved-bg-note');
+
+    if (activeMode === 'pdf') {
+      stage.style.display = 'none';
+      if (pdfStage) pdfStage.style.display = 'block';
+      if (btnW) { btnW.classList.remove('btn-dark'); btnW.classList.add('btn-outline-dark'); }
+      if (btnP) { btnP.classList.remove('btn-outline-danger'); btnP.classList.add('btn-danger'); }
+      if (bgNote) bgNote.style.display = hasUnsavedBgFile ? 'block' : 'none';
+      schedulePdfIframeReload(true);
+    } else {
+      if (pdfStage) pdfStage.style.display = 'none';
+      stage.style.display = 'block';
+      if (btnW) { btnW.classList.remove('btn-outline-dark'); btnW.classList.add('btn-dark'); }
+      if (btnP) { btnP.classList.remove('btn-danger'); btnP.classList.add('btn-outline-danger'); }
+      if (bgNote) bgNote.style.display = 'none';
+      renderPreview();
+    }
+  };
+
+  function getScale() {
+    var h = stage.clientHeight || 420;
+    return h / PAGE_H_PT;
+  }
+
+  function applyLineStyle(elId, textId, rawText, yMm, fsPt, bold, color, tagId, numLabel) {
+    var el = document.getElementById(elId);
+    var txtEl = document.getElementById(textId);
+    if (!el || !txtEl) return;
+    var clean = String(rawText || '').trim();
+    if (!clean) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    txtEl.textContent = clean;
+
+    var actualPt = fitFontSizePt(clean, fsPt, bold);
+    var stageH = stage.clientHeight || 420;
+    var scale = stageH / PAGE_H_PT;
+    var pxPerMm = stageH / PAGE_H_MM;
+    el.style.top = lineTopPx(yMm, actualPt, pxPerMm, scale) + 'px';
+    el.style.fontSize = (actualPt * scale) + 'px';
+    el.style.fontWeight = bold ? '700' : '400';
+    el.style.color = color;
+    var tag = document.getElementById(tagId);
+    if (tag) tag.textContent = numLabel + '. Y=' + Number(yMm).toFixed(1) + 'mm';
+  }
+
+  function renderMultilinePv(wrapId, linesWrapId, tagId, tagPrefix, yMm, fsPt, spMm, bold, color, rawText, dropAllEmpty) {
+    var wrapEl = document.getElementById(wrapId);
+    var linesWrap = document.getElementById(linesWrapId);
+    if (!wrapEl || !linesWrap) return;
+
+    var rawLines = renderTokens(rawText).split(/\r?\n/);
+    var entries = [];
+    if (dropAllEmpty) {
+      rawLines.forEach(function (ln) {
+        var t = ln.trim();
+        if (t) entries.push({ idx: entries.length, text: t });
+      });
+    } else {
+      var trimmed = rawLines.map(function (ln) { return ln.trim(); });
+      while (trimmed.length && !trimmed[trimmed.length - 1]) trimmed.pop();
+      trimmed.forEach(function (t, i) {
+        if (t) entries.push({ idx: i, text: t });
+      });
+    }
+
+    if (!entries.length) {
+      wrapEl.style.display = 'none';
+      linesWrap.innerHTML = '';
+      return;
+    }
+    wrapEl.style.display = 'block';
+
+    var stageH = stage.clientHeight || 420;
+    var scale = stageH / PAGE_H_PT;
+    var pxPerMm = stageH / PAGE_H_MM;
+
+    var minTop = Infinity;
+    var maxBot = -Infinity;
+    var positioned = entries.map(function (item) {
+      var actualPt = fitFontSizePt(item.text, fsPt, bold);
+      var fsPx = actualPt * scale;
+      var topPx = lineTopPx(yMm + (item.idx * spMm), actualPt, pxPerMm, scale);
+      var botPx = topPx + (fsPx * WIN_LH);
+      if (topPx < minTop) minTop = topPx;
+      if (botPx > maxBot) maxBot = botPx;
+      return { text: item.text, fsPx: fsPx, topPx: topPx };
+    });
+
+    wrapEl.style.top = minTop + 'px';
+    wrapEl.style.height = Math.max(8, maxBot - minTop) + 'px';
+    wrapEl.style.fontWeight = bold ? '700' : '400';
+    wrapEl.style.color = color;
+
+    var tagEl = document.getElementById(tagId);
+    if (tagEl) tagEl.textContent = tagPrefix + '. Y=' + Number(yMm).toFixed(1) + 'mm';
+
+    linesWrap.innerHTML = '';
+    positioned.forEach(function (p) {
+      var div = document.createElement('div');
+      div.className = 'cert-pv-subline';
+      div.style.top = (p.topPx - minTop) + 'px';
+      div.style.fontSize = p.fsPx + 'px';
+      div.textContent = p.text;
+      linesWrap.appendChild(div);
+    });
+  }
+
+  function renderFallbackChrome(stageW, stageH, pxPerMm, scale) {
+    var fbChrome = document.getElementById('cert-fallback-chrome');
+    if (!fbChrome || fbChrome.style.display === 'none') return;
+
+    var marginPx = 12.0 * pxPerMm;
+    var innerMarginPx = 15.5 * pxPerMm;
+    var cornerOffsetPx = 17.5 * pxPerMm;
+    var cornerLenPx = 8.0 * pxPerMm;
+
+    var outerEl = document.getElementById('cert-fb-outer');
+    if (outerEl) {
+      outerEl.style.left = marginPx + 'px';
+      outerEl.style.top = marginPx + 'px';
+      outerEl.style.width = (stageW - 2 * marginPx) + 'px';
+      outerEl.style.height = (stageH - 2 * marginPx) + 'px';
+      outerEl.style.borderWidth = Math.max(1, 3.0 * scale) + 'px';
+    }
+    var innerEl = document.getElementById('cert-fb-inner');
+    if (innerEl) {
+      innerEl.style.left = innerMarginPx + 'px';
+      innerEl.style.top = innerMarginPx + 'px';
+      innerEl.style.width = (stageW - 2 * innerMarginPx) + 'px';
+      innerEl.style.height = (stageH - 2 * innerMarginPx) + 'px';
+      innerEl.style.borderWidth = Math.max(0.75, 1.2 * scale) + 'px';
+    }
+    var cornerBw = Math.max(1, 1.5 * scale) + 'px';
+    [
+      { id: 'cert-fb-c0', left: cornerOffsetPx, top: cornerOffsetPx },
+      { id: 'cert-fb-c1', left: stageW - cornerOffsetPx - cornerLenPx, top: cornerOffsetPx },
+      { id: 'cert-fb-c2', left: cornerOffsetPx, top: stageH - cornerOffsetPx - cornerLenPx },
+      { id: 'cert-fb-c3', left: stageW - cornerOffsetPx - cornerLenPx, top: stageH - cornerOffsetPx - cornerLenPx }
+    ].forEach(function (c) {
+      var el = document.getElementById(c.id);
+      if (!el) return;
+      el.style.left = c.left + 'px';
+      el.style.top = c.top + 'px';
+      el.style.width = cornerLenPx + 'px';
+      el.style.height = cornerLenPx + 'px';
+      el.style.borderWidth = cornerBw;
+    });
+
+    // โลโก้ 4 รูปด้านบน (20×20mm, ระยะห่างกึ่งกลาง 34mm, ขอบบน 16mm)
+    var logos = document.querySelectorAll('#cert-fallback-logos .cert-fb-logo');
+    if (logos.length) {
+      var logoSizeMm = 20.0;
+      var spacingMm = 34.0;
+      var logoTopPx = 16.0 * pxPerMm;
+      var logoSizePx = logoSizeMm * pxPerMm;
+      var startXMm = (PAGE_W_MM / 2.0) - ((logos.length - 1) * spacingMm) / 2.0 - (logoSizeMm / 2.0);
+      logos.forEach(function (img, idx) {
+        img.style.left = ((startXMm + idx * spacingMm) * pxPerMm) + 'px';
+        img.style.top = logoTopPx + 'px';
+        img.style.width = logoSizePx + 'px';
+        img.style.height = logoSizePx + 'px';
+      });
+    }
+
+    // ลายเซ็นด้านล่าง (baseline ชื่อ y=180mm 14pt bold, ตำแหน่ง 11.5pt regular ที่ +4.5mm, +8.5mm)
+    var sigName = document.getElementById('cert-fb-sig-name');
+    var sigPos1 = document.getElementById('cert-fb-sig-pos1');
+    var sigPos2 = document.getElementById('cert-fb-sig-pos2');
+    if (sigName) {
+      var nameFsPx = 14.0 * scale;
+      sigName.style.fontSize = nameFsPx + 'px';
+      sigName.style.top = ((180.0 * pxPerMm) - (WIN_ASCENT * nameFsPx)) + 'px';
+    }
+    var posFsPx = 11.5 * scale;
+    [
+      { el: sigPos1, text: DIRECTOR_POS_LINES[0] || '', yMm: 184.5 },
+      { el: sigPos2, text: DIRECTOR_POS_LINES[1] || '', yMm: 188.5 }
+    ].forEach(function (p) {
+      if (!p.el) return;
+      if (!p.text) {
+        p.el.style.display = 'none';
+        return;
+      }
+      p.el.style.display = 'block';
+      p.el.textContent = p.text;
+      p.el.style.fontSize = posFsPx + 'px';
+      p.el.style.top = ((p.yMm * pxPerMm) - (WIN_ASCENT * posFsPx)) + 'px';
+    });
+  }
+
+  function schedulePdfIframeReload(immediate) {
+    if (activeMode !== 'pdf') return;
+    var iframe = document.getElementById('cert-pdf-iframe');
+    var pdfBtn = document.getElementById('btn-open-pdf-preview');
+    var loader = document.getElementById('cert-pdf-loading');
+    if (!iframe || !pdfBtn) return;
+
+    var targetSrc = pdfBtn.href + '#toolbar=0&navpanes=0&view=Fit';
+    if (targetSrc === lastPdfUrl) return;
+
+    if (pdfReloadTimer) {
+      clearTimeout(pdfReloadTimer);
+      pdfReloadTimer = null;
+    }
+    var runLoad = function () {
+      lastPdfUrl = targetSrc;
+      if (loader) loader.style.display = 'inline-block';
+      iframe.src = targetSrc;
+    };
+    if (immediate) {
+      runLoad();
+    } else {
+      pdfReloadTimer = setTimeout(runLoad, 350);
+    }
+  }
+
+  var pdfIframe = document.getElementById('cert-pdf-iframe');
+  if (pdfIframe) {
+    pdfIframe.addEventListener('load', function () {
+      var loader = document.getElementById('cert-pdf-loading');
+      if (loader) loader.style.display = 'none';
+    });
+  }
+
+  window.renderPreview = function () {
+    var yh1 = parseFloat(document.getElementById('inp-header1-y').value) || 45;
+    var fsh1 = parseFloat(document.getElementById('inp-header1-fs').value) || 22;
+    var sph1 = parseFloat(document.getElementById('inp-header1-sp').value) || 10;
+    var bh1 = document.getElementById('inp-header1-bold').checked;
+    var ch1 = document.getElementById('inp-header1-color').value || '#0f4c5c';
+    var txth1 = document.getElementById('inp-header1-text').value || '';
+
+    var yh2 = parseFloat(document.getElementById('inp-header2-y').value) || 71;
+    var fsh2 = parseFloat(document.getElementById('inp-header2-fs').value) || 24;
+    var bh2 = document.getElementById('inp-header2-bold').checked;
+    var ch2 = document.getElementById('inp-header2-color').value || '#b8860b';
+    var txth2 = document.getElementById('inp-header2-text').value || '';
+
+    var y1 = parseFloat(document.getElementById('inp-line1-y').value) || 94;
+    var fs1 = parseFloat(document.getElementById('inp-line1-fs').value) || 34;
+    var b1 = document.getElementById('inp-line1-bold').checked;
+    var c1 = document.getElementById('inp-line1-color').value || '#000000';
+
+    var y2 = parseFloat(document.getElementById('inp-line2-y').value) || 111;
+    var fs2 = parseFloat(document.getElementById('inp-line2-fs').value) || 22;
+    var b2 = document.getElementById('inp-line2-bold').checked;
+    var c2 = document.getElementById('inp-line2-color').value || '#000000';
+
+    var y3 = parseFloat(document.getElementById('inp-line3-y').value) || 127;
+    var fs3 = parseFloat(document.getElementById('inp-line3-fs').value) || 21;
+    var sp3 = parseFloat(document.getElementById('inp-line3-sp').value) || 11;
+    var b3 = document.getElementById('inp-line3-bold').checked;
+    var c3 = document.getElementById('inp-line3-color').value || '#000000';
+
+    var y4 = parseFloat(document.getElementById('inp-line4-y').value) || 162;
+    var fs4 = parseFloat(document.getElementById('inp-line4-fs').value) || 21;
+    var b4 = document.getElementById('inp-line4-bold').checked;
+    var c4 = document.getElementById('inp-line4-color').value || '#000000';
+
+    var showQr = document.getElementById('inp-show-qr').checked;
+    var qrX = parseFloat(document.getElementById('inp-qr-x').value) || 252;
+    var qrY = parseFloat(document.getElementById('inp-qr-y').value) || 164;
+    var qrSize = parseFloat(document.getElementById('inp-qr-size').value) || 24;
+    var refFs = parseFloat(document.getElementById('inp-ref-fs').value) || 9.5;
+    var refCol = document.getElementById('inp-ref-color').value || '#333333';
+
+    var stuProv = (document.getElementById('inp-stu-prov').value || '').trim();
+    var clearBgChk = document.getElementById('clearBgImg');
+    var clearBgChecked = !!(clearBgChk && clearBgChk.checked);
+
+    var stageW = stage.clientWidth || 594;
+    var stageH = stage.clientHeight || 420;
+    var pxPerMm = stageH / PAGE_H_MM;
+    var scale = stageH / PAGE_H_PT;
+
+    if (activeMode !== 'pdf') {
+      renderFallbackChrome(stageW, stageH, pxPerMm, scale);
+
+      renderMultilinePv('pv-header1', 'pv-header1-lines', 'tag-header1', 'หัว 1', yh1, fsh1, sph1, bh1, ch1, txth1, true);
+      applyLineStyle('pv-header2', 'pv-header2-text', renderTokens(txth2), yh2, fsh2, bh2, ch2, 'tag-header2', 'หัว 2');
+
+      var smp = SAMPLE[activeGroup] || SAMPLE.student;
+      var schoolDisplay = smp.rawSchool;
+      if (activeGroup === 'student' && smp.baseSchool) {
+        schoolDisplay = (stuProv && smp.baseSchool.indexOf(stuProv) === -1)
+          ? (smp.baseSchool + ' ' + stuProv)
+          : smp.baseSchool;
+      }
+      applyLineStyle('pv-line1', 'pv-line1-text', smp.name, y1, fs1, b1, c1, 'tag-line1', '1');
+      applyLineStyle('pv-line2', 'pv-line2-text', schoolDisplay, y2, fs2, b2, c2, 'tag-line2', '2');
+
+      var descInputId = activeGroup === 'lecturer' ? 'inp-lec-l3' : (activeGroup === 'committee' ? 'inp-com-l3' : 'inp-stu-l3');
+      renderMultilinePv('pv-line3', 'pv-line3-lines', 'tag-line3', '3', y3, fs3, sp3, b3, c3, document.getElementById(descInputId).value, false);
+
+      var l4Txt = renderTokens(document.getElementById('inp-line4-text').value);
+      applyLineStyle('pv-line4', 'pv-line4-text', l4Txt, y4, fs4, b4, c4, 'tag-line4', '4');
+
+      // QR Code Overlay & ข้อความ 2 บรรทัดใต้ QR (ตรงกับ _draw_qr_and_ref_code ใน certificate_pdf.py 1:1)
+      var qrBox = document.getElementById('pv-qr-box');
+      var cap1 = document.getElementById('pv-qr-cap1');
+      var cap2 = document.getElementById('pv-qr-cap2');
+      if (qrBox && cap1 && cap2) {
+        var qrDisplay = showQr ? '' : 'none';
+        qrBox.style.display = showQr ? 'flex' : 'none';
+        cap1.style.display = showQr ? 'block' : 'none';
+        cap2.style.display = showQr ? 'block' : 'none';
+        if (showQr) {
+          var qrSizeMm = clamp(qrSize || 24.0, 12.0, 50.0);
+          var xMm = clamp(qrX || 252.0, 6.0, PAGE_W_MM - qrSizeMm - 6.0);
+          var clampedQrY = clamp(qrY || 164.0, 6.0, 200.0);
+          var yBottomFromBottomMm = Math.max(11.0, PAGE_H_MM - clampedQrY - qrSizeMm);
+          var yQrTopMm = PAGE_H_MM - yBottomFromBottomMm - qrSizeMm;
+          var yQrBottomFromTopMm = yQrTopMm + qrSizeMm;
+          var padMm = 1.5;
+
+          qrBox.style.left = ((xMm - padMm) * pxPerMm) + 'px';
+          qrBox.style.top = ((yQrTopMm - padMm) * pxPerMm) + 'px';
+          qrBox.style.width = ((qrSizeMm + 2.0 * padMm) * pxPerMm) + 'px';
+          qrBox.style.height = ((qrSizeMm + 2.0 * padMm) * pxPerMm) + 'px';
+          qrBox.style.padding = (padMm * pxPerMm) + 'px';
+          qrBox.style.borderWidth = Math.max(0.5, 0.5 * scale) + 'px';
+
+          var labelCxPx = clamp(xMm + (qrSizeMm / 2.0), 24.0, PAGE_W_MM - 24.0) * pxPerMm;
+          var refFsClamped = clamp(refFs || 9.5, 6.5, 20.0);
+          var cap1FsPx = Math.max(6.5, refFsClamped - 1.0) * scale;
+          var cap2FsPx = refFsClamped * scale;
+
+          cap1.style.left = labelCxPx + 'px';
+          cap1.style.fontSize = cap1FsPx + 'px';
+          cap1.style.fontWeight = '400';
+          cap1.style.color = refCol;
+          cap1.style.top = (((yQrBottomFromTopMm + 4.0) * pxPerMm) - (WIN_ASCENT * cap1FsPx)) + 'px';
+
+          cap2.style.left = labelCxPx + 'px';
+          cap2.style.fontSize = cap2FsPx + 'px';
+          cap2.style.fontWeight = '400';
+          cap2.style.color = refCol;
+          cap2.style.top = (((yQrBottomFromTopMm + 7.8) * pxPerMm) - (WIN_ASCENT * cap2FsPx)) + 'px';
+        }
+      }
+    }
+
+    // อัปเดต URL สำหรับปุ่ม "เปิด PDF เต็มจอ" และ Live PDF Iframe
+    var pdfBtn = document.getElementById('btn-open-pdf-preview');
+    if (pdfBtn) {
+      var qs = new URLSearchParams({
+        year: YEAR,
+        group: activeGroup,
+        header1_text: txth1, header1_y: yh1, header1_font_size: fsh1, header1_line_spacing: sph1,
+        header1_bold: bh1 ? '1' : '0', header1_color: ch1,
+        header2_text: txth2, header2_y: yh2, header2_font_size: fsh2,
+        header2_bold: bh2 ? '1' : '0', header2_color: ch2,
+        line1_y: y1, line1_font_size: fs1, line1_bold: b1 ? '1' : '0', line1_color: c1,
+        line2_y: y2, line2_font_size: fs2, line2_bold: b2 ? '1' : '0', line2_color: c2,
+        student_default_province: stuProv,
+        line3_y: y3, line3_font_size: fs3, line3_line_spacing: sp3, line3_bold: b3 ? '1' : '0', line3_color: c3,
+        line4_y: y4, line4_font_size: fs4, line4_bold: b4 ? '1' : '0', line4_color: c4,
+        line4_text: document.getElementById('inp-line4-text').value,
+        student_line3_text: document.getElementById('inp-stu-l3').value,
+        lecturer_line3_text: document.getElementById('inp-lec-l3').value,
+        committee_line3_text: document.getElementById('inp-com-l3').value,
+        show_qr_verify: showQr ? '1' : '0',
+        qr_x: qrX, qr_y: qrY, qr_size: qrSize, ref_code_font_size: refFs, ref_code_color: refCol,
+        clear_background_image: (clearBgChecked && !hasUnsavedBgFile) ? '1' : '0'
+      });
+      pdfBtn.href = "{% url 'food:certificate_preview_pdf' %}?" + qs.toString();
+      schedulePdfIframeReload(false);
+    }
+  };
+
+  function setStageBackgroundVisibility(showBg, srcUrl) {
+    var bgImg = document.getElementById('cert-preview-bg');
+    var fbChrome = document.getElementById('cert-fallback-chrome');
+    if (showBg && srcUrl) {
+      if (bgImg) { bgImg.src = srcUrl; bgImg.style.display = 'block'; }
+      stage.classList.remove('no-bg');
+      if (fbChrome) fbChrome.style.display = 'none';
+    } else {
+      if (bgImg) { bgImg.style.display = 'none'; }
+      stage.classList.add('no-bg');
+      if (fbChrome) fbChrome.style.display = 'block';
+    }
+    renderPreview();
+  }
+
+  // พรีวิวรูปพื้นหลังทันทีเมื่อเลือกไฟล์ใหม่ หรือติ๊ก "ลบรูปพื้นหลัง"
+  var bgInput = document.getElementById('inp-bg-image');
+  var clearBgChk = document.getElementById('clearBgImg');
+  if (bgInput) {
+    bgInput.addEventListener('change', function () {
+      var file = bgInput.files && bgInput.files[0];
+      if (!file) {
+        hasUnsavedBgFile = false;
+        return;
+      }
+      hasUnsavedBgFile = true;
+      if (clearBgChk) clearBgChk.checked = false;
+      var bgNote = document.getElementById('cert-pdf-unsaved-bg-note');
+      if (bgNote && activeMode === 'pdf') bgNote.style.display = 'block';
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        setStageBackgroundVisibility(true, ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  if (clearBgChk) {
+    clearBgChk.addEventListener('change', function () {
+      var bgImg = document.getElementById('cert-preview-bg');
+      var savedSrc = bgImg ? (bgImg.getAttribute('data-saved-src') || '') : '';
+      if (clearBgChk.checked) {
+        hasUnsavedBgFile = false;
+        setStageBackgroundVisibility(false, '');
+      } else if (savedSrc) {
+        setStageBackgroundVisibility(true, savedSrc);
+      } else {
+        setStageBackgroundVisibility(false, '');
+      }
+    });
+  }
+
+  // เปิด Accordion Dropdown ของส่วนประกอบเกียรติบัตร
+  var accEl = document.getElementById('cert-settings-accordion');
+  function openCertAccordion(collapseId) {
+    if (!collapseId || !window.bootstrap) return;
+    var target = document.getElementById(collapseId);
+    if (!target) return;
+    if (accEl && !target.getAttribute('data-bs-parent')) {
+      target.setAttribute('data-bs-parent', '#cert-settings-accordion');
+    }
+    bootstrap.Collapse.getOrCreateInstance(target, {toggle: false}).show();
+  }
+  if (accEl) {
+    accEl.querySelectorAll('.accordion-collapse').forEach(function (col) {
+      col.addEventListener('shown.bs.collapse', function () {
+        if (!col.getAttribute('data-bs-parent')) {
+          col.setAttribute('data-bs-parent', '#cert-settings-accordion');
+        }
+      });
+    });
+    var btnExpAll = document.getElementById('btn-cert-expand-all');
+    var btnColAll = document.getElementById('btn-cert-collapse-all');
+    if (btnExpAll) {
+      btnExpAll.addEventListener('click', function () {
+        accEl.querySelectorAll('.accordion-collapse').forEach(function (col) {
+          col.removeAttribute('data-bs-parent');
+          bootstrap.Collapse.getOrCreateInstance(col, {toggle: false}).show();
+        });
+      });
+    }
+    if (btnColAll) {
+      btnColAll.addEventListener('click', function () {
+        accEl.querySelectorAll('.accordion-collapse').forEach(function (col) {
+          col.setAttribute('data-bs-parent', '#cert-settings-accordion');
+          bootstrap.Collapse.getOrCreateInstance(col, {toggle: false}).hide();
+        });
+      });
+    }
+    if (window.location.hash) {
+      var hashItem = document.querySelector(window.location.hash);
+      if (hashItem && accEl.contains(hashItem)) {
+        var hashCol = hashItem.classList.contains('accordion-collapse')
+          ? hashItem
+          : hashItem.querySelector('.accordion-collapse');
+        if (hashCol) openCertAccordion(hashCol.id);
+      }
+    }
+  }
+
+  // ลากข้อความขึ้น-ลงบนแกน Y ด้วย Pointer Events
+  var dragTarget = null;
+  var dragStartClientY = 0;
+  var dragStartMm = 0;
+
+  stage.querySelectorAll('[data-y-input]').forEach(function (el) {
+    el.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      if (el.dataset.accTarget) openCertAccordion(el.dataset.accTarget);
+      var inp = document.getElementById(el.dataset.yInput);
+      if (!inp) return;
+      dragTarget = { el: el, inp: inp, lblId: el.dataset.lblId || '' };
+      dragStartClientY = ev.clientY;
+      dragStartMm = parseFloat(inp.value) || 100;
+      el.classList.add('dragging');
+      if (el.setPointerCapture) el.setPointerCapture(ev.pointerId);
+    });
+    el.addEventListener('pointermove', function (ev) {
+      if (!dragTarget || dragTarget.el !== el) return;
+      var deltaPx = ev.clientY - dragStartClientY;
+      var deltaMm = (deltaPx / (stage.clientHeight || 420)) * PAGE_H_MM;
+      var nextMm = Math.round(clamp(dragStartMm + deltaMm, 5, 205) * 2) / 2;
+      dragTarget.inp.value = nextMm;
+      var rng = document.getElementById(dragTarget.inp.id.replace('inp-', 'rng-'));
+      if (rng) rng.value = nextMm;
+      if (dragTarget.lblId) {
+        var lbl = document.getElementById(dragTarget.lblId);
+        if (lbl) lbl.textContent = nextMm;
+      }
+      renderPreview();
+    });
+    function endDrag(ev) {
+      if (!dragTarget || dragTarget.el !== el) return;
+      el.classList.remove('dragging');
+      if (el.releasePointerCapture) {
+        try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+      }
+      dragTarget = null;
+    }
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+  });
+
+  // ลาก QR Code & ข้อความใต้ QR แบบ 2 มิติ (X และ Y)
+  var qrHandles = ['pv-qr-box', 'pv-qr-cap1', 'pv-qr-cap2']
+    .map(function (id) { return document.getElementById(id); })
+    .filter(function (el) { return !!el; });
+  var qrDrag = null;
+
+  qrHandles.forEach(function (handleEl) {
+    handleEl.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      if (handleEl.dataset.accTarget) openCertAccordion(handleEl.dataset.accTarget);
+      var xInp = document.getElementById('inp-qr-x');
+      var yInp = document.getElementById('inp-qr-y');
+      if (!xInp || !yInp) return;
+      qrDrag = {
+        handle: handleEl,
+        startX: ev.clientX, startY: ev.clientY,
+        baseX: parseFloat(xInp.value) || 252, baseY: parseFloat(yInp.value) || 164,
+        xInp: xInp, yInp: yInp
+      };
+      handleEl.classList.add('dragging');
+      if (handleEl.setPointerCapture) handleEl.setPointerCapture(ev.pointerId);
+    });
+    handleEl.addEventListener('pointermove', function (ev) {
+      if (!qrDrag || qrDrag.handle !== handleEl) return;
+      var dxMm = ((ev.clientX - qrDrag.startX) / (stage.clientWidth || 594)) * PAGE_W_MM;
+      var dyMm = ((ev.clientY - qrDrag.startY) / (stage.clientHeight || 420)) * PAGE_H_MM;
+      var nx = Math.round(clamp(qrDrag.baseX + dxMm, 10, 275) * 2) / 2;
+      var ny = Math.round(clamp(qrDrag.baseY + dyMm, 10, 195) * 2) / 2;
+      qrDrag.xInp.value = nx;
+      qrDrag.yInp.value = ny;
+      var rX = document.getElementById('rng-qr-x');
+      var rY = document.getElementById('rng-qr-y');
+      var lX = document.getElementById('lbl-qrx');
+      var lY = document.getElementById('lbl-qry');
+      if (rX) rX.value = nx;
+      if (rY) rY.value = ny;
+      if (lX) lX.textContent = nx;
+      if (lY) lY.textContent = ny;
+      renderPreview();
+    });
+    function endQrDrag(ev) {
+      if (!qrDrag || qrDrag.handle !== handleEl) return;
+      handleEl.classList.remove('dragging');
+      if (handleEl.releasePointerCapture) {
+        try { handleEl.releasePointerCapture(ev.pointerId); } catch (e) {}
+      }
+      qrDrag = null;
+    }
+    handleEl.addEventListener('pointerup', endQrDrag);
+    handleEl.addEventListener('pointercancel', endQrDrag);
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(renderPreview).observe(stage);
+  } else {
+    window.addEventListener('resize', renderPreview);
+  }
+  if (document.fonts && document.fonts.load) {
+    Promise.all([
+      document.fonts.load('400 24px "THSarabunNewCert"'),
+      document.fonts.load('700 24px "THSarabunNewCert"')
+    ]).catch(function () {}).then(function () { renderPreview(); });
+    document.fonts.ready.then(function () { renderPreview(); });
+  }
+  renderPreview();
+})();
+
+// 3. เลือกรายชื่อและดาวน์โหลดเกียรติบัตรแยกไฟล์รายบุคคล (.zip)
+(function () {
+  function initCertZipSelector(cfg) {
+    var form = document.getElementById(cfg.formId);
+    var submitBtn = document.getElementById(cfg.btnId);
+    var masterChk = document.getElementById(cfg.masterId);
+    var cntEl = document.getElementById(cfg.countId);
+    var rowChks = Array.prototype.slice.call(document.querySelectorAll(cfg.rowSelector));
+    if (!form || !submitBtn) return;
+
+    function sync() {
+      var checked = rowChks.filter(function (c) { return c.checked; });
+      if (cntEl) cntEl.textContent = checked.length;
+      submitBtn.disabled = checked.length === 0;
+      if (masterChk && rowChks.length > 0) {
+        masterChk.checked = (checked.length === rowChks.length);
+        masterChk.indeterminate = (checked.length > 0 && checked.length < rowChks.length);
+      }
+    }
+    if (masterChk) {
+      masterChk.addEventListener('change', function () {
+        var on = masterChk.checked;
+        rowChks.forEach(function (c) { c.checked = on; });
+        sync();
+      });
+    }
+    rowChks.forEach(function (c) { c.addEventListener('change', sync); });
+
+    var btnAll = cfg.selectAllId ? document.getElementById(cfg.selectAllId) : null;
+    var btnNone = cfg.selectNoneId ? document.getElementById(cfg.selectNoneId) : null;
+    if (btnAll) btnAll.addEventListener('click', function () {
+      rowChks.forEach(function (c) { c.checked = true; });
+      sync();
+    });
+    if (btnNone) btnNone.addEventListener('click', function () {
+      rowChks.forEach(function (c) { c.checked = false; });
+      sync();
+    });
+
+    submitBtn.addEventListener('click', function () {
+      var checked = rowChks.filter(function (c) { return c.checked; });
+      if (checked.length === 0) return;
+      form.querySelectorAll('.dyn-zip-id').forEach(function (el) { el.remove(); });
+      checked.forEach(function (c) {
+        var h = document.createElement('input');
+        h.type = 'hidden';
+        h.className = 'dyn-zip-id';
+        h.name = cfg.paramName;
+        h.value = c.value;
+        form.appendChild(h);
+      });
+      form.submit();
+    });
+
+    sync();
+  }
+
+  initCertZipSelector({
+    formId: 'cert-zip-students-form',
+    btnId: 'btn-zip-selected-students',
+    masterId: 'chk-all-cert-students',
+    countId: 'cnt-selected-students',
+    rowSelector: '.chk-cert-student',
+    paramName: 'student_ids',
+    selectAllId: 'btn-stu-select-all',
+    selectNoneId: 'btn-stu-select-none'
+  });
+
+  initCertZipSelector({
+    formId: 'cert-zip-recipients-form',
+    btnId: 'btn-zip-selected-recipients',
+    masterId: 'chk-all-cert-recipients',
+    countId: 'cnt-selected-recipients',
+    rowSelector: '.chk-cert-recipient',
+    paramName: 'recipient_ids',
+    selectAllId: 'btn-rec-select-all',
+    selectNoneId: 'btn-rec-select-none'
+  });
+})();
+</script>
+{% endblock %}

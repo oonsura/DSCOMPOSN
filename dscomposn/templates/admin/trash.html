@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ถังขยะ{% endblock %}
+{% block content %}
+{% include "admin/_backup_tabs.html" %}
+<h4>
+  ถังขยะ (Soft Delete)
+  {% info_tip "ข้อมูลที่ถูกลบจะไม่หายจากฐานข้อมูล สามารถกู้คืนได้ที่นี่" %}
+</h4>
+{% for s in sections %}
+<div class="card mb-3"><div class="card-body"><h6>{{ s.label }} ({{ s.items|length }})</h6>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 small">
+      {% for o in s.items %}<tr><td>{{ o }}</td><td>{{ o.deleted_at|date:"d/m/Y H:i" }}</td><td>{{ o.deleted_by.camp1_code|default:"-" }}</td>
+        <td>
+          {% if o.is_year_locked %}
+            <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>ล็อก (ประกาศผลแล้ว)</span>
+          {% else %}
+            <form method="post">{% csrf_token %}<input type="hidden" name="model" value="{{ s.key }}"><input type="hidden" name="id" value="{{ o.pk }}"><button class="btn btn-sm btn-outline-success py-0">กู้คืน</button></form>
+          {% endif %}
+        </td></tr>
+      {% empty %}<tr><td class="text-muted">ไม่มีรายการ</td></tr>{% endfor %}
+    </table>
+  </div>
+</div></div>
+{% endfor %}
+{% endblock %}

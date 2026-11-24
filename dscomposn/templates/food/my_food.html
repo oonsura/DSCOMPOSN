@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}รายการอาหาร{% endblock %}
+{% block breadcrumb %}รายการอาหาร{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-bowl-hot me-2 text-primary"></i>รายการอาหาร
+      {% info_tip "เลือกเมนูอาหารภายในเวลาที่เปิดให้แก้ไข" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <div class="btn-group btn-group-sm">
+      <a href="?status=all" class="btn {% if flt == 'all' or not flt %}btn-primary{% else %}btn-outline-primary{% endif %}">ทั้งหมด</a>
+      <a href="?status=active" class="btn {% if flt == 'active' %}btn-primary{% else %}btn-outline-primary{% endif %}">กำลังเปิดเลือก</a>
+    </div>
+    <a href="{% url 'food:member_surveys' %}" class="btn btn-warning text-dark fw-semibold btn-sm">
+      <i class="bi bi-clipboard2-check me-1"></i>แบบสอบถาม
+      {% if pending_surveys_count %}<span class="badge bg-danger rounded-pill ms-1">{{ pending_surveys_count }}</span>{% endif %}
+    </a>
+    <a href="#my-selections-section" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-check2-square me-1"></i>รายการที่ฉันเลือก ({{ selections|length }})
+    </a>
+  </div>
+</div>
+
+{% if open_surveys %}
+<div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 mb-3">
+  <div>
+    <i class="bi bi-clipboard2-pulse me-1"></i><strong>มีแบบสอบถามที่เปิดให้ตอบ ({{ open_surveys|length }} รายการ)</strong>
+    <span class="small text-muted ms-1">กรุณาช่วยตอบเพื่อใช้สรุปข้อมูลการจัดอาหาร</span>
+  </div>
+  <a href="{% url 'food:member_surveys' %}" class="btn btn-sm btn-dark">ไปตอบแบบสอบถาม</a>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  {% for o in orders %}
+  {% with status=o.get_status %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card food-card h-100 shadow-sm {% if status == 'completed' %}completed{% endif %}">
+      <div class="food-header" style="background: linear-gradient(135deg, {{ o.day_color }}, {{ o.day_color }}dd); color: #fff; padding: 0.9rem 1rem;">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+          <div class="flex-grow-1" style="min-width:150px;">
+            <span class="badge bg-white text-dark mb-1 shadow-sm" style="font-size:0.75rem;">วัน{{ o.day_name }}</span>
+            <h6 class="fw-bold mb-1 fs-5 text-white">{{ o.restaurant_name }}</h6>
+            <div class="text-white opacity-95 small">
+              <i class="bi bi-calendar3 me-1"></i>{{ o.date_full }}
+              <span class="badge bg-white text-dark ms-1 fw-semibold">เลือกแล้ว {{ o.selected_student_count }} คน / {{ o.eligible_student_count }} คน</span>
+            </div>
+          </div>
+          <div class="text-sm-end flex-shrink-0">
+            <div>
+              {% if status == 'active' %}<span class="badge bg-success shadow-sm">กำลังเปิดเลือก</span>
+              {% elif status == 'closed' %}<span class="badge bg-warning text-dark shadow-sm">ปิดแก้ไข</span>
+              {% else %}<span class="badge bg-light text-dark shadow-sm">เสร็จสิ้น</span>{% endif %}
+            </div>
+            <div class="mt-2">
+              {% if o.my_selections %}
+                {% if o.is_editable_by_member %}
+                <a href="{% url 'food:my_food_detail' o.pk %}" class="btn btn-danger btn-sm py-0 px-2 fw-bold shadow-sm" style="font-size:0.78rem;">
+                  <i class="bi bi-pencil-square me-1"></i>แก้ไขรายการที่เลือก
+                </a>
+                {% else %}
+                <a href="{% url 'food:my_food_detail' o.pk %}" class="btn btn-dark btn-sm py-0 px-2 shadow-sm" style="font-size:0.75rem;">
+                  <i class="bi bi-eye me-1"></i>ดูรายการที่เลือก
+                </a>
+                {% endif %}
+              {% else %}
+                {% if o.is_editable_by_member %}
+                <a href="{% url 'food:my_food_detail' o.pk %}" class="btn btn-light btn-sm py-0 px-2 fw-bold text-primary shadow-sm" style="font-size:0.78rem;">
+                  <i class="bi bi-cart-plus me-1"></i>เลือกอาหาร
+                </a>
+                {% else %}
+                <a href="{% url 'food:my_food_detail' o.pk %}" class="btn btn-secondary btn-sm py-0 px-2 shadow-sm" style="font-size:0.75rem;">
+                  <i class="bi bi-eye me-1"></i>ดูรายละเอียด
+                </a>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body py-2">
+        {% if o.overall_image %}
+        <div class="text-center mb-2">
+          <img src="{{ o.overall_image.url }}" class="img-fluid rounded" style="max-height:120px;object-fit:cover;width:100%;">
+        </div>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-1 mb-2">
+          <span class="badge bg-light text-dark border">เลือกได้สูงสุด {{ o.max_selection_count }} อย่าง</span>
+          <span class="badge bg-light text-dark border">{{ o.get_selection_mode_display }}</span>
+        </div>
+
+        <div class="border rounded p-2 bg-light mb-2">
+          <div class="small fw-bold text-muted mb-1"><i class="bi bi-list-ul me-1"></i>รายการเมนูทั้งหมด ({{ o.menus.all|length }} เมนู):</div>
+          <ol class="mb-0 ps-3 small" style="max-height:110px; overflow-y:auto;">
+            {% for m in o.menus.all %}
+            <li class="py-0">
+              <span class="fw-semibold text-dark">{{ m.menu_name }}</span>
+              {% if m.menu_description %}<span class="text-muted" style="font-size:0.75rem;"> - {{ m.menu_description }}</span>{% endif %}
+            </li>
+            {% empty %}
+            <li class="text-muted">ยังไม่มีรายการเมนู</li>
+            {% endfor %}
+          </ol>
+        </div>
+
+        {% if o.my_selections %}
+        <div class="alert alert-success py-2 px-3 mb-0 small border-success">
+          <div class="fw-bold mb-1"><i class="bi bi-check-circle-fill text-success me-1"></i>เมนูที่คุณเลือกไว้:</div>
+          <ul class="mb-0 ps-3">
+            {% for s in o.my_selections %}
+            <li><strong>{{ s.food_menu.menu_name }}</strong> (x{{ s.quantity }})</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="alert alert-light py-2 px-3 mb-0 small border text-muted">
+          <i class="bi bi-circle me-1"></i>คุณยังไม่ได้เลือกเมนูในรายการนี้
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% empty %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+        <h5>ยังไม่มีรายการอาหารที่เปิดให้เลือกในขณะนี้</h5>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- รายการที่ฉันเลือก (รวมอยู่ในหน้าเดียวกับรายการอาหาร) -->
+<div class="card mt-4" id="my-selections-section">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-bold">
+      <i class="bi bi-check2-square me-2 text-success"></i>รายการที่ฉันเลือก (ปีการศึกษา {{ year }})
+      <span class="badge bg-success ms-1">{{ selections|length }} รายการ</span>
+      {% info_tip "สรุปรายการเมนูอาหารที่คุณเลือกไว้ทั้งหมดในปีการศึกษานี้ สามารถกดแก้ไขได้หากรายการยังเปิดให้แก้ไขอยู่" %}
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:0.88rem;">
+      <thead>
+        <tr>
+          <th>วันที่จัดอาหาร</th>
+          <th>ร้านอาหาร</th>
+          <th>เมนูที่เลือก</th>
+          <th class="text-center">จำนวน</th>
+          <th>สถานะรายการ</th>
+          <th>ดำเนินการ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sel in selections %}
+        {% with order=sel.food_order status=sel.food_order.get_status %}
+        <tr>
+          <td>{{ order.food_date|date_thai }}</td>
+          <td class="fw-semibold">{{ order.restaurant_name }}</td>
+          <td>{{ sel.food_menu.menu_name }}</td>
+          <td class="text-center"><span class="badge bg-primary">{{ sel.quantity }}</span></td>
+          <td>
+            {% if status == 'active' %}<span class="badge bg-success">กำลังเปิดเลือก</span>
+            {% elif status == 'closed' %}<span class="badge bg-warning text-dark">ปิดการแก้ไข</span>
+            {% else %}<span class="badge bg-secondary">เสร็จสิ้น</span>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'food:my_food_detail' order.pk %}" class="btn btn-sm btn-outline-primary py-0">
+              {% if order.is_editable_by_member %}แก้ไข{% else %}ดูรายละเอียด{% endif %}
+            </a>
+          </td>
+        </tr>
+        {% endwith %}
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center py-4 text-muted">
+            <i class="bi bi-inbox fs-3 d-block mb-1"></i>คุณยังไม่มีประวัติการเลือกอาหารในปีการศึกษานี้
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

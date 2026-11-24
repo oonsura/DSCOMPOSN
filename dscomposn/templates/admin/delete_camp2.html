@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ลบรหัสค่าย 2{% endblock %}
+{% block breadcrumb %}ลบรหัสค่าย 2{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0 text-danger">
+      <i class="bi bi-trash3 me-2"></i>ลบรหัสค่าย 2
+      {% info_tip "พิมพ์หรือวางรหัสค่าย 2 ที่ต้องการลบ และตรวจสอบ Preview ก่อนยืนยันด้วยรหัสผ่านของผู้ดูแลระบบ" %}
+    </h4>
+  </div>
+  <a href="{% url 'composn:admin_users' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>กลับหน้ารายชื่อผู้ใช้
+  </a>
+</div>
+
+<div class="row g-3">
+  <!-- ฝั่งซ้าย: กล่องพิมพ์รหัสค่าย 2 เพื่อตรวจสอบ (Preview) -->
+  <div class="col-lg-5">
+    <div class="card mb-3 shadow-sm border-danger">
+      <div class="card-header bg-danger bg-opacity-10 text-danger fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pencil-square me-1"></i>ขั้นตอนที่ 1: พิมพ์รหัสค่าย 2 ที่ต้องการลบ</span>
+        {% info_tip "เงื่อนไขและความปลอดภัย:\n• การลบรหัสค่าย 2 จะทำให้รหัสค่าย 2 ของนักเรียนคนนั้นว่างลง (สามารถใช้สิทธิ์ค่าย 1 หรือรอรับรหัสค่าย 2 ใหม่ได้)\n• ประวัติการใช้สิทธิ์และคะแนนเดิมของนักเรียนจะยังคงอยู่ ไม่สูญหาย\n• ต้องใส่รหัสผ่านของ Admin ที่กำลังใช้งานก่อนยืนยันการลบทุกครั้ง" %}
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="preview">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">
+              รหัสค่าย 2 ทั้งหมดที่ต้องการลบ
+              {% info_tip "วางจาก Excel / พิมพ์แยกทีละบรรทัด หรือคั่นด้วยช่องว่าง/จุลภาค ระบบจะค้นหานักเรียนที่ตรงกันมาแสดง Preview ก่อนลบจริง" %}
+            </label>
+            <textarea name="camp2_codes_text" class="form-control font-monospace" rows="10"
+                      placeholder="เช่น&#10;69KM01&#10;69KM02&#10;69KM03" required>{{ codes_text }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 fw-semibold">
+            <i class="bi bi-search me-1"></i>ตรวจสอบรายการก่อนลบ (Preview)
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ฝั่งขวา: ผลการตรวจสอบ (Preview) & ฟอร์มยืนยันลบด้วยรหัสผ่าน -->
+  <div class="col-lg-7">
+    {% if preview %}
+      <!-- สรุปผลการตรวจ -->
+      <div class="card mb-3 shadow-sm border-warning">
+        <div class="card-header bg-warning bg-opacity-10 fw-bold text-dark d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-eye me-1"></i>ขั้นตอนที่ 2: ผลการตรวจสอบรายการก่อนลบ (Preview)</span>
+          <span class="badge bg-danger">{{ preview.matched_count }} คนที่ตรงกัน</span>
+        </div>
+        <div class="card-body">
+          <div class="row text-center g-2 mb-3">
+            <div class="col-4">
+              <div class="p-2 border rounded bg-light">
+                <div class="fs-4 fw-bold text-primary">{{ preview.total_input }}</div>
+                <div class="small text-muted">รหัสที่ระบุ</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 border rounded bg-danger bg-opacity-10 border-danger">
+                <div class="fs-4 fw-bold text-danger">{{ preview.matched_count }}</div>
+                <div class="small text-danger fw-semibold">พบในระบบ (จะถูกลบ)</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 border rounded bg-secondary bg-opacity-10">
+                <div class="fs-4 fw-bold text-secondary">{{ preview.not_found_count }}</div>
+                <div class="small text-muted">ไม่พบในระบบ</div>
+              </div>
+            </div>
+          </div>
+
+          {% if not_found %}
+            <div class="alert alert-warning py-2 small mb-3">
+              <strong><i class="bi bi-exclamation-circle me-1"></i>ไม่พบรหัสค่าย 2 ในระบบ ({{ not_found|length }} รหัส):</strong>
+              <div class="font-monospace mt-1">{{ not_found|join:", " }}</div>
+            </div>
+          {% endif %}
+
+          {% if matched_users %}
+            <div class="table-responsive mb-3" style="max-height: 280px; overflow-y: auto;">
+              <table class="table table-sm table-hover mb-0" style="font-size:0.875rem;">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>#</th>
+                    <th>รหัสค่าย 2 (ที่จะลบ)</th>
+                    <th>รหัสค่าย 1</th>
+                    <th>ชื่อ-นามสกุล</th>
+                    <th>โรงเรียน</th>
+                    <th>ชั้น</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in matched_users %}
+                  <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td class="code fw-bold text-danger">{{ u.camp2_code }}</td>
+                    <td class="code">{{ u.camp1_code }}</td>
+                    <td>{{ u.get_full_name }}</td>
+                    <td>{{ u.school_name|default:"-"|truncatechars:25 }}</td>
+                    <td>{{ u.current_level|default:"-" }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- กล่องยืนยันการลบด้วยรหัสผ่าน Admin -->
+            <div class="p-3 rounded border border-danger bg-danger bg-opacity-10">
+              <h6 class="fw-bold text-danger mb-2">
+                <i class="bi bi-shield-lock-fill me-1"></i>ยืนยันการลบรหัสค่าย 2 ด้วยรหัสผ่าน Admin
+              </h6>
+              {% if locked_codes %}
+              <div class="alert alert-danger py-2 small mb-3" id="delete-camp2-lock-alert">
+                <strong><i class="bi bi-lock-fill me-1"></i>พบรหัสค่าย 2 ที่อยู่ในปีการศึกษาที่อนุมัติประกาศผลแล้ว:</strong>
+                <div class="font-monospace mt-1">{{ locked_codes|join:", " }}</div>
+                <div class="mt-1">ไม่สามารถลบรหัสค่าย 2 เหล่านี้ได้ กรุณายกเลิกประกาศผลก่อน หรือตัดรหัสเหล่านี้ออกจากการตรวจสอบ</div>
+              </div>
+              {% endif %}
+              <p class="small text-dark mb-3">
+                คุณกำลังจะลบรหัสค่าย 2 ของนักเรียนจำนวน <strong>{{ preview.matched_count }}</strong> คนข้างต้น
+                กรุณาป้อนรหัสผ่านของบัญชีคุณ (<strong>{{ user.camp1_code }}</strong>) เพื่อยืนยัน:
+              </p>
+              <form method="post" onsubmit="return confirm('คำเตือน: คุณแน่ใจหรือไม่ว่าต้องการลบรหัสค่าย 2 ของนักเรียน {{ preview.matched_count }} คนนี้?');">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="confirm_delete">
+                <input type="hidden" name="confirmed_codes" value="{{ preview.codes_str }}">
+                <div class="d-flex flex-column flex-sm-row gap-2 mb-2">
+                  <div class="input-group flex-grow-1">
+                    <span class="input-group-text bg-white"><i class="bi bi-key-fill text-danger"></i></span>
+                    <input type="password" name="admin_password" class="form-control"
+                           placeholder="ป้อนรหัสผ่านของผู้ดูแลระบบที่กำลังใช้งาน" required autocomplete="current-password"
+                           {% if locked_codes %}disabled{% endif %}>
+                  </div>
+                  <button type="submit" class="btn btn-danger fw-bold px-4 text-nowrap" {% if locked_codes %}disabled{% endif %}>
+                    <i class="bi bi-trash3-fill me-1"></i>ยืนยันลบรหัสค่าย 2
+                  </button>
+                </div>
+              </form>
+            </div>
+          {% else %}
+            <div class="alert alert-info mb-0">
+              ไม่พบนักเรียนที่มีรหัสค่าย 2 ตรงกับรายการที่ป้อน
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div class="card shadow-sm h-100 d-flex align-items-center justify-content-center p-5 text-center text-muted">
+        <div>
+          <i class="bi bi-file-earmark-person fs-1 text-secondary opacity-50 mb-3 d-block"></i>
+          <h5>ยังไม่มีรายการตรวจสอบ</h5>
+          <p class="small mb-0">กรุณาพิมพ์หรือวางรหัสค่าย 2 ที่กล่องฝั่งซ้าย แล้วกดปุ่ม <strong>"ตรวจสอบรายการก่อนลบ (Preview)"</strong></p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,315 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}จัดการเมนู &amp; ยอดสั่ง - {{ o.restaurant_name }}{% endblock %}
+{% block breadcrumb %}<a href="{% url 'food:orders' %}">รายการอาหาร</a> / {{ o.restaurant_name }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">{{ o.restaurant_name }}</h4>
+    <div class="text-muted small mt-1">
+      <i class="bi bi-calendar3 me-1"></i>{{ o.date_full }}
+      <strong class="text-primary ms-1">เลือกแล้ว {{ o.selected_student_count }} คน / {{ o.eligible_student_count }} คน</strong>
+      · เลือกได้สูงสุด <strong>{{ o.max_selection_count }}</strong> ({{ o.get_selection_mode_display }})
+      · กลุ่ม:
+      {% if o.allow_current_students %}<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">นักเรียนปัจจุบัน</span>{% endif %}
+      {% if o.allow_rights_students %}<span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">นักเรียนใช้สิทธิ์</span>{% endif %}
+      · <span class="badge {% if o.get_status == 'active' %}bg-success{% else %}bg-secondary{% endif %}">{{ o.get_status_display_th }}</span>
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'food:orders' %}">
+      <i class="bi bi-arrow-left me-1"></i>กลับหน้ารายการอาหาร
+    </a>
+    <a class="btn btn-warning btn-sm fw-bold" href="{% url 'food:order_print' o.pk %}" target="_blank">
+      <i class="bi bi-printer me-1"></i>พิมพ์รายงาน A4
+    </a>
+    <a class="btn btn-success btn-sm" href="{% url 'food:order_report' o.pk %}">
+      <i class="bi bi-file-earmark-bar-graph me-1"></i>สรุปยอดสั่ง
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'food:order_export' o.pk %}">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'food:order_edit' o.pk %}">
+      <i class="bi bi-pencil me-1"></i>แก้ไขรายการ
+    </a>
+    <a class="btn btn-outline-info btn-sm" href="{% url 'food:order_copy' o.pk %}">
+      <i class="bi bi-copy me-1"></i>คัดลอก
+    </a>
+    <form class="d-inline" method="post" action="{% url 'food:order_action' o.pk %}">
+      {% csrf_token %}<input type="hidden" name="action" value="toggle">
+      <button class="btn btn-sm btn-outline-dark">
+        {% if o.edit_toggle_open %}<i class="bi bi-lock me-1"></i>ปิดการเลือก{% else %}<i class="bi bi-unlock me-1"></i>เปิดการเลือก{% endif %}
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Add Menu Form -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-plus-circle me-2 text-success"></i>เพิ่มเมนูใหม่</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_menu">
+          <input type="hidden" name="ai_image_url" id="selectedAiImageUrl" value="">
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">
+              ชื่อเมนู <span class="text-danger">*</span>
+              {% info_tip "พิมพ์ชื่อเมนูแล้วกด \"AI ค้นหารูป\" เพื่อเลือกรูปประกอบ" %}
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="m-menu_name" id="addMenuNameInput" class="form-control" required placeholder="เช่น ข้าวกะเพราหมูกรอบ">
+              <button type="button" class="btn btn-outline-primary text-nowrap" onclick="fetchAiImages('add')">
+                <i class="bi bi-magic me-1"></i>AI ค้นหารูป
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">รายละเอียดเมนู</label>
+            <input type="text" name="m-menu_description" id="addMenuDescInput" class="form-control form-control-sm" placeholder="เช่น ไข่ดาว, เผ็ดน้อย">
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">ลำดับ</label>
+            <input type="number" name="m-sort_order" class="form-control form-control-sm" value="{{ summary|length|add:1 }}" min="0">
+          </div>
+
+          <!-- AI Image Selection Box -->
+          <div id="aiImageSelectionBox" class="border rounded p-2 mb-2 bg-light d-none">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-bold text-primary"><i class="bi bi-stars me-1"></i>รูปภาพที่แนะนำ:</span>
+              <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="clearSelectedAiImage('add')">ยกเลิก</button>
+            </div>
+            <div id="aiImagesContainer" class="d-flex gap-2 overflow-auto py-1"></div>
+            <div id="aiImageLoading" class="text-center py-2 text-muted small d-none">
+              <span class="spinner-border spinner-border-sm me-1"></span> กำลังค้นหารูปภาพ...
+            </div>
+          </div>
+
+          <!-- Selected AI Preview -->
+          <div id="selectedAiPreviewBox" class="border rounded p-2 mb-2 text-center bg-white d-none position-relative">
+            <span class="badge bg-success mb-1">ใช้รูปนี้</span>
+            <div><img id="selectedAiPreviewImg" src="" class="rounded" style="max-height:95px; object-fit:cover;"></div>
+            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 mt-1" style="font-size:0.75rem;" onclick="clearSelectedAiImage('add')">
+              นำรูปออก
+            </button>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">หรืออัปโหลดรูปภาพจากเครื่อง</label>
+            <input type="file" name="m-menu_image" id="addMenuFileInput" class="form-control form-control-sm" accept="image/*" onchange="clearSelectedAiImage('add')">
+          </div>
+
+          <button type="submit" class="btn btn-success btn-sm w-100">
+            <i class="bi bi-plus-lg me-1"></i>เพิ่มเมนู
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu List & Selector Counts -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul me-2 text-primary"></i>เมนูและยอดสั่งทั้งหมด ({{ summary|length }} เมนู)</span>
+        <span class="badge bg-primary fs-6">รวมยอดสั่ง {{ grand_total }} รายการ</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:0.88rem;">
+          <thead>
+            <tr>
+              <th style="width:45px;">ลำดับ</th>
+              <th>เมนูอาหาร</th>
+              <th class="text-center" style="width:120px;">ยอดสั่ง</th>
+              <th>รายชื่อผู้เลือก</th>
+              <th style="width:90px;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in summary %}
+            <tr>
+              <td class="text-center fw-bold text-muted">{{ m.sort_order }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  {% if m.menu_image %}
+                    <img src="{{ m.menu_image.url }}" class="rounded border" style="width:48px;height:48px;object-fit:cover;">
+                  {% endif %}
+                  <div>
+                    <div class="fw-bold text-dark">{{ m.menu_name }}</div>
+                    {% if m.menu_description %}<small class="text-muted">{{ m.menu_description }}</small>{% endif %}
+                  </div>
+                </div>
+              </td>
+              <td class="text-center">
+                <span class="badge {% if m.total > 0 %}bg-primary{% else %}bg-secondary{% endif %} fs-6 px-3">{{ m.total|default:0 }}</span>
+              </td>
+              <td>
+                <div class="d-flex flex-wrap gap-1">
+                  {% for s in m.member_selections %}
+                    <span class="badge bg-light text-dark border" style="font-size:0.76rem;">
+                      {{ s.camp_code_snapshot }} {{ s.full_name_snapshot }}
+                      {% if s.quantity > 1 %}<span class="badge bg-danger ms-1">x{{ s.quantity }}</span>{% endif %}
+                    </span>
+                  {% empty %}
+                    <span class="text-muted small">ยังไม่มีผู้เลือก</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td class="text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                        onclick="openEditMenu({{ m.pk }}, '{{ m.menu_name|escapejs }}', '{{ m.menu_description|escapejs }}', {{ m.sort_order }}, '{% if m.menu_image %}{{ m.menu_image.url }}{% endif %}')">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form class="d-inline" method="post" action="{% url 'food:order_action' o.pk %}" onsubmit="return confirm('ลบเมนู {{ m.menu_name|escapejs }}?')">
+                  {% csrf_token %}<input type="hidden" name="action" value="delete_menu"><input type="hidden" name="menu_id" value="{{ m.pk }}">
+                  <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">ยังไม่มีเมนูอาหารในรายการนี้</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Menu Modal -->
+<div class="modal fade" id="editMenuModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fs-6"><i class="bi bi-pencil-square me-2"></i>แก้ไขเมนู</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'food:order_action' o.pk %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="edit_menu">
+        <input type="hidden" name="menu_id" id="editMenuId">
+        <input type="hidden" name="edit_ai_image_url" id="editSelectedAiImageUrl" value="">
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">ชื่อเมนู <span class="text-danger">*</span></label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="menu_name" id="editMenuName" class="form-control" required>
+              <button type="button" class="btn btn-outline-primary text-nowrap" onclick="fetchAiImages('edit')">
+                <i class="bi bi-magic me-1"></i>AI ค้นหารูป
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">รายละเอียด</label>
+            <input type="text" name="menu_description" id="editMenuDesc" class="form-control form-control-sm">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">ลำดับ</label>
+            <input type="number" name="sort_order" id="editMenuSort" class="form-control form-control-sm" min="0">
+          </div>
+          <div id="editAiImageSelectionBox" class="border rounded p-2 mb-2 bg-light d-none">
+            <div id="editAiImagesContainer" class="d-flex gap-2 overflow-auto py-1"></div>
+            <div id="editAiImageLoading" class="text-center py-2 text-muted small d-none">กำลังค้นหารูปภาพ...</div>
+          </div>
+          <div id="editSelectedAiPreviewBox" class="border rounded p-2 mb-2 text-center bg-white d-none">
+            <img id="editSelectedAiPreviewImg" src="" class="rounded" style="max-height:85px;">
+          </div>
+          <div id="currentMenuImagePreview" class="mb-2"></div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">อัปโหลดรูปภาพใหม่</label>
+            <input type="file" name="menu_image" class="form-control form-control-sm" accept="image/*">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary btn-sm">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function fetchAiImages(type) {
+  const nameInput = (type === 'add') ? document.getElementById('addMenuNameInput') : document.getElementById('editMenuName');
+  const descInput = (type === 'add') ? document.getElementById('addMenuDescInput') : document.getElementById('editMenuDesc');
+  const query = nameInput ? nameInput.value.trim() : '';
+  const desc = descInput ? descInput.value.trim() : '';
+  if (!query) { alert('กรุณากรอกชื่อเมนูก่อนกดค้นหารูป'); return; }
+
+  const box = (type === 'add') ? document.getElementById('aiImageSelectionBox') : document.getElementById('editAiImageSelectionBox');
+  const container = (type === 'add') ? document.getElementById('aiImagesContainer') : document.getElementById('editAiImagesContainer');
+  const loading = (type === 'add') ? document.getElementById('aiImageLoading') : document.getElementById('editAiImageLoading');
+
+  box.classList.remove('d-none');
+  container.innerHTML = '';
+  loading.classList.remove('d-none');
+
+  fetch(`{% url 'food:api_ai_food_images' %}?name=${encodeURIComponent(query)}&desc=${encodeURIComponent(desc)}`)
+    .then(r => r.json())
+    .then(data => {
+      loading.classList.add('d-none');
+      (data.images || []).forEach(img => {
+        const div = document.createElement('div');
+        div.className = 'text-center flex-shrink-0';
+        div.style.width = '100px';
+        div.style.cursor = 'pointer';
+        div.innerHTML = `
+          <div class="border rounded p-1 bg-white" onclick="selectAiImage('${type}', '${img.url}')">
+            <img src="${img.url}" class="rounded w-100" style="height:68px;object-fit:cover;">
+            <small class="d-block text-truncate text-muted mt-1" style="font-size:0.65rem;">${img.title}</small>
+          </div>`;
+        container.appendChild(div);
+      });
+    })
+    .catch(() => { loading.classList.add('d-none'); });
+}
+
+function selectAiImage(type, url) {
+  if (type === 'add') {
+    document.getElementById('selectedAiImageUrl').value = url;
+    document.getElementById('selectedAiPreviewImg').src = url;
+    document.getElementById('selectedAiPreviewBox').classList.remove('d-none');
+  } else {
+    document.getElementById('editSelectedAiImageUrl').value = url;
+    document.getElementById('editSelectedAiPreviewImg').src = url;
+    document.getElementById('editSelectedAiPreviewBox').classList.remove('d-none');
+  }
+}
+
+function clearSelectedAiImage(type) {
+  if (type === 'add') {
+    document.getElementById('selectedAiImageUrl').value = '';
+    document.getElementById('selectedAiPreviewBox').classList.add('d-none');
+    document.getElementById('aiImageSelectionBox').classList.add('d-none');
+  } else {
+    document.getElementById('editSelectedAiImageUrl').value = '';
+    document.getElementById('editSelectedAiPreviewBox').classList.add('d-none');
+    document.getElementById('editAiImageSelectionBox').classList.add('d-none');
+  }
+}
+
+function openEditMenu(id, name, desc, sort, imgUrl) {
+  document.getElementById('editMenuId').value = id;
+  document.getElementById('editMenuName').value = name;
+  document.getElementById('editMenuDesc').value = desc;
+  document.getElementById('editMenuSort').value = sort;
+  clearSelectedAiImage('edit');
+  const preview = document.getElementById('currentMenuImagePreview');
+  if (imgUrl) {
+    preview.innerHTML = `<img src="${imgUrl}" class="rounded border mb-1" style="max-height:70px;">
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="clear_menu_image" value="1" id="clearImg"><label class="form-check-label small text-danger" for="clearImg">ลบรูปเดิม</label></div>`;
+  } else {
+    preview.innerHTML = '';
+  }
+  new bootstrap.Modal(document.getElementById('editMenuModal')).show();
+}
+</script>
+{% endblock %}

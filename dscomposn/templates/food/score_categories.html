@@ -1,0 +1,1147 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}กำหนดปีการศึกษา{% endblock %}
+{% block breadcrumb %}ตั้งค่าระบบ / กำหนดปีการศึกษา{% endblock %}
+{% block extra_head %}
+<style>
+  @media (max-width: 767.98px) {
+    #score-cat-table input.form-control,
+    #score-cat-table select.form-select { min-width: 72px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>กำหนดปีการศึกษา</h4>
+    <small class="text-muted">กำลังดูข้อมูลปีการศึกษา {{ year }} · คะแนนรวมทั้งหมด (รวมจากสัดส่วนคะแนน): <strong id="header-total-weight">{{ total_weight|floatformat:2 }}</strong> · คะแนนเต็มรวม: <strong id="header-total-max">{{ total_max_score|floatformat:2 }}</strong></small>
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <a href="{% url 'composn:admin_settings' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-palette me-1"></i>ตั้งค่าสี ข้อความ</a>
+    <a href="{% url 'food:staff_scores' %}" class="btn btn-success btn-sm"><i class="bi bi-pencil-square me-1"></i>บันทึกคะแนน</a>
+    <a href="{% url 'food:score_announcement' %}?year={{ year }}" class="btn btn-warning btn-sm text-dark fw-semibold"><i class="bi bi-megaphone me-1"></i>การประกาศผล</a>
+  </div>
+</div>
+
+<!-- การ์ดตั้งค่าปีการศึกษาปัจจุบัน & เพิ่มปีการศึกษาใหม่ -->
+<div class="card mb-3 shadow-sm border-primary-subtle">
+  <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+    <span class="fw-bold"><i class="bi bi-calendar-check me-2 text-primary"></i>ปีการศึกษาปัจจุบัน &amp; จำนวนครั้งขาดอบรมสูงสุด</span>
+    <span class="badge bg-primary">ปีการศึกษาปัจจุบันของระบบ: {{ setting.current_academic_year }}</span>
+  </div>
+  <div class="card-body py-2">
+    <form method="post" action="{% url 'food:score_categories' %}" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_academic_year_settings">
+      <input type="hidden" name="tab" id="year-tab-input" value="{{ tab }}">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold mb-1">ปีการศึกษาปัจจุบัน (พ.ศ.)</label>
+        <div class="d-flex gap-2 align-items-stretch">
+          <select name="current_academic_year" class="form-select form-select-sm fw-bold">
+            {% for y in available_years_desc %}
+              <option value="{{ y }}" {% if y == setting.current_academic_year %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-success btn-sm text-nowrap fw-semibold" data-bs-toggle="modal" data-bs-target="#addAcademicYearModal">
+            <i class="bi bi-plus-circle me-1"></i>เพิ่มปีการศึกษา
+          </button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">
+          จำนวนครั้งขาดอบรมสูงสุด (วัน)
+          {% info_tip "จำนวนครั้งที่ขาดอบรมสูงสุดก่อนส่งผลต่อสิทธิ์หรือการเตือนภัยในระบบ" %}
+        </label>
+        <input type="number" min="1" name="max_absences" class="form-control form-control-sm fw-semibold" value="{{ setting.max_absences }}" {% if current_year_approved %}readonly{% endif %}>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+          <i class="bi bi-floppy me-1"></i>บันทึกปีการศึกษา
+        </button>
+      </div>
+    </form>
+    {% if current_year_approved %}
+    <div class="form-text text-warning small mt-1" id="lock-hint-max_absences">
+      <i class="bi bi-lock-fill me-1"></i>ปีการศึกษา {{ setting.current_academic_year }} อนุมัติประกาศผลแล้ว — ล็อกจำนวนครั้งขาดอบรมสูงสุดไว้ (หากต้องการแก้ไข กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ setting.current_academic_year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; ยกเลิกประกาศผล</a>)
+    </div>
+    {% endif %}
+    <div class="mt-2 pt-2 border-top d-flex flex-wrap align-items-center gap-1 small">
+      <span class="text-muted me-1">ปีการศึกษาในระบบ (คลิกเพื่อดู/ตั้งค่าวันอบรมและคะแนนของปีนั้น):</span>
+      {% for y in available_years_asc %}
+        <a href="?year={{ y }}&tab={{ tab }}" class="badge text-decoration-none {% if y == year %}bg-primary text-white{% elif y == setting.current_academic_year %}bg-info text-dark{% else %}bg-light text-dark border{% endif %}">
+          {{ y }}{% if y == setting.current_academic_year %} (ปัจจุบัน){% endif %}
+        </a>
+      {% endfor %}
+      {% if year != setting.current_academic_year %}
+        <span class="text-primary ms-2 fw-semibold"><i class="bi bi-eye me-1"></i>กำลังแก้ไขหัวข้อคะแนนและวันอบรมของปี {{ year }}</span>
+      {% endif %}
+    </div>
+    <div class="form-text small">เลือกได้ตั้งแต่ปี {{ min_academic_year }} ถึง {{ max_academic_year }} · กด "เพิ่มปีการศึกษา" เพื่อเพิ่มปีใหม่</div>
+  </div>
+</div>
+
+<!-- แท็บเมนูการตั้งค่า (2 แท็บ: หัวข้อคะแนน และ วันที่อบรม/วันสอบ/วันหยุด) -->
+<ul class="nav nav-tabs mb-3" id="scoreSettingTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link fw-semibold {% if tab == 'scores' or not tab %}active{% endif %}" id="tab-scores-btn" data-bs-toggle="tab" data-bs-target="#pane-scores" data-tab-name="scores" type="button" role="tab">
+      <i class="bi bi-sliders me-1 text-primary"></i>1. กำหนดหัวข้อคะแนน &amp; สัดส่วน
+      <span class="badge bg-primary ms-1">{{ categories|length }} หัวข้อใหญ่</span>
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link fw-semibold {% if tab == 'dates' %}active{% endif %}" id="tab-dates-btn" data-bs-toggle="tab" data-bs-target="#pane-dates" data-tab-name="dates" type="button" role="tab">
+      <i class="bi bi-calendar-event me-1 text-success"></i>2. ตั้งค่าวันที่อบรม / วันสอบ / วันหยุด
+      <span class="badge bg-success ms-1" id="tab-dates-badge">{{ training_dates|length }} วัน</span>
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="scoreSettingTabContent">
+  <!-- TAB 1: กำหนดหมวดคะแนน สัดส่วน และวันเวลาเปิด-ปิดของแต่ละหัวข้อ -->
+  <div class="tab-pane fade {% if tab == 'scores' or not tab %}show active{% endif %}" id="pane-scores" role="tabpanel">
+    {% if is_approved %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2" id="scores-cat-approved-lock-banner">
+      <i class="bi bi-lock-fill fs-5 text-warning"></i>
+      <div>
+        <strong>ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว — ล็อกการแก้ไขหัวข้อคะแนนและสัดส่วน</strong>
+        <span class="small d-block text-muted">หากต้องการแก้ไข กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; แท็บอนุมัติประกาศผล</a> เพื่อกด "ยกเลิกประกาศผล" พร้อมรหัสผ่าน Admin</span>
+      </div>
+    </div>
+    {% endif %}
+    <form id="bulk-save-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="save_all_categories"><input type="hidden" name="tab" value="scores"><input type="hidden" name="year" value="{{ year }}"></form>
+    <div class="card mb-3">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+          <span>
+            <i class="bi bi-sliders me-2 text-primary"></i>1. กำหนดหัวข้อคะแนนใหญ่ และหัวข้อย่อย (Sub) (ปีการศึกษา {{ year }})
+            {% info_tip "คลิกที่ ชื่อหัวข้อใหญ่ เพื่อซ่อน/แสดงหัวข้อย่อย · แก้ไขแล้วกดปุ่ม บันทึกการตั้งค่าคะแนน ด้านขวาบน" %}
+          </span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          {% if categories %}
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-expand-all-subs">
+            <i class="bi bi-arrows-expand me-1"></i>แสดงหัวข้อย่อยทั้งหมด
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-collapse-all-subs">
+            <i class="bi bi-arrows-collapse me-1"></i>ซ่อนหัวข้อย่อยทั้งหมด
+          </button>
+          {% endif %}
+          <span class="badge bg-primary fs-6">คะแนนรวมทั้งหมด (สัดส่วนรวม): <span id="badge-total-weight">{{ total_weight|floatformat:2 }}</span></span>
+          {% if categories %}
+          <button type="submit" form="bulk-save-form" class="btn btn-primary btn-sm fw-semibold" {% if is_approved %}disabled{% endif %}>
+            <i class="bi bi-floppy me-1"></i>บันทึกการตั้งค่าคะแนน
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle" id="score-cat-table" style="font-size:0.85rem;">
+          <thead class="table-light">
+            <tr>
+              <th>ชื่อหัวข้อคะแนน / หัวข้อย่อย (Sub)</th>
+              <th style="width:105px;">สัดส่วน / คะแนน</th>
+              <th style="width:100px;">คะแนนเต็ม</th>
+              <th style="width:72px;">ลำดับ</th>
+              <th class="text-center" style="width:92px;">
+                <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-0 px-2" id="btn-all-visible" title="สลับ เปิด/ปิด แสดงคะแนนทั้งหมด" {% if is_approved %}disabled{% endif %}>
+                  แสดง
+                </button>
+              </th>
+              <th class="text-center" style="width:92px;">
+                <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold py-0 px-2" id="btn-all-open" title="สลับ เปิด/ปิด บันทึกคะแนนทั้งหมด" {% if is_approved %}disabled{% endif %}>
+                  บันทึก
+                </button>
+              </th>
+              <th class="text-center" style="width:72px;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in categories %}
+            <!-- แถวหัวข้อใหญ่ (Main Category) -->
+            <tr data-main-row="{{ c.pk }}" style="background-color:#f4f7fc; border-left: 4px solid {{ c.box_color|default:'#0d6efd' }};">
+              <td>
+                <form id="cat{{ c.pk }}" method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ c.pk }}"><input type="hidden" name="tab" value="scores"><input type="hidden" name="year" value="{{ year }}"></form>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <div class="btn btn-sm d-flex align-items-center gap-1 text-start flex-grow-1 btn-toggle-subs main-title-toggle" data-parent-id="{{ c.pk }}" data-sub-count="{{ c.sub_list|length }}" data-box-color="{{ c.box_color|default:'#0d6efd' }}" style="cursor:pointer;" title="คลิกที่ชื่อหัวข้อใหญ่เพื่อซ่อน/แสดงหัวข้อย่อย">
+                    <i class="bi bi-chevron-down toggle-icon"></i>
+                    <span class="fw-bold">{{ c.main_no }}. <span class="main-title-label" id="main-label-{{ c.pk }}">{{ c.name }}</span></span>
+                    <span class="badge bg-white text-dark ms-auto sub-count-badge">{{ c.sub_list|length }} หัวข้อย่อย</span>
+                  </div>
+                  <input form="bulk-save-form" class="form-control form-control-sm fw-bold nav-col main-name-input" style="max-width:190px;" data-col="name" data-parent-id="{{ c.pk }}" name="name_{{ c.pk }}" value="{{ c.name }}" required title="แก้ไขชื่อหัวข้อใหญ่" {% if is_approved %}disabled{% endif %}>
+                  <input form="bulk-save-form" type="color" class="form-control form-control-color form-control-sm main-color-input" data-parent-id="{{ c.pk }}" name="box_color_{{ c.pk }}" value="{{ c.box_color|default:'#0d6efd' }}" title="เลือกสีกล่องหัวข้อใหญ่" style="width:36px;min-width:36px;height:31px;padding:2px;" {% if is_approved %}disabled{% endif %}>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-1 pt-1 border-top border-secondary-subtle small">
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted fw-semibold">ประเภท:</span>
+                    <select form="bulk-save-form" name="group_type_{{ c.pk }}" class="form-select form-select-sm fw-semibold py-0" style="width:auto;min-width:130px;" {% if is_approved %}disabled{% endif %}>
+                      {% for gk, gv in group_choices %}
+                      <option value="{{ gk }}" {% if c.group_type == gk %}selected{% endif %}>{{ gv }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">เริ่มเปิด:</span>
+                    <input form="bulk-save-form" type="datetime-local" class="form-control form-control-sm py-0" style="width:auto;max-width:168px;" name="open_at_{{ c.pk }}" value="{{ c.open_at|date:'Y-m-d\TH:i' }}" title="เวลาเริ่มเปิดบันทึกคะแนน (ไม่บังคับ)" {% if is_approved %}disabled{% endif %}>
+                  </div>
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted">ปิด:</span>
+                    <input form="bulk-save-form" type="datetime-local" class="form-control form-control-sm py-0" style="width:auto;max-width:168px;" name="close_at_{{ c.pk }}" value="{{ c.close_at|date:'Y-m-d\TH:i' }}" title="เวลาปิดบันทึกคะแนน (เว้นว่าง = ไม่ปิด)" {% if is_approved %}disabled{% endif %}>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <input form="bulk-save-form" class="form-control form-control-sm fw-bold nav-col main-weight-input" data-col="score" name="weight_{{ c.pk }}" value="{{ c.weight|floatformat:2 }}" title="สัดส่วนของหัวข้อใหญ่" {% if is_approved %}disabled{% endif %}>
+              </td>
+              <td>
+                <input form="bulk-save-form" class="form-control form-control-sm nav-col main-max-input" id="main-max-{{ c.pk }}" data-col="max" data-parent-id="{{ c.pk }}" name="default_max_score_{{ c.pk }}" value="{{ c.default_max_score|floatformat:2 }}" {% if c.sub_list %}readonly style="background-color:#eef4ff;font-weight:700;" title="คำนวณอัตโนมัติจากผลรวมคะแนนของหัวข้อย่อยทั้งหมด"{% endif %} {% if is_approved %}disabled{% endif %}>
+              </td>
+              <td>
+                <input form="bulk-save-form" type="number" class="form-control form-control-sm nav-col" data-col="order" name="order_{{ c.pk }}" value="{{ c.order }}" {% if is_approved %}disabled{% endif %}>
+              </td>
+              <td class="text-center">
+                <input form="bulk-save-form" type="hidden" class="inp-visible inp-main-visible" data-parent-id="{{ c.pk }}" name="is_visible_{{ c.pk }}" value="{% if c.is_visible %}1{% else %}0{% endif %}">
+                <button type="button" class="btn btn-sm rounded-pill px-3 py-0 fw-semibold btn-status-toggle btn-visible-toggle btn-main-visible {% if c.is_visible %}btn-success{% else %}btn-outline-secondary{% endif %}" data-parent-id="{{ c.pk }}" data-state="{% if c.is_visible %}1{% else %}0{% endif %}" title="คลิกเพื่อ เปิด/ปิด การแสดงคะแนน (ส่งผลกับหัวข้อย่อยทั้งหมด)" {% if is_approved %}disabled{% endif %}>
+                  {% if c.is_visible %}เปิด{% else %}ปิด{% endif %}
+                </button>
+              </td>
+              <td class="text-center">
+                <input form="bulk-save-form" type="hidden" class="inp-open inp-main-open" data-parent-id="{{ c.pk }}" name="is_open_{{ c.pk }}" value="{% if c.is_open %}1{% else %}0{% endif %}">
+                <button type="button" class="btn btn-sm rounded-pill px-3 py-0 fw-semibold btn-status-toggle btn-open-toggle btn-main-open {% if c.is_open %}btn-success{% else %}btn-outline-secondary{% endif %}" data-parent-id="{{ c.pk }}" data-state="{% if c.is_open %}1{% else %}0{% endif %}" title="คลิกเพื่อ เปิด/ปิด การบันทึกคะแนน (ส่งผลกับหัวข้อย่อยทั้งหมด)" {% if is_approved %}disabled{% endif %}>
+                  {% if c.is_open %}เปิด{% else %}ปิด{% endif %}
+                </button>
+                {% if c.total_scores_count > 0 %}
+                <div class="text-muted" style="font-size:0.7rem;">({{ c.total_scores_count }} คะแนน)</div>
+                {% endif %}
+              </td>
+              <td class="text-center text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 btn-delete-cat"
+                        data-form-id="cat{{ c.pk }}"
+                        data-cat-id="{{ c.pk }}"
+                        data-cat-name="{{ c.main_no }}. {{ c.name }}"
+                        data-score-count="{{ c.total_scores_count }}"
+                        data-is-main="1"
+                        {% if is_approved %}disabled{% endif %}>ลบ</button>
+              </td>
+            </tr>
+
+            {% if c.sub_list %}
+            <!-- แถบเครื่องมือกำหนดคะแนนหัวข้อย่อยของหัวข้อนี้ให้เท่ากันพร้อมกัน -->
+            <tr class="bg-light border-bottom sub-group-row" data-sub-group="{{ c.pk }}">
+              <td colspan="3">
+                <div class="d-flex align-items-center gap-2 ps-4">
+                  <span class="small text-primary fw-semibold text-nowrap"><i class="bi bi-lightning-charge-fill me-1"></i>กำหนดคะแนนทุกข้อย่อยในหัวข้อ {{ c.main_no }} ให้เท่ากัน:</span>
+                  <div class="input-group input-group-sm" style="max-width:190px;">
+                    <input type="text" class="form-control form-control-sm" id="fill-val-{{ c.pk }}" placeholder="เช่น 10" inputmode="decimal" {% if is_approved %}disabled{% endif %}>
+                    <button type="button" class="btn btn-outline-primary btn-fill-subs" data-parent-id="{{ c.pk }}" {% if is_approved %}disabled{% endif %}>ใส่ทุกช่อง</button>
+                  </div>
+                  {% info_tip "ใส่ค่าแล้วกดปุ่ม บันทึกการตั้งค่าคะแนน ด้านบนได้เลย" %}
+                </div>
+              </td>
+              <td colspan="4"></td>
+            </tr>
+            {% endif %}
+
+            <!-- แถวหัวข้อย่อย (Subcategories) ของหัวข้อใหญ่นี้ -->
+            {% for sc in c.sub_list %}
+            <tr class="sub-group-row" data-sub-group="{{ c.pk }}" data-sub-of="{{ c.pk }}">
+              <td>
+                <form id="del_sub_{{ sc.pk }}" method="post">{% csrf_token %}<input type="hidden" name="id" value="{{ sc.pk }}"><input type="hidden" name="tab" value="scores"><input type="hidden" name="year" value="{{ year }}"></form>
+                <div class="input-group input-group-sm ps-4">
+                  <span class="input-group-text bg-light fw-semibold text-muted"><i class="bi bi-arrow-return-right me-1"></i>{{ sc.sub_no }}</span>
+                  <input form="bulk-save-form" class="form-control form-control-sm nav-col" data-col="name" name="name_{{ sc.pk }}" value="{{ sc.name }}" required {% if is_approved %}disabled{% endif %}>
+                </div>
+              </td>
+              <td colspan="2">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-light text-muted">คะแนน</span>
+                  <input form="bulk-save-form" class="form-control form-control-sm nav-col sub-score-input" data-col="score" data-parent-id="{{ c.pk }}" name="default_max_score_{{ sc.pk }}" value="{{ sc.default_max_score|floatformat:2 }}" title="คะแนนของหัวข้อย่อยนี้" {% if is_approved %}disabled{% endif %}>
+                </div>
+              </td>
+              <td>
+                <input form="bulk-save-form" type="number" class="form-control form-control-sm nav-col" data-col="order" name="order_{{ sc.pk }}" value="{{ sc.order }}" {% if is_approved %}disabled{% endif %}>
+              </td>
+              <td class="text-center">
+                <input form="bulk-save-form" type="hidden" class="inp-visible inp-sub-visible" data-parent-id="{{ c.pk }}" name="is_visible_{{ sc.pk }}" value="{% if sc.is_visible %}1{% else %}0{% endif %}">
+                <button type="button" class="btn btn-sm rounded-pill px-3 py-0 fw-semibold btn-status-toggle btn-visible-toggle btn-sub-visible {% if sc.is_visible %}btn-success{% else %}btn-outline-secondary{% endif %}" data-parent-id="{{ c.pk }}" data-state="{% if sc.is_visible %}1{% else %}0{% endif %}" title="คลิกเพื่อ เปิด/ปิด แสดงคะแนนหัวข้อย่อยนี้" {% if is_approved %}disabled{% endif %}>
+                  {% if sc.is_visible %}เปิด{% else %}ปิด{% endif %}
+                </button>
+              </td>
+              <td class="text-center">
+                <input form="bulk-save-form" type="hidden" class="inp-open inp-sub-open" data-parent-id="{{ c.pk }}" name="is_open_{{ sc.pk }}" value="{% if sc.is_open %}1{% else %}0{% endif %}">
+                <button type="button" class="btn btn-sm rounded-pill px-3 py-0 fw-semibold btn-status-toggle btn-open-toggle btn-sub-open {% if sc.is_open %}btn-success{% else %}btn-outline-secondary{% endif %}" data-parent-id="{{ c.pk }}" data-state="{% if sc.is_open %}1{% else %}0{% endif %}" title="คลิกเพื่อ เปิด/ปิด บันทึกคะแนนหัวข้อย่อยนี้" {% if is_approved %}disabled{% endif %}>
+                  {% if sc.is_open %}เปิด{% else %}ปิด{% endif %}
+                </button>
+                {% if sc.n > 0 %}
+                <div class="text-muted" style="font-size:0.7rem;">({{ sc.n }} คะแนน)</div>
+                {% endif %}
+              </td>
+              <td class="text-center text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 btn-delete-cat"
+                        data-form-id="del_sub_{{ sc.pk }}"
+                        data-cat-id="{{ sc.pk }}"
+                        data-cat-name="{{ sc.sub_no }} {{ sc.name }}"
+                        data-score-count="{{ sc.n }}"
+                        data-is-main="0"
+                        {% if is_approved %}disabled{% endif %}>ลบ</button>
+              </td>
+            </tr>
+            {% endfor %}
+
+            <!-- แถวเพิ่มหัวข้อย่อย (Sub) ภายใต้หัวข้อใหญ่นี้ -->
+            <tr class="bg-light sub-group-row" data-sub-group="{{ c.pk }}">
+              <td colspan="7">
+                <fieldset {% if is_approved %}disabled{% endif %}>
+                  <form method="post" class="row g-1 align-items-center ps-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_sub">
+                    <input type="hidden" name="tab" value="scores">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <input type="hidden" name="parent_id" value="{{ c.pk }}">
+                    <div class="col-auto">
+                      <span class="small text-success fw-semibold"><i class="bi bi-plus-circle me-1"></i>เพิ่ม Sub ในข้อ {{ c.main_no }}:</span>
+                    </div>
+                    <div class="col-md-5">
+                      <input class="form-control form-control-sm" name="name" placeholder="เช่น จิตสาธารณะ, ส่งงาน หรือ ข้อ1, ข้อ2, ข้อ3 (คั่นด้วย , เพื่อเพิ่มหลายข้อพร้อมกัน)" required>
+                    </div>
+                    <div class="col-md-2">
+                      <div class="input-group input-group-sm">
+                        <span class="input-group-text">คะแนนต่อข้อ</span>
+                        <input class="form-control form-control-sm" name="default_max_score" value="10" placeholder="คะแนน">
+                      </div>
+                    </div>
+                    <div class="col-md-1">
+                      <input type="number" class="form-control form-control-sm" name="order" value="{{ c.sub_list|length|add:1 }}" title="ลำดับเริ่มต้น">
+                    </div>
+                    <div class="col-auto text-center">
+                      <label class="small text-muted me-1">แสดง</label>
+                      <input type="checkbox" class="form-check-input" name="is_visible" value="1" checked>
+                    </div>
+                    <div class="col-md-2">
+                      <button class="btn btn-outline-success btn-sm w-100 py-0"><i class="bi bi-plus-lg"></i> เพิ่ม Sub</button>
+                    </div>
+                  </form>
+                </fieldset>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-3">ยังไม่มีหัวข้อคะแนนในปีการศึกษานี้</td></tr>
+            {% endfor %}
+          </tbody>
+          {% if categories %}
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td class="text-end">รวมคะแนนทั้งหมด (รวมจากสัดส่วนคะแนน):</td>
+              <td class="text-primary fs-6" id="tfoot-total-weight">{{ total_weight|floatformat:2 }}</td>
+              <td class="text-dark" id="tfoot-total-max">{{ total_max_score|floatformat:2 }}</td>
+              <td colspan="4" class="text-muted small fw-normal">คะแนนทั้งหมดแสดงทศนิยม 2 ตำแหน่ง</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+      <div class="card-footer bg-light d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="flex-grow-1">
+          <h6 class="small fw-bold mb-2"><i class="bi bi-plus-circle me-1 text-primary"></i>เพิ่มหัวข้อคะแนนใหญ่ (เลือกจาก คะแนนเก็บ / คะแนนสอบทฤษฎี / คะแนนสอบปฏิบัติ)</h6>
+          <fieldset {% if is_approved %}disabled{% endif %}>
+            <form method="post" class="row g-2 align-items-end">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="create">
+              <input type="hidden" name="tab" value="scores">
+              <input type="hidden" name="year" value="{{ year }}">
+              <div class="col-md-2">
+                <label class="form-label small mb-1">ประเภทหัวข้อใหญ่</label>
+                <select name="group_type" class="form-select form-select-sm" onchange="if(!this.form.name.value || this.form.name.dataset.auto==='1'){this.form.name.value=this.value;this.form.name.dataset.auto='1';}">
+                  {% for gk, gv in group_choices %}
+                  <option value="{{ gk }}">{{ gv }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">ชื่อหัวข้อใหญ่ (ปรับแก้ได้)</label>
+                <input class="form-control form-control-sm" name="name" value="คะแนนเก็บ" data-auto="1" oninput="this.dataset.auto='0'" placeholder="เช่น คะแนนเก็บ / คะแนนสอบทฤษฎี" required>
+              </div>
+              <div class="col-auto">
+                <label class="form-label small mb-1">สีกล่อง</label>
+                <input type="color" name="box_color" class="form-control form-control-color form-control-sm" value="{{ next_random_color|default:'#0d6efd' }}" title="สีกล่อง (ระบบสุ่มสีไม่ซ้ำให้อัตโนมัติ)">
+              </div>
+              <div class="col-md-1">
+                <label class="form-label small mb-1">สัดส่วน</label>
+                <input class="form-control form-control-sm" name="weight" value="25">
+              </div>
+              <div class="col-md-1">
+                <label class="form-label small mb-1">คะแนนเต็ม</label>
+                <input class="form-control form-control-sm" name="default_max_score" value="100">
+              </div>
+              <div class="col-md-1">
+                <label class="form-label small mb-1">ลำดับ</label>
+                <input type="number" class="form-control form-control-sm" name="order" value="{{ categories|length|add:1 }}">
+              </div>
+              <div class="col-auto text-center">
+                <label class="form-label small mb-1 d-block">แสดง</label>
+                <input type="checkbox" class="form-check-input mt-1" name="is_visible" value="1" checked>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">เวลาเริ่มเปิด (ไม่บังคับ)</label>
+                <input type="datetime-local" class="form-control form-control-sm" name="open_at">
+              </div>
+              <div class="col-md-1">
+                <label class="form-label small mb-1">เวลาปิด</label>
+                <input type="datetime-local" class="form-control form-control-sm" name="close_at">
+              </div>
+              <div class="col-md-1">
+                <button class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-lg"></i> เพิ่ม</button>
+              </div>
+            </form>
+          </fieldset>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: ตั้งค่าวันที่อบรม วันสอบ และวันหยุด -->
+  <div class="tab-pane fade {% if tab == 'dates' %}show active{% endif %}" id="pane-dates" role="tabpanel">
+    {% if is_approved %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2" id="dates-approved-lock-banner">
+      <i class="bi bi-lock-fill fs-5 text-warning"></i>
+      <div>
+        <strong>ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว — ล็อกการแก้ไขวันที่อบรม / วันสอบ / วันหยุด</strong>
+        <span class="small d-block text-muted">หากต้องการแก้ไข กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; แท็บอนุมัติประกาศผล</a> เพื่อกด "ยกเลิกประกาศผล" พร้อมรหัสผ่าน Admin</span>
+      </div>
+    </div>
+    {% endif %}
+    <form id="bulk-dates-form" method="post">{% csrf_token %}<input type="hidden" name="action" value="save_all_training_dates"><input type="hidden" name="tab" value="dates"><input type="hidden" name="year" value="{{ year }}"></form>
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+          <span>
+            <i class="bi bi-calendar-event me-2 text-success"></i>2. ตั้งค่าวันที่อบรม วันสอบ และวันหยุด (ปี {{ year }})
+            {% info_tip "คลิกที่ป้ายข้อความ วันอบรม / วันหยุด / วันสอบ เพื่อสลับประเภทได้ทันที" %}
+          </span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <div class="small fw-semibold">
+            <span class="badge bg-primary me-1">วันอบรม <span id="cnt-training">{{ date_counts.training }}</span> วัน</span>
+            <span class="badge bg-danger me-1">วันสอบ <span id="cnt-exam">{{ date_counts.exam }}</span> วัน</span>
+            <span class="badge bg-dark me-1">วันหยุด <span id="cnt-holiday">{{ date_counts.holiday }}</span> วัน</span>
+            <span class="badge bg-secondary">รวม <span id="cnt-total">{{ date_counts.total }}</span> วัน</span>
+          </div>
+          {% if training_dates %}
+          <button type="submit" form="bulk-dates-form" class="btn btn-primary btn-sm fw-semibold" {% if is_approved %}disabled{% endif %}>
+            <i class="bi bi-floppy me-1"></i>บันทึกทั้งหมด
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        <fieldset {% if is_approved %}disabled{% endif %}>
+          <form method="post" class="row g-2 align-items-end mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_training_date">
+            <input type="hidden" name="tab" value="dates">
+            <input type="hidden" name="year" value="{{ year }}">
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1">ตั้งแต่วันที่</label>
+              <input type="date" name="date_start" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1">ถึงวันที่ (เว้นว่าง=วันเดียว)</label>
+              <input type="date" name="date_end" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-semibold mb-1">ประเภท</label>
+              <select name="event_type" id="add-td-type" class="form-select form-select-sm"
+                      onchange="document.getElementById('add-td-exam-wrap').classList.toggle('d-none', this.value !== 'exam')">
+                <option value="training">วันอบรม</option>
+                <option value="exam">วันสอบ</option>
+                <option value="holiday">วันหยุด</option>
+              </select>
+            </div>
+            <div class="col-md-4 d-none" id="add-td-exam-wrap">
+              <div class="row g-1">
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1 text-danger">ช่วงเวลาสอบ</label>
+                  <select name="exam_period" class="form-select form-select-sm border-danger">
+                    {% for ek, ev in exam_period_choices %}
+                    <option value="{{ ek }}">{{ ev }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold mb-1 text-danger">ประเภทการสอบ</label>
+                  <select name="exam_type" class="form-select form-select-sm border-danger">
+                    {% for tk, tv in exam_type_choices %}
+                    <option value="{{ tk }}">{{ tv }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="col">
+              <label class="form-label small fw-semibold mb-1">รายละเอียด</label>
+              <div class="input-group input-group-sm">
+                <input type="text" name="title" class="form-control" placeholder="เช่น อบรมค่าย 1 / สอบปฏิบัติ / วันหยุดนักขัตฤกษ์">
+                <button class="btn btn-success"><i class="bi bi-plus-lg"></i> เพิ่ม</button>
+              </div>
+            </div>
+          </form>
+        </fieldset>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0" id="training-dates-table" style="font-size:0.86rem;">
+            <thead class="table-light">
+              <tr>
+                <th style="width:220px;">วันที่ (พ.ศ.)</th>
+                <th style="width:360px;">ประเภท / ช่วงเวลาสอบ / ประเภทการสอบ</th>
+                <th>รายละเอียด</th>
+                <th style="width:120px;">ใบลงชื่อ</th>
+                <th style="width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for td in training_dates %}
+              <tr data-td-id="{{ td.pk }}">
+                <td class="fw-semibold">
+                  {{ td.date|day_short_thai }} {{ td.date|date_thai }} <span class="text-muted fw-normal">(วัน{{ td.date|day_name_thai }})</span>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <input type="hidden" form="bulk-dates-form" name="td_type_{{ td.pk }}" id="td-type-input-{{ td.pk }}" value="{{ td.event_type }}">
+                    <span class="badge td-type-badge {% if td.event_type == 'exam' %}bg-danger{% elif td.event_type == 'holiday' %}bg-dark{% else %}bg-primary{% endif %}{% if is_approved %} opacity-75{% endif %}"
+                          style="cursor:{% if is_approved %}default{% else %}pointer{% endif %};font-size:0.85rem;user-select:none;"
+                          data-td-id="{{ td.pk }}"
+                          data-current-type="{{ td.event_type }}"
+                          title="{% if is_approved %}ล็อกหลังอนุมัติประกาศผล{% else %}คลิกเพื่อสลับประเภท: วันอบรม / วันหยุด / วันสอบ{% endif %}">
+                      {{ td.get_event_type_display }}
+                    </span>
+                    <select form="bulk-dates-form"
+                            name="td_exam_period_{{ td.pk }}"
+                            id="td-exam-period-{{ td.pk }}"
+                            data-td-id="{{ td.pk }}"
+                            class="form-select form-select-sm py-0 px-2 border-danger td-exam-period-select {% if td.event_type != 'exam' %}d-none{% endif %}"
+                            style="width:auto; font-size:0.78rem;"
+                            {% if is_approved %}disabled{% endif %}>
+                      {% for ek, ev in exam_period_choices %}
+                      <option value="{{ ek }}" {% if td.exam_period == ek %}selected{% endif %}>{{ ev }}</option>
+                      {% endfor %}
+                    </select>
+                    <select form="bulk-dates-form"
+                            name="td_exam_type_{{ td.pk }}"
+                            id="td-exam-type-{{ td.pk }}"
+                            data-td-id="{{ td.pk }}"
+                            class="form-select form-select-sm py-0 px-2 border-danger td-exam-type-select {% if td.event_type != 'exam' %}d-none{% endif %}"
+                            style="width:auto; font-size:0.78rem;"
+                            title="ประเภทการสอบ (ใช้กับจัดที่นั่งสอบ)"
+                            {% if is_approved %}disabled{% endif %}>
+                      {% for tk, tv in exam_type_choices %}
+                      <option value="{{ tk }}" {% if td.exam_type == tk %}selected{% endif %}>{{ tv }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </td>
+                <td>
+                  <input form="bulk-dates-form" type="text" name="td_title_{{ td.pk }}" class="form-control form-control-sm" value="{{ td.title }}" placeholder="ระบุรายละเอียด..." {% if is_approved %}disabled{% endif %}>
+                </td>
+                <td id="td-signin-cell-{{ td.pk }}">
+                  {% if td.event_type == 'holiday' %}
+                    <span class="text-muted small">-</span>
+                  {% else %}
+                    <a href="{% url 'food:signin_sheet' %}?td_id={{ td.pk }}" class="btn btn-sm btn-outline-success py-0 px-2">
+                      <i class="bi bi-printer"></i> ใบลงชื่อ
+                    </a>
+                  {% endif %}
+                </td>
+                <td class="text-nowrap text-end">
+                  <form method="post" class="d-inline" onsubmit="return confirm('ลบวันที่นี้?')">
+                    {% csrf_token %}<input type="hidden" name="action" value="delete_training_date"><input type="hidden" name="tab" value="dates"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="td_id" value="{{ td.pk }}">
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" {% if is_approved %}disabled{% endif %}><i class="bi bi-trash"></i></button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center text-muted py-3">ยังไม่ได้กำหนดวันที่อบรม/วันสอบ/วันหยุด</td></tr>
+              {% endfor %}
+            </tbody>
+            {% if training_dates %}
+            <tfoot class="table-light fw-semibold">
+              <tr>
+                <td colspan="5" class="text-end">
+                  สรุปจำนวนวัน:
+                  <span class="text-primary ms-2">วันอบรม <b id="foot-cnt-training">{{ date_counts.training }}</b> วัน</span> ·
+                  <span class="text-danger">วันสอบ <b id="foot-cnt-exam">{{ date_counts.exam }}</b> วัน</span> ·
+                  <span class="text-dark">วันหยุด <b id="foot-cnt-holiday">{{ date_counts.holiday }}</b> วัน</span> ·
+                  <span class="text-muted">รวม <b id="foot-cnt-total">{{ date_counts.total }}</b> วัน</span>
+                </td>
+              </tr>
+            </tfoot>
+            {% endif %}
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div>
+</div>
+
+<!-- Modal ยืนยันการลบหัวข้อที่มีคะแนนบันทึกอยู่แล้วด้วยรหัสผ่าน -->
+<div class="modal fade" id="deleteCategoryPasswordModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-danger">
+      <form method="post" id="delete-cat-pw-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="tab" value="scores">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="id" id="del-pw-cat-id" value="">
+        <div class="modal-header bg-danger text-white py-2">
+          <h6 class="modal-title fw-bold mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>ยืนยันการลบหัวข้อที่มีคะแนนแล้ว</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning small mb-3">
+            หัวข้อคะแนน <strong id="del-pw-cat-name"></strong> มีข้อมูลคะแนนที่บันทึกไว้แล้วจำนวน
+            <strong class="text-danger" id="del-pw-score-count">0</strong> รายการ
+            <br>หากดำเนินการลบ คะแนนที่บันทึกไว้ทั้งหมดในหัวข้อนี้ (และหัวข้อย่อย) จะถูกลบออกด้วย
+          </div>
+          <label class="form-label small fw-bold">กรุณาพิมพ์รหัสผ่านผู้ดูแลระบบของคุณเพื่อยืนยันการลบ</label>
+          <input type="password" name="confirm_password" id="del-pw-input" class="form-control form-control-sm" required placeholder="พิมพ์รหัสผ่านของคุณ...">
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-danger btn-sm fw-semibold">
+            <i class="bi bi-trash-fill me-1"></i>ยืนยันลบหัวข้อและคะแนน
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal เพิ่มปีการศึกษาใหม่ -->
+<div class="modal fade" id="addAcademicYearModal" tabindex="-1" aria-labelledby="addAcademicYearModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'food:score_categories' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_academic_year">
+        <input type="hidden" name="tab" value="{{ tab }}">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold" id="addAcademicYearModalLabel">
+            <i class="bi bi-calendar-plus text-success me-2"></i>เพิ่มปีการศึกษาใหม่
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="newAcademicYearInput" class="form-label fw-semibold">ปีการศึกษาใหม่ (พ.ศ.)</label>
+            <input type="number" class="form-control" id="newAcademicYearInput" name="new_academic_year"
+                   value="{{ next_academic_year }}" min="{{ min_academic_year }}" max="2700" required>
+            <div class="form-text">
+              ระบบแนะนำปีถัดไป ({{ next_academic_year }}) · ปีที่มีอยู่ในระบบแล้ว: {{ min_academic_year }}–{{ max_academic_year }}
+            </div>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="setAsCurrentYearCheck" name="set_as_current" value="1" checked>
+            <label class="form-check-label fw-semibold" for="setAsCurrentYearCheck">
+              ตั้งเป็นปีการศึกษาปัจจุบันทันที เพื่อเริ่มการสร้างข้อมูลปีใหม่
+            </label>
+          </div>
+          <div class="alert alert-info small mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            ข้อมูลของปีการศึกษาเดิม ({{ min_academic_year }}–{{ max_academic_year }}) จะยังคงอยู่ครบถ้วนและสามารถสลับกลับมาดูย้อนหลังได้เสมอ
+            เมื่อสร้างปีใหม่แล้วสามารถเริ่มนำเข้านักเรียน ตั้งวันอบรม และกำหนดเกณฑ์คะแนนของปีใหม่ได้ทันที
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button type="submit" class="btn btn-success fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i>สร้างและเพิ่มปีการศึกษา
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var IS_YEAR_APPROVED = {% if is_approved %}true{% else %}false{% endif %};
+  // 0. อัปเดตค่า tab เวลาคลิกสลับแท็บ เพื่อให้บันทึกแล้วคงอยู่แท็บเดิม
+  var tabInput = document.getElementById('year-tab-input');
+  document.querySelectorAll('#scoreSettingTabs [data-tab-name]').forEach(function (btn) {
+    btn.addEventListener('shown.bs.tab', function () {
+      var t = btn.getAttribute('data-tab-name');
+      if (tabInput) tabInput.value = t;
+      if (history.replaceState) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('tab', t);
+        history.replaceState(null, '', url.toString());
+      }
+    });
+  });
+
+  var table = document.getElementById('score-cat-table');
+
+  // 0.2 คลิกที่ป้ายข้อความ ประเภท (วันอบรม -> วันหยุด -> วันสอบ) เพื่อสลับประเภททันทีและอัปเดตยอดรวม
+  var TYPE_CYCLE = ['training', 'holiday', 'exam'];
+  var TYPE_LABELS = {'training': 'วันอบรม', 'holiday': 'วันหยุด', 'exam': 'วันสอบ'};
+  var TYPE_CLASSES = {'training': 'bg-primary', 'holiday': 'bg-dark', 'exam': 'bg-danger'};
+
+  function recountTrainingDates() {
+    var counts = {'training': 0, 'exam': 0, 'holiday': 0, 'total': 0};
+    document.querySelectorAll('.td-type-badge').forEach(function (b) {
+      var t = b.getAttribute('data-current-type') || 'training';
+      if (counts[t] !== undefined) counts[t]++;
+      counts.total++;
+    });
+    ['cnt-training', 'foot-cnt-training'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.textContent = counts.training;
+    });
+    ['cnt-exam', 'foot-cnt-exam'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.textContent = counts.exam;
+    });
+    ['cnt-holiday', 'foot-cnt-holiday'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.textContent = counts.holiday;
+    });
+    ['cnt-total', 'foot-cnt-total'].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.textContent = counts.total;
+    });
+  }
+
+  document.querySelectorAll('.td-type-badge').forEach(function (badge) {
+    badge.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var tdId = badge.getAttribute('data-td-id');
+      var cur = badge.getAttribute('data-current-type') || 'training';
+      var nextType = TYPE_CYCLE[(TYPE_CYCLE.indexOf(cur) + 1) % TYPE_CYCLE.length];
+      badge.setAttribute('data-current-type', nextType);
+      badge.textContent = TYPE_LABELS[nextType];
+      badge.className = 'badge td-type-badge ' + TYPE_CLASSES[nextType];
+      var hiddenInput = document.getElementById('td-type-input-' + tdId);
+      if (hiddenInput) hiddenInput.value = nextType;
+      var examSel = document.getElementById('td-exam-period-' + tdId);
+      if (examSel) examSel.classList.toggle('d-none', nextType !== 'exam');
+      var examTypeSel = document.getElementById('td-exam-type-' + tdId);
+      if (examTypeSel) examTypeSel.classList.toggle('d-none', nextType !== 'exam');
+
+      var signinCell = document.getElementById('td-signin-cell-' + tdId);
+      if (signinCell) {
+        if (nextType === 'holiday') {
+          signinCell.innerHTML = '<span class="text-muted small">-</span>';
+        } else {
+          signinCell.innerHTML = '<a href="{% url "food:signin_sheet" %}?td_id=' + tdId + '" class="btn btn-sm btn-outline-success py-0 px-2"><i class="bi bi-printer"></i> ใบลงชื่อ</a>';
+        }
+      }
+      recountTrainingDates();
+
+      // บันทึกลงฐานข้อมูลเบื้องหลังทันทีโดยไม่ต้องรีโหลดหน้า
+      var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+      if (csrfEl) {
+        var body = new URLSearchParams({
+          action: 'update_training_date',
+          td_id: tdId,
+          event_type: nextType,
+          exam_period: examSel ? examSel.value : 'both',
+          exam_type: examTypeSel ? examTypeSel.value : '',
+          year: '{{ year }}'
+        });
+        fetch(window.location.pathname, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'X-CSRFToken': csrfEl.value, 'X-Requested-With': 'XMLHttpRequest'},
+          body: body
+        });
+      }
+    });
+  });
+
+  function syncExamDateField(sel) {
+    if (IS_YEAR_APPROVED) return;
+    var tdId = sel.getAttribute('data-td-id');
+    var hiddenInput = document.getElementById('td-type-input-' + tdId);
+    var periodSel = document.getElementById('td-exam-period-' + tdId);
+    var typeSel = document.getElementById('td-exam-type-' + tdId);
+    var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfEl) {
+      var body = new URLSearchParams({
+        action: 'update_training_date',
+        td_id: tdId,
+        event_type: hiddenInput ? hiddenInput.value : 'exam',
+        exam_period: periodSel ? periodSel.value : 'both',
+        exam_type: typeSel ? typeSel.value : '',
+        year: '{{ year }}'
+      });
+      fetch(window.location.pathname, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'X-CSRFToken': csrfEl.value, 'X-Requested-With': 'XMLHttpRequest'},
+        body: body
+      });
+    }
+  }
+
+  document.querySelectorAll('.td-exam-period-select, .td-exam-type-select').forEach(function (sel) {
+    sel.addEventListener('change', function () { syncExamDateField(sel); });
+  });
+
+  if (!table) return;
+
+  // 0.5 ซ่อน/แสดง หัวข้อย่อยของแต่ละหัวข้อใหญ่ (Collapse / Expand Subcategories) พร้อมใช้สีกล่องที่เลือก
+  var STORAGE_KEY = 'dscomposn_collapsed_subs_{{ year }}';
+  var collapsedMap = {};
+  try {
+    collapsedMap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') || {};
+  } catch (e) { collapsedMap = {}; }
+
+  function parseHexRgb(hex) {
+    var h = (hex || '#0d6efd').replace('#', '');
+    if (h.length !== 6) return [13, 110, 253];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+
+  function contrastTextForHex(hex) {
+    var rgb = parseHexRgb(hex);
+    var lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+    return lum > 0.62 ? '#111827' : '#ffffff';
+  }
+
+  function applyMainBoxColor(pid, hex, collapsed) {
+    var btn = table.querySelector('.btn-toggle-subs[data-parent-id="' + pid + '"]');
+    var row = table.querySelector('tr[data-main-row="' + pid + '"]');
+    var colorHex = /^#[0-9a-fA-F]{6}$/.test(hex || '') ? hex : '#0d6efd';
+    if (row) {
+      row.style.borderLeft = '4px solid ' + colorHex;
+    }
+    if (!btn) return;
+    btn.setAttribute('data-box-color', colorHex);
+    var rgb = parseHexRgb(colorHex);
+    if (collapsed) {
+      btn.style.backgroundColor = colorHex;
+      btn.style.borderColor = colorHex;
+      btn.style.color = contrastTextForHex(colorHex);
+    } else {
+      btn.style.backgroundColor = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.13)';
+      btn.style.borderColor = colorHex;
+      btn.style.color = colorHex;
+    }
+  }
+
+  function setSubGroupCollapsed(pid, collapsed) {
+    var rows = table.querySelectorAll('.sub-group-row[data-sub-group="' + pid + '"]');
+    rows.forEach(function (r) {
+      r.classList.toggle('d-none', !!collapsed);
+    });
+    var btn = table.querySelector('.btn-toggle-subs[data-parent-id="' + pid + '"]');
+    if (btn) {
+      var icon = btn.querySelector('.toggle-icon');
+      if (icon) {
+        icon.className = collapsed ? 'bi bi-chevron-right toggle-icon' : 'bi bi-chevron-down toggle-icon';
+      }
+      var curHex = btn.getAttribute('data-box-color') || '#0d6efd';
+      applyMainBoxColor(pid, curHex, !!collapsed);
+    }
+    collapsedMap[pid] = !!collapsed;
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(collapsedMap)); } catch (e) {}
+  }
+
+  table.querySelectorAll('.btn-toggle-subs').forEach(function (btn) {
+    var pid = btn.getAttribute('data-parent-id');
+    var initCollapsed = !!collapsedMap[pid];
+    setSubGroupCollapsed(pid, initCollapsed);
+    btn.addEventListener('click', function () {
+      var isCurrentlyCollapsed = !!collapsedMap[pid];
+      setSubGroupCollapsed(pid, !isCurrentlyCollapsed);
+    });
+  });
+
+  table.querySelectorAll('.main-color-input').forEach(function (colInp) {
+    colInp.addEventListener('input', function () {
+      var pid = colInp.getAttribute('data-parent-id');
+      applyMainBoxColor(pid, colInp.value, !!collapsedMap[pid]);
+    });
+  });
+
+  var btnExpandAll = document.getElementById('btn-expand-all-subs');
+  if (btnExpandAll) {
+    btnExpandAll.addEventListener('click', function () {
+      table.querySelectorAll('.btn-toggle-subs').forEach(function (btn) {
+        setSubGroupCollapsed(btn.getAttribute('data-parent-id'), false);
+      });
+    });
+  }
+
+  var btnCollapseAll = document.getElementById('btn-collapse-all-subs');
+  if (btnCollapseAll) {
+    btnCollapseAll.addEventListener('click', function () {
+      table.querySelectorAll('.btn-toggle-subs').forEach(function (btn) {
+        setSubGroupCollapsed(btn.getAttribute('data-parent-id'), true);
+      });
+    });
+  }
+
+  // 1. กดลูกศรขึ้น-ลง (ArrowUp / ArrowDown) หรือ Enter เพื่อเลื่อนช่องกรอกตามคอลัมน์เดียวกัน (ข้ามแถวที่ถูกซ่อนอยู่)
+  table.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Enter') return;
+    var target = e.target;
+    if (!target.classList.contains('nav-col')) return;
+    var col = target.getAttribute('data-col');
+    if (!col) return;
+    var inputs = Array.prototype.slice.call(table.querySelectorAll('.nav-col[data-col="' + col + '"]')).filter(function (el) {
+      return el.offsetParent !== null;
+    });
+    var idx = inputs.indexOf(target);
+    if (idx === -1) return;
+    var nextIdx = (e.key === 'ArrowUp') ? idx - 1 : idx + 1;
+    if (nextIdx >= 0 && nextIdx < inputs.length) {
+      e.preventDefault();
+      inputs[nextIdx].focus();
+      if (typeof inputs[nextIdx].select === 'function') inputs[nextIdx].select();
+    }
+  });
+
+  // 2. คำนวณผลรวมคะแนนหัวข้อย่อยใส่ช่องคะแนนรวมของหัวข้อใหญ่อัตโนมัติ + คำนวณสัดส่วนรวมทั้งหมด (ทศนิยม 2 ตำแหน่ง)
+  function recalcTotalWeightAndMax() {
+    if (!table) return;
+    var wSum = 0, mSum = 0;
+    table.querySelectorAll('.main-weight-input').forEach(function (inp) {
+      var v = parseFloat((inp.value || '').replace(/,/g, ''));
+      if (!isNaN(v) && v >= 0) wSum += v;
+    });
+    table.querySelectorAll('.main-max-input').forEach(function (inp) {
+      var v = parseFloat((inp.value || '').replace(/,/g, ''));
+      if (!isNaN(v) && v >= 0) mSum += v;
+    });
+    var wStr = wSum.toFixed(2), mStr = mSum.toFixed(2);
+    ['header-total-weight', 'badge-total-weight', 'tfoot-total-weight'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = wStr;
+    });
+    ['header-total-max', 'tfoot-total-max'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = mStr;
+    });
+  }
+
+  function recalcMainMaxScore(pid) {
+    if (!table) return;
+    var subInputs = Array.prototype.slice.call(table.querySelectorAll('.sub-score-input[data-parent-id="' + pid + '"]'));
+    if (subInputs.length === 0) return;
+    var sum = 0;
+    subInputs.forEach(function (inp) {
+      var v = parseFloat((inp.value || '').replace(/,/g, ''));
+      if (!isNaN(v) && v >= 0) sum += v;
+    });
+    var mainMax = document.getElementById('main-max-' + pid);
+    if (mainMax) {
+      mainMax.value = sum.toFixed(2);
+    }
+    recalcTotalWeightAndMax();
+  }
+
+  if (table) {
+    table.querySelectorAll('.sub-score-input').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        recalcMainMaxScore(inp.getAttribute('data-parent-id'));
+      });
+    });
+    table.querySelectorAll('.main-weight-input, .main-max-input').forEach(function (inp) {
+      inp.addEventListener('input', recalcTotalWeightAndMax);
+    });
+  }
+
+  // ซิงค์ชื่อป้ายหัวข้อใหญ่เมื่อพิมพ์แก้ในช่องชื่อหัวข้อใหญ่
+  table.querySelectorAll('.main-name-input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var pid = inp.getAttribute('data-parent-id');
+      var lbl = document.getElementById('main-label-' + pid);
+      if (lbl) lbl.textContent = inp.value;
+    });
+  });
+
+  document.querySelectorAll('.btn-fill-subs').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var pid = btn.getAttribute('data-parent-id');
+      var valInput = document.getElementById('fill-val-' + pid);
+      if (!valInput || valInput.value.trim() === '') {
+        if (valInput) valInput.focus();
+        return;
+      }
+      var val = valInput.value.trim();
+      table.querySelectorAll('.sub-score-input[data-parent-id="' + pid + '"]').forEach(function (inp) {
+        inp.value = val;
+      });
+      recalcMainMaxScore(pid);
+    });
+  });
+
+  // กด Enter ในช่องกำหนดคะแนนพร้อมกัน ให้ทำงานเหมือนกดปุ่ม "ใส่ทุกช่อง"
+  document.querySelectorAll('[id^="fill-val-"]').forEach(function (inp) {
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        var pid = inp.id.replace('fill-val-', '');
+        var btn = table.querySelector('.btn-fill-subs[data-parent-id="' + pid + '"]');
+        if (btn) btn.click();
+      }
+    });
+  });
+
+  // 3. ปุ่มสถานะ แสดง และ บันทึก (เปิด <-> ปิด) กดที่หัวข้อใหญ่สั่ง เปิด/ปิด หัวข้อย่อยทั้งหมดตามทันที
+  function setToggleState(btn, stateOn) {
+    var on = !!stateOn;
+    btn.setAttribute('data-state', on ? '1' : '0');
+    btn.textContent = on ? 'เปิด' : 'ปิด';
+    btn.classList.toggle('btn-success', on);
+    btn.classList.toggle('btn-outline-secondary', !on);
+    var td = btn.closest('td');
+    if (td) {
+      var hidden = td.querySelector('input[type="hidden"]');
+      if (hidden) hidden.value = on ? '1' : '0';
+    }
+  }
+
+  function syncHeaderToggleBtn(btnId, selector, labelText) {
+    var hBtn = document.getElementById(btnId);
+    if (!hBtn) return;
+    var items = Array.prototype.slice.call(table.querySelectorAll(selector));
+    if (items.length === 0) return;
+    var allOn = items.every(function (b) { return b.getAttribute('data-state') === '1'; });
+    hBtn.textContent = labelText;
+    hBtn.classList.toggle('btn-success', allOn);
+    hBtn.classList.toggle('btn-outline-secondary', !allOn);
+  }
+
+  table.querySelectorAll('.btn-main-visible').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var nextOn = btn.getAttribute('data-state') !== '1';
+      var pid = btn.getAttribute('data-parent-id');
+      setToggleState(btn, nextOn);
+      table.querySelectorAll('.btn-sub-visible[data-parent-id="' + pid + '"]').forEach(function (sb) {
+        setToggleState(sb, nextOn);
+      });
+      syncHeaderToggleBtn('btn-all-visible', '.btn-visible-toggle', 'แสดง');
+    });
+  });
+
+  table.querySelectorAll('.btn-sub-visible').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var nextOn = btn.getAttribute('data-state') !== '1';
+      setToggleState(btn, nextOn);
+      syncHeaderToggleBtn('btn-all-visible', '.btn-visible-toggle', 'แสดง');
+    });
+  });
+
+  table.querySelectorAll('.btn-main-open').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var nextOn = btn.getAttribute('data-state') !== '1';
+      var pid = btn.getAttribute('data-parent-id');
+      setToggleState(btn, nextOn);
+      table.querySelectorAll('.btn-sub-open[data-parent-id="' + pid + '"]').forEach(function (sb) {
+        setToggleState(sb, nextOn);
+      });
+      syncHeaderToggleBtn('btn-all-open', '.btn-open-toggle', 'บันทึก');
+    });
+  });
+
+  table.querySelectorAll('.btn-sub-open').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var nextOn = btn.getAttribute('data-state') !== '1';
+      setToggleState(btn, nextOn);
+      syncHeaderToggleBtn('btn-all-open', '.btn-open-toggle', 'บันทึก');
+    });
+  });
+
+  var btnAllVisible = document.getElementById('btn-all-visible');
+  if (btnAllVisible) {
+    btnAllVisible.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var items = Array.prototype.slice.call(table.querySelectorAll('.btn-visible-toggle'));
+      var allOn = items.length > 0 && items.every(function (b) { return b.getAttribute('data-state') === '1'; });
+      items.forEach(function (b) { setToggleState(b, !allOn); });
+      syncHeaderToggleBtn('btn-all-visible', '.btn-visible-toggle', 'แสดง');
+    });
+  }
+
+  var btnAllOpen = document.getElementById('btn-all-open');
+  if (btnAllOpen) {
+    btnAllOpen.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var items = Array.prototype.slice.call(table.querySelectorAll('.btn-open-toggle'));
+      var allOn = items.length > 0 && items.every(function (b) { return b.getAttribute('data-state') === '1'; });
+      items.forEach(function (b) { setToggleState(b, !allOn); });
+      syncHeaderToggleBtn('btn-all-open', '.btn-open-toggle', 'บันทึก');
+    });
+  }
+
+  syncHeaderToggleBtn('btn-all-visible', '.btn-visible-toggle', 'แสดง');
+  syncHeaderToggleBtn('btn-all-open', '.btn-open-toggle', 'บันทึก');
+
+  // 4. ยืนยันการลบ (หากมีคะแนนบันทึกอยู่แล้ว ให้พิมพ์รหัสผ่านใน Modal)
+  var pwModalEl = document.getElementById('deleteCategoryPasswordModal');
+  var pwModal = (pwModalEl && window.bootstrap) ? new bootstrap.Modal(pwModalEl) : null;
+  table.querySelectorAll('.btn-delete-cat').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED) return;
+      var scoreCnt = parseInt(btn.getAttribute('data-score-count') || '0', 10) || 0;
+      var catName = btn.getAttribute('data-cat-name') || '';
+      var catId = btn.getAttribute('data-cat-id') || '';
+      var formId = btn.getAttribute('data-form-id') || '';
+      if (scoreCnt > 0 && pwModal) {
+        var idInp = document.getElementById('del-pw-cat-id');
+        var nameEl = document.getElementById('del-pw-cat-name');
+        var cntEl = document.getElementById('del-pw-score-count');
+        var pwInp = document.getElementById('del-pw-input');
+        if (idInp) idInp.value = catId;
+        if (nameEl) nameEl.textContent = catName;
+        if (cntEl) cntEl.textContent = scoreCnt;
+        if (pwInp) pwInp.value = '';
+        pwModal.show();
+        setTimeout(function () { if (pwInp) pwInp.focus(); }, 250);
+      } else {
+        if (confirm('ยืนยันลบหัวข้อ ' + catName + ' ใช่หรือไม่?')) {
+          var frm = document.getElementById(formId);
+          if (frm) {
+            var actInp = frm.querySelector('input[name="action"]');
+            if (!actInp) {
+              actInp = document.createElement('input');
+              actInp.type = 'hidden';
+              actInp.name = 'action';
+              frm.appendChild(actInp);
+            }
+            actInp.value = 'delete';
+            frm.submit();
+          }
+        }
+      }
+    });
+  });
+
+  // 5. ปุ่ม "บันทึกการตั้งค่าทั้งหมดในครั้งเดียว" รวบรวมค่าทุกแถวส่งเข้า bulk-save-form
+  var bulkForm = document.getElementById('bulk-save-form');
+  if (bulkForm) {
+    bulkForm.addEventListener('submit', function () {
+      bulkForm.querySelectorAll('.bulk-hidden-field').forEach(function (el) { el.remove(); });
+      table.querySelectorAll('[data-bulk-name]').forEach(function (el) {
+        var bName = el.getAttribute('data-bulk-name');
+        if (el.type === 'checkbox') {
+          if (!el.checked) return;
+        }
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.className = 'bulk-hidden-field';
+        hidden.name = bName;
+        hidden.value = el.value;
+        bulkForm.appendChild(hidden);
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

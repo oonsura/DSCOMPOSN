@@ -1,0 +1,447 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ผู้ใช้ (นักเรียน/สมาชิก){% endblock %}
+{% block breadcrumb %}ผู้ใช้ (นักเรียน/สมาชิก){% endblock %}
+{% block extra_css %}
+<style>
+  .status-dot {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    vertical-align: middle;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .status-dot-green { background-color: #28a745; }
+  .status-dot-red { background-color: #dc3545; }
+  .tri-btn {
+    background: transparent;
+    border: none;
+    padding: 2px 6px;
+    cursor: pointer;
+    line-height: 1;
+    transition: transform 0.15s;
+  }
+  .tri-btn:hover { transform: scale(1.2); }
+  .tri-pink { color: #e91e63; font-size: 1.15rem; }
+  .tri-purple { color: #b388ff; font-size: 1.15rem; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.18)); }
+  .code-blue { color: #0d6efd !important; font-weight: 700; }
+  .code-green { color: #198754 !important; font-weight: 700; }
+  .user-avatar-sm {
+    width: 34px;
+    height: 34px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 1.5px solid #dee2e6;
+    cursor: zoom-in;
+    transition: transform 0.15s ease;
+  }
+  .user-avatar-sm:hover { transform: scale(1.15); border-color: #0d6efd; }
+  .user-avatar-placeholder {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #f1f3f5;
+    border: 1px solid #dee2e6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-people me-2 text-primary"></i>ผู้ใช้ (นักเรียน/สมาชิก)
+      {% if not is_admin_viewer %}
+      <span class="badge bg-info text-dark fs-6 align-middle ms-1">ดูอย่างเดียว</span>
+      {% info_tip "โหมดเจ้าหน้าที่: ดูข้อมูล ค้นหา ดูรูปภาพ และดูรายละเอียดเท่านั้น ไม่สามารถแก้ไข" %}
+      {% endif %}
+    </h4>
+  </div>
+  {% if is_admin_viewer %}
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-success btn-sm" href="{% url 'composn:admin_template_students' %}">
+      <i class="bi bi-file-earmark-arrow-down me-1"></i>Template นักเรียน (ภาษาไทย)
+    </a>
+    <a class="btn btn-info btn-sm text-white" href="{% url 'composn:admin_import_students' %}">
+      <i class="bi bi-file-earmark-excel me-1"></i>Import นักเรียน
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'composn:admin_import_camp2' %}">
+      <i class="bi bi-patch-plus me-1"></i>Import รหัสค่าย 2
+    </a>
+    <a class="btn btn-outline-danger btn-sm" href="{% url 'composn:admin_delete_camp2' %}">
+      <i class="bi bi-trash3 me-1"></i>ลบรหัสค่าย 2
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'composn:admin_calculate_level' %}">
+      <i class="bi bi-calculator me-1"></i>คำนวณระดับชั้น
+    </a>
+    <a class="btn btn-primary btn-sm" href="{% url 'composn:admin_user_create' %}">
+      <i class="bi bi-person-plus me-1"></i>เพิ่มสมาชิก/ผู้ใช้
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Search & Filter -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form class="row g-2 align-items-center" method="get">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <div class="col-md-3">
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="ค้นหา รหัสค่าย / ชื่อ / ชื่อเล่น / โรงเรียน">
+      </div>
+      <div class="col-md-2">
+        <select class="form-select form-select-sm" name="year" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select form-select-sm" name="camp" onchange="this.form.submit()">
+          <option value="">-- ทุกกลุ่มค่าย --</option>
+          <option value="2" {% if camp == '2' %}selected{% endif %}>เฉพาะที่มีรหัสค่าย 2</option>
+          <option value="1" {% if camp == '1' %}selected{% endif %}>เฉพาะค่าย 1 (ไม่มีรหัสค่าย 2)</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select form-select-sm" name="active" onchange="this.form.submit()">
+          <option value="">-- ทุกสถานะบัญชี --</option>
+          <option value="1" {% if active == '1' %}selected{% endif %}>ใช้งาน</option>
+          <option value="0" {% if active == '0' %}selected{% endif %}>ระงับการใช้งาน</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select form-select-sm" name="pw_status" onchange="this.form.submit()">
+          <option value="">-- สถานะรหัสผ่าน --</option>
+          <option value="first" {% if pw_status == 'first' %}selected{% endif %}>ยังไม่เปลี่ยน (รหัสเริ่มต้น)</option>
+          <option value="changed" {% if pw_status == 'changed' %}selected{% endif %}>เปลี่ยนรหัสผ่านแล้ว</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select form-select-sm" name="health" onchange="this.form.submit()">
+          <option value="">-- ข้อมูลสุขภาพ/อาหาร --</option>
+          <option value="disease" {% if health == 'disease' %}selected{% endif %}>เฉพาะมีโรคประจำตัว</option>
+          <option value="allergy" {% if health == 'allergy' %}selected{% endif %}>เฉพาะแพ้อาหาร</option>
+          <option value="muslim" {% if health == 'muslim' %}selected{% endif %}>เฉพาะศาสนาอิสลาม</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+        <a class="btn btn-outline-secondary btn-sm" href="{% url 'composn:admin_users' %}?year={{ year }}" title="ล้างตัวกรอง">ล้าง</a>
+        {% if is_admin_viewer %}
+        <a class="btn btn-outline-success btn-sm ms-1" href="?{{ querystring }}{% if querystring %}&{% endif %}export=xlsx">
+          <i class="bi bi-file-earmark-excel me-1"></i>Export
+        </a>
+        {% endif %}
+      </div>
+      <div class="col-auto ms-auto small text-muted d-flex flex-wrap align-items-center gap-3">
+        <span><span class="status-dot status-dot-green me-1"></span>ใช้งาน / เปลี่ยนรหัสแล้ว</span>
+        <span><span class="status-dot status-dot-red me-1"></span>ระงับ / ยังไม่เปลี่ยนรหัส</span>
+        <span><i class="bi bi-triangle-fill tri-pink me-1"></i>โรคประจำตัว</span>
+        <span><i class="bi bi-triangle-fill tri-purple me-1"></i>แพ้อาหาร</span>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if is_admin_viewer %}
+<!-- Bulk Action Bar -->
+<form method="post" action="{% url 'composn:admin_users_bulk_action' %}" id="bulkForm">
+  {% csrf_token %}
+  <div class="card mb-2 border-primary" id="bulkBar" style="display:none;">
+    <div class="card-body py-2 px-3 d-flex flex-wrap gap-2 align-items-center bg-light rounded">
+      <span class="fw-bold text-primary" id="selectedCount">0 รายการที่เลือก</span>
+      <div class="d-flex gap-2 ms-auto flex-wrap">
+        <button type="submit" name="bulk_action" value="activate" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-check-circle me-1"></i>เปิดใช้งาน
+        </button>
+        <button type="submit" name="bulk_action" value="deactivate" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-slash-circle me-1"></i>ระงับการใช้งาน
+        </button>
+        <button type="submit" name="bulk_action" value="reset_password" class="btn btn-warning btn-sm text-dark"
+                onclick="return confirm('Reset รหัสผ่านของผู้ใช้ที่เลือกกลับเป็นค่าเริ่มต้น?')">
+          <i class="bi bi-key me-1"></i>Reset รหัส
+        </button>
+        <button type="submit" name="bulk_action" value="delete" class="btn btn-danger btn-sm"
+                onclick="return confirm('ต้องการลบผู้ใช้ที่เลือก?')">
+          <i class="bi bi-trash me-1"></i>ลบที่เลือก
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+<!-- Tabs: นักเรียนปัจจุบัน / นักเรียนใช้สิทธิ์ / ทั้งหมด -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <ul class="nav nav-pills gap-2" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'current' %}active fw-bold{% else %}bg-white border text-dark{% endif %} px-3 py-2 shadow-sm"
+         href="{{ tab_url_current }}" title="นักเรียนปัจจุบัน">
+        <i class="bi bi-person-fill me-1 {% if tab == 'current' %}text-white{% else %}text-primary{% endif %}"></i>
+        นักเรียนปัจจุบัน
+        <span class="badge {% if tab == 'current' %}bg-white text-primary{% else %}bg-primary{% endif %} ms-1">
+          {{ current_count }}
+        </span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'rights' %}active fw-bold bg-success text-white{% else %}bg-white border text-dark{% endif %} px-3 py-2 shadow-sm"
+         href="{{ tab_url_rights }}" title="นักเรียนใช้สิทธิ์">
+        <i class="bi bi-award-fill me-1 {% if tab == 'rights' %}text-white{% else %}text-success{% endif %}"></i>
+        นักเรียนใช้สิทธิ์
+        <span class="badge {% if tab == 'rights' %}bg-white text-success{% else %}bg-success{% endif %} ms-1">
+          {{ rights_count }}
+        </span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'all' %}active fw-bold bg-dark text-white{% else %}bg-white border text-muted{% endif %} px-3 py-2 shadow-sm"
+         href="{{ tab_url_all }}" title="แสดงทั้งหมด (เรียงนักเรียนปัจจุบันขึ้นก่อน)">
+        <i class="bi bi-people-fill me-1"></i>
+        ทั้งหมด
+        <span class="badge {% if tab == 'all' %}bg-white text-dark{% else %}bg-secondary{% endif %} ms-1">
+          {{ all_count }}
+        </span>
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      {% if tab == 'current' %}
+        <i class="bi bi-person-fill text-primary me-1"></i><strong>นักเรียนปัจจุบัน</strong>
+      {% elif tab == 'rights' %}
+        <i class="bi bi-award-fill text-success me-1"></i><strong>นักเรียนใช้สิทธิ์</strong>
+      {% else %}
+        <i class="bi bi-people-fill me-1"></i><strong>รายชื่อผู้ใช้ทั้งหมด</strong>
+      {% endif %}
+      <span class="badge bg-primary ms-1">{{ page.paginator.count }}</span>
+      {% info_tip "คลิกที่ชื่อนักเรียน เพื่อแสดง/ซ่อนรูปภาพและข้อมูลติดต่อ\nคลิกสัญลักษณ์สามเหลี่ยม (โรคประจำตัว/แพ้อาหาร) เพื่อดูรายละเอียดเพิ่มเติม" %}
+    </span>
+    <span class="text-muted small">หน้า {{ page.number }}/{{ page.paginator.num_pages }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:0.875rem;">
+      <thead>
+        <tr>
+          {% if is_admin_viewer %}
+          <th style="width:36px;">
+            <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll(this)">
+          </th>
+          {% endif %}
+          <th class="text-center" style="width:52px;">รูป</th>
+          <th>รหัสค่าย 1</th>
+          <th>รหัสค่าย 2</th>
+          <th>ชื่อ-นามสกุล {% info_tip "คลิกที่ชื่อเพื่อดูรูปภาพและข้อมูลติดต่อ" %}</th>
+          <th>โรงเรียน</th>
+          <th class="text-center">ชั้น</th>
+          <th class="text-center">โรคประจำตัว</th>
+          <th class="text-center">แพ้อาหาร</th>
+          <th class="text-center">สถานะ</th>
+          <th class="text-center">รหัสผ่าน</th>
+          <th style="width:{% if is_admin_viewer %}175px{% else %}76px{% endif %};">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in page %}
+        <tr class="{% if not u.is_active %}table-secondary{% endif %}">
+          {% if is_admin_viewer %}
+          <td>
+            <input type="checkbox" form="bulkForm" name="user_ids" value="{{ u.pk }}"
+                   class="form-check-input user-checkbox" onchange="updateBulkBar()">
+          </td>
+          {% endif %}
+          <td class="text-center">
+            {% if u.profile_photo %}
+              <img src="{{ u.profile_photo.url }}"
+                   alt="{{ u.get_full_name }}"
+                   class="user-avatar-sm"
+                   onclick="openPhotoLightbox('{{ u.profile_photo.url }}', '{{ u.camp1_code }} {{ u.get_full_name|escapejs }}')"
+                   title="คลิกเพื่อขยาย/ย่อรูปภาพ">
+            {% else %}
+              <span class="user-avatar-placeholder" title="ยังไม่มีรูปภาพ"><i class="bi bi-person-fill"></i></span>
+            {% endif %}
+          </td>
+          <td class="code">
+            <a href="{% url 'composn:admin_user_detail' u.pk %}"
+               class="text-decoration-none {% if u.is_current_student %}code-blue{% else %}code-green{% endif %}"
+               title="{% if u.is_current_student %}นักเรียนปัจจุบัน{% else %}นักเรียนใช้สิทธิ์{% endif %}">
+              {{ u.camp1_code }}
+            </a>
+          </td>
+          <td class="code">
+            {% if u.camp2_code %}
+              <a href="{% url 'composn:admin_user_detail' u.pk %}"
+                 class="text-decoration-none {% if u.is_current_student %}code-blue{% else %}code-green{% endif %}"
+                 title="{% if u.is_current_student %}นักเรียนปัจจุบัน{% else %}นักเรียนใช้สิทธิ์{% endif %}">
+                {{ u.camp2_code }}
+              </a>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            <a href="javascript:void(0)" class="fw-semibold text-dark text-decoration-none d-inline-flex align-items-center gap-1"
+               onclick="toggleUserDetail('uinfo-{{ u.pk }}')" title="คลิกเพื่อแสดง/ซ่อนรูปภาพและข้อมูลติดต่อของนักเรียน">
+              <i class="bi bi-caret-down-fill small text-primary"></i>
+              <span>{{ u.get_full_name|default:"-" }}</span>
+              {% if u.is_muslim %}<span class="badge bg-success ms-1" style="font-size:0.68rem;">อิสลาม</span>{% endif %}
+            </a>
+            <div id="uinfo-{{ u.pk }}" class="d-none mt-1 p-2 rounded border bg-light small shadow-sm" style="min-width:220px; max-width:100%;">
+              <div class="d-flex gap-2 align-items-start">
+                <div class="flex-shrink-0 text-center">
+                  {% if u.profile_photo %}
+                    <img src="{{ u.profile_photo.url }}"
+                         alt="{{ u.get_full_name }}"
+                         onclick="openPhotoLightbox('{{ u.profile_photo.url }}', '{{ u.camp1_code }} {{ u.get_full_name|escapejs }}')"
+                         class="rounded border shadow-sm"
+                         style="width:76px;height:76px;object-fit:cover;cursor:zoom-in;"
+                         title="คลิกที่รูปเพื่อขยาย/ย่อ">
+                    <div class="text-primary mt-1" style="font-size:0.68rem;cursor:pointer;"
+                         onclick="openPhotoLightbox('{{ u.profile_photo.url }}', '{{ u.camp1_code }} {{ u.get_full_name|escapejs }}')">
+                      <i class="bi bi-zoom-in"></i> ขยายรูป
+                    </div>
+                  {% else %}
+                    <div class="rounded border bg-white d-flex align-items-center justify-content-center text-muted"
+                         style="width:76px;height:76px;">
+                      <i class="bi bi-person-circle fs-2"></i>
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="flex-grow-1">
+                  <div><strong>ชื่อ:</strong> {{ u.first_name|default:"-" }} &nbsp; <strong>นามสกุล:</strong> {{ u.last_name|default:"-" }}</div>
+                  <div><strong>ชื่อเล่น:</strong> {{ u.nickname|default:"-" }}</div>
+                  <div><strong>เบอร์โทรนักเรียน:</strong> {{ u.student_phone|default:"-" }}</div>
+                  <div><strong>เบอร์โทรผู้ปกครอง:</strong> {{ u.parent_phone|default:"-" }}</div>
+                  <div><strong>อีเมล:</strong> {{ u.email|default:"-" }}</div>
+                </div>
+              </div>
+            </div>
+          </td>
+          <td>{{ u.school_name|default:"-"|truncatechars:35 }}</td>
+          <td class="text-center fw-semibold">{{ u.display_level|default:u.current_level|default:"-" }}</td>
+          <td class="text-center">
+            {% if u.chronic_disease %}
+              <div>
+                <button type="button" class="tri-btn" onclick="toggleUserDetail('udisease-{{ u.pk }}')" title="คลิกเพื่อดูรายละเอียดโรคประจำตัว">
+                  <i class="bi bi-triangle-fill tri-pink"></i>
+                </button>
+                <div id="udisease-{{ u.pk }}" class="d-none mt-1 p-2 rounded border bg-white small text-start shadow-sm" style="border-color:#e91e63 !important;">
+                  <strong style="color:#e91e63;"><i class="bi bi-triangle-fill me-1"></i>โรคประจำตัว:</strong> {{ u.chronic_disease }}
+                </div>
+              </div>
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if u.food_allergy %}
+              <div>
+                <button type="button" class="tri-btn" onclick="toggleUserDetail('uallergy-{{ u.pk }}')" title="คลิกเพื่อดูรายละเอียดแพ้อาหาร">
+                  <i class="bi bi-triangle-fill tri-purple"></i>
+                </button>
+                <div id="uallergy-{{ u.pk }}" class="d-none mt-1 p-2 rounded border bg-white small text-start shadow-sm" style="border-color:#b388ff !important;">
+                  <strong style="color:#7e57c2;"><i class="bi bi-triangle-fill me-1"></i>แพ้อาหาร:</strong> {{ u.food_allergy }}
+                </div>
+              </div>
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if u.is_active %}
+              <span class="status-dot status-dot-green" title="ใช้งาน"></span>
+            {% else %}
+              <span class="status-dot status-dot-red" title="ระงับการใช้งาน"></span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if u.is_first_login %}
+              <span class="status-dot status-dot-red" title="ยังไม่เปลี่ยนรหัสผ่าน"></span>
+            {% else %}
+              <span class="status-dot status-dot-green" title="เปลี่ยนรหัสผ่านแล้ว"></span>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            <div class="d-flex gap-1">
+              <a class="btn btn-sm btn-outline-info py-0 px-2" href="{% url 'composn:admin_user_detail' u.pk %}" title="ดูรายละเอียด">
+                <i class="bi bi-eye"></i>{% if not is_admin_viewer %} ดู{% endif %}
+              </a>
+              {% if is_admin_viewer %}
+              <a class="btn btn-sm btn-outline-primary py-0 px-2" href="{% url 'composn:admin_user_edit' u.pk %}" title="แก้ไข">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form class="d-inline" method="post" action="{% url 'composn:admin_user_reset_password' u.pk %}"
+                    onsubmit="return confirm('Reset รหัสผ่านของ {{ u.camp1_code }} ?')">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-warning py-0 px-2" title="Reset รหัสผ่าน">
+                  <i class="bi bi-key"></i>
+                </button>
+              </form>
+              <form class="d-inline" method="post" action="{% url 'composn:admin_user_toggle' u.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-sm {% if u.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %} py-0 px-2"
+                        title="{% if u.is_active %}ระงับ{% else %}เปิด{% endif %}ใช้งาน">
+                  <i class="bi bi-{% if u.is_active %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                </button>
+              </form>
+              {% if u.pk != user.pk %}
+              <form class="d-inline" method="post" action="{% url 'composn:admin_user_delete' u.pk %}"
+                    onsubmit="return confirm('ลบผู้ใช้ {{ u.camp1_code }} ?')">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" title="ลบผู้ใช้">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="12" class="text-center text-muted py-4"><i class="bi bi-inbox fs-3 d-block mb-1"></i>ไม่พบข้อมูลผู้ใช้</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer d-flex justify-content-between align-items-center py-2">
+    <span class="text-muted small">ทั้งหมด {{ page.paginator.count }} รายการ</span>
+    <div>
+      {% if page.has_previous %}
+        <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page.previous_page_number }}">‹ ก่อนหน้า</a>
+      {% endif %}
+      <span class="mx-2 small">หน้า {{ page.number }}/{{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+        <a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page.next_page_number }}">ถัดไป ›</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.user-checkbox').forEach(c => c.checked = cb.checked);
+  updateBulkBar();
+}
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.user-checkbox:checked').length;
+  const bar = document.getElementById('bulkBar');
+  const count = document.getElementById('selectedCount');
+  bar.style.display = checked > 0 ? 'block' : 'none';
+  count.textContent = checked + ' รายการที่เลือก';
+}
+function toggleUserDetail(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('d-none');
+}
+</script>
+{% endblock %}

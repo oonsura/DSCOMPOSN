@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}Audit Log{% endblock %}
+{% block content %}
+{% include "admin/_backup_tabs.html" %}
+<h4>Audit Log</h4>
+{% if active_lockouts %}
+<div class="card border-danger mb-3 shadow-sm" id="active-lockouts-card">
+  <div class="card-header bg-danger bg-opacity-10 text-danger fw-bold d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span><i class="bi bi-shield-exclamation me-2"></i>บัญชี / IP ที่ถูกระงับการเข้าสู่ระบบชั่วคราว ({{ active_lockouts|length }})</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle small">
+        <thead class="table-light">
+          <tr><th>ประเภท</th><th>บัญชี / IP</th><th>จำนวนครั้งที่ผิด</th><th>ล่าสุดเมื่อ</th><th>เหลือเวลา</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for lk in active_lockouts %}
+          <tr>
+            <td>{% if lk.lock_type == 'username' %}<span class="badge bg-warning text-dark">บัญชีผู้ใช้</span>{% else %}<span class="badge bg-danger">IP Address</span>{% endif %}</td>
+            <td class="code fw-bold">{{ lk.lock_value }}</td>
+            <td>{{ lk.fail_count }} ครั้ง</td>
+            <td class="text-nowrap">{{ lk.last_failed_at|date:"d/m/Y H:i:s" }}</td>
+            <td>ประมาณ {{ lk.remaining_minutes }} นาที</td>
+            <td class="text-end">
+              <form method="post" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="unlock_login">
+                <input type="hidden" name="lock_type" value="{{ lk.lock_type }}">
+                <input type="hidden" name="lock_value" value="{{ lk.lock_value }}">
+                <button type="submit" class="btn btn-sm btn-outline-success py-0"><i class="bi bi-unlock me-1"></i>ปลดล็อก</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-4"><input class="form-control" name="q" value="{{ q }}" placeholder="ค้นหา ผู้กระทำ/ค่า/ตาราง"></div>
+  <div class="col-md-3"><select class="form-select" name="action"><option value="">ทุกการกระทำ</option>{% for k, v in action_labels.items %}<option value="{{ k }}" {% if action == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><button class="btn btn-primary">ค้นหา</button></div>
+</form>
+<div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm table-hover mb-0 small">
+  <thead class="table-light"><tr><th>เวลา</th><th>ผู้กระทำ</th><th>การกระทำ</th><th>เป้าหมาย</th><th>ค่าเดิม</th><th>ค่าใหม่</th><th>IP</th></tr></thead>
+  {% for l in page %}<tr><td class="text-nowrap">{{ l.created_at|date:"d/m/Y H:i:s" }}</td><td class="code">{{ l.user.camp1_code|default:"-" }}</td>
+    <td>{% for k, v in action_labels.items %}{% if k == l.action %}{{ v }}{% endif %}{% endfor %}</td>
+    <td>{{ l.target_model }}{% if l.target_id %} #{{ l.target_id }}{% endif %}</td><td class="text-break">{{ l.old_value|truncatechars:120 }}</td><td class="text-break">{{ l.new_value|truncatechars:160 }}</td><td>{{ l.ip_address }}</td></tr>
+  {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">ไม่มีข้อมูล</td></tr>{% endfor %}
+</table></div></div></div>
+<nav class="mt-3 d-flex justify-content-between"><span class="text-muted small">ทั้งหมด {{ page.paginator.count }} รายการ</span>
+  <div>{% if page.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page.previous_page_number }}">‹</a>{% endif %}
+  <span class="mx-2">{{ page.number }}/{{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{{ querystring }}&page={{ page.next_page_number }}">›</a>{% endif %}</div></nav>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}คำนวณระดับชั้น{% endblock %}
+{% block content %}
+<h4>
+  คำนวณระดับชั้น +1 ถึง +5
+  {% info_tip "ระบบอ่าน current_level แล้วคำนวณ year_plus_1 ถึง year_plus_5 ปีที่เกิน ม.6 / ปวช.3 จะเขียนว่า \"หมดสิทธิ์\" (รองรับ ป.1-ป.6, ม.1-ม.6 และ ปวช.1-ปวช.3)\nตัวอย่าง: ม.4 -> ม.5, ม.6, หมดสิทธิ์, หมดสิทธิ์, หมดสิทธิ์" %}
+</h4>
+<div class="card mb-3"><div class="card-body">
+  <form method="post" onsubmit="return confirm('คำนวณระดับชั้นของสมาชิกทั้งหมด?')">{% csrf_token %}
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="only_empty" id="oe"><label for="oe" class="form-check-label">คำนวณเฉพาะคนที่ยังไม่มีค่า</label></div>
+    <button class="btn btn-primary">คำนวณระดับชั้น</button>
+  </form>
+</div></div>
+<div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0">
+  <thead class="table-light"><tr><th>รหัส</th><th>ชื่อ</th><th>ปัจจุบัน</th><th>+1</th><th>+2</th><th>+3</th><th>+4</th><th>+5</th></tr></thead>
+  {% for u in sample %}<tr><td class="code">{{ u.camp1_code }}</td><td>{{ u.get_full_name }}</td><td>{{ u.current_level }}</td><td>{{ u.year_plus_1 }}</td><td>{{ u.year_plus_2 }}</td><td>{{ u.year_plus_3 }}</td><td>{{ u.year_plus_4 }}</td><td>{{ u.year_plus_5 }}</td></tr>{% endfor %}
+</table></div></div></div>
+{% endblock %}

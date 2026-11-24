@@ -1,0 +1,387 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}แบบลงชื่อ{% endblock %}
+{% block extra_head %}
+<style>
+  .signin-sheet-page {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .signin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .signin-logo-box {
+    width: 68px;
+    flex: 0 0 68px;
+    text-align: center;
+    background: transparent;
+  }
+  .signin-logo-box img {
+    max-height: 62px;
+    max-width: 66px;
+    object-fit: contain;
+    background: transparent;
+  }
+  .signin-title-box {
+    flex: 1;
+    text-align: center;
+    line-height: 1.3;
+    color: #000;
+  }
+  .signin-title-l1 { font-size: 0.98rem; font-weight: 700; }
+  .signin-title-l2 { font-size: 0.88rem; font-weight: 600; }
+  .signin-title-l3 { font-size: 0.9rem; font-weight: 700; }
+  .signin-title-l4 {
+    display: inline-block;
+    margin-top: 2px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border-bottom: 1.5px solid #000;
+    padding: 0 10px;
+  }
+  .signin-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.78rem;
+    color: #000;
+  }
+  .signin-table th,
+  .signin-table td {
+    border: 1px solid #333;
+    padding: 2px 3px;
+    vertical-align: middle;
+    line-height: 1.18;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .signin-table thead th {
+    background: #f1f3f5;
+    text-align: center;
+    font-weight: 700;
+    padding: 3px 2px;
+    white-space: normal;
+  }
+  .signin-table td.col-no { text-align: center; }
+  .signin-table td.col-code { text-align: center; font-weight: 600; white-space: nowrap; }
+  .signin-table td.col-name { white-space: nowrap; }
+  .signin-table td.col-grade { text-align: center; white-space: nowrap; }
+  .signin-table td.col-school { white-space: nowrap; font-size: 0.72rem; }
+  .signin-table td.col-sign { height: 22px; }
+  .signin-table .split-divider {
+    border-left: 2px solid #000 !important;
+  }
+
+  @media print {
+    @page {
+      size: A4 landscape;
+      margin: 5mm 6mm;
+    }
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .sidebar, .topbar, .sidebar-overlay, .no-print, .alert {
+      display: none !important;
+    }
+    .main-content {
+      margin-left: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+    }
+    .content-area {
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: visible !important;
+    }
+    .table-responsive {
+      overflow: visible !important;
+    }
+    .signin-sheet-page {
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      page-break-after: always;
+      break-after: page;
+    }
+    .signin-sheet-page:last-of-type {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .signin-header {
+      margin-bottom: 2.5mm;
+    }
+    .signin-logo-box {
+      width: 16mm;
+      flex: 0 0 16mm;
+    }
+    .signin-logo-box img {
+      max-height: 15mm;
+      max-width: 16mm;
+    }
+    .signin-title-box { line-height: 1.2; }
+    .signin-title-l1 { font-size: 11.5pt; }
+    .signin-title-l2 { font-size: 10pt; }
+    .signin-title-l3 { font-size: 10.5pt; }
+    .signin-title-l4 { font-size: 10pt; margin-top: 1px; }
+    .signin-table {
+      font-size: 8.2pt;
+    }
+    .signin-table th,
+    .signin-table td {
+      padding: 1.2px 2.5px;
+      line-height: 1.15;
+    }
+    .signin-table td.col-school { font-size: 7.4pt; }
+    .signin-table td.col-sign { height: 5.5mm; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+{% include "food/_attendance_tabs.html" %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center no-print">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-card-checklist me-2 text-primary"></i>แบบลงชื่อ
+      {% info_tip "วันอบรม: เฉพาะนักเรียนปัจจุบัน (1 วัน = 2 แผ่น เช้า/บ่าย)\nวันสอบ: แยกแผ่น นักเรียนปัจจุบัน และ นักเรียนใช้สิทธิ์ คนละแผ่นกัน" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="?{{ pdf_query }}" class="btn btn-danger btn-sm fw-bold {% if not sheets %}disabled{% endif %}">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF ({{ sheets|length }} แผ่น)
+    </a>
+    <a href="?{{ docx_query }}" class="btn btn-primary btn-sm fw-bold {% if not sheets %}disabled{% endif %}">
+      <i class="bi bi-file-earmark-word me-1"></i>Export Word (.docx)
+    </a>
+    <a href="?{{ xlsx_query }}" class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+    </a>
+    {% if user.can_attendance %}
+    <a href="{% url 'food:staff_attendance' %}?year={{ year }}&date={{ date_start|date:'Y-m-d' }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-calendar2-check me-1"></i>บันทึกเวลาเรียน
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ตัวกรองเลือกช่วงวันที่ / วันอบรม / วันสอบ / ภาคเวลา -->
+<div class="card mb-3 no-print">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end" id="signin-filter-form">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ปีการศึกษา</label>
+        <select name="year" class="form-select form-select-sm" onchange="if(this.form.td_id){this.form.td_id.value='';} this.form.submit();">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปี {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ตั้งแต่วันที่</label>
+        <input type="date" name="date_start" value="{{ date_start|date:'Y-m-d' }}" class="form-control form-control-sm"
+               onchange="if(this.form.td_id){this.form.td_id.value='';} if(this.form.date_end.value && this.form.date_end.value < this.value){this.form.date_end.value=this.value;}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ถึงวันที่</label>
+        <input type="date" name="date_end" value="{{ date_end|date:'Y-m-d' }}" class="form-control form-control-sm"
+               onchange="if(this.form.td_id){this.form.td_id.value='';}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ประเภทใบลงชื่อ</label>
+        <select name="mode" class="form-select form-select-sm" onchange="if(this.form.td_id){this.form.td_id.value='';}">
+          <option value="auto" {% if mode == 'auto' %}selected{% endif %}>ตามตารางวัน (อบรม/สอบ)</option>
+          <option value="training" {% if mode == 'training' %}selected{% endif %}>แบบลงชื่อเข้าอบรม</option>
+          <option value="exam" {% if mode == 'exam' %}selected{% endif %}>แบบลงชื่อเข้าสอบ</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label small fw-semibold mb-1">ค่าย</label>
+        <select name="camp" class="form-select form-select-sm">
+          <option value="1" {% if camp == 1 %}selected{% endif %}>ค่าย 1</option>
+          <option value="2" {% if camp == 2 %}selected{% endif %}>ค่าย 2</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ภาคเวลา (แผ่น)</label>
+        <select name="period" class="form-select form-select-sm">
+          <option value="both" {% if period_opt == 'both' %}selected{% endif %}>ทั้งวัน (เช้า + บ่าย)</option>
+          <option value="morning" {% if period_opt == 'morning' %}selected{% endif %}>เฉพาะภาคเช้า</option>
+          <option value="afternoon" {% if period_opt == 'afternoon' %}selected{% endif %}>เฉพาะภาคบ่าย</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> แสดง</button>
+      </div>
+
+      {% if training_dates %}
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1 text-muted">ทางลัด: เลือกวันเดียวจากตาราง</label>
+        <select name="td_id" class="form-select form-select-sm" onchange="if(this.value){this.form.date_start.value='';this.form.date_end.value='';} this.form.submit();">
+          <option value="">-- ใช้ช่วงวันที่ด้านบน --</option>
+          {% for td in training_dates %}
+          <option value="{{ td.pk }}" {% if selected_td and selected_td.pk == td.pk %}selected{% endif %}>
+            {{ td.date|date_thai }} · {{ td.get_event_type_display }}{% if td.title %} ({{ td.title }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <a href="?year={{ year }}&camp={{ camp }}&period={{ period_opt }}&range_all=1"
+           class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-calendar-range me-1"></i>เลือกทุกวันอบรม/สอบทั้งค่าย ({{ training_dates|length }} วัน)
+        </a>
+      </div>
+      {% endif %}
+      <div class="col-auto ms-auto small text-muted d-flex flex-wrap gap-2 align-items-center">
+        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">นักเรียนปัจจุบัน {{ current_rows|length }} คน</span>
+        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">นักเรียนใช้สิทธิ์ {{ rights_rows|length }} คน (เฉพาะวันสอบ)</span>
+        <span class="badge bg-secondary">รวม {{ day_entries|length }} วัน · {{ sheets|length }} แผ่น</span>
+        {% if skipped_holidays %}
+        <span class="badge bg-dark">ข้ามวันหยุด {{ skipped_holidays }} วัน</span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- แผ่นใบลงชื่อ A4 แนวนอน (1 แผ่นต่อ 1 ภาคเวลา · แยกแผ่นนักเรียนปัจจุบัน/นักเรียนใช้สิทธิ์ในวันสอบ) -->
+{% for sheet in sheets %}
+<div class="signin-sheet-page">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1 no-print">
+    <div class="d-flex align-items-center gap-1 flex-wrap">
+      <span class="badge {% if sheet.day_mode == 'exam' %}bg-danger{% else %}bg-primary{% endif %}">
+        แผ่นที่ {{ forloop.counter }} / {{ sheets|length }}
+      </span>
+      <span class="badge bg-light text-dark border">{{ sheet.date_thai_header }}</span>
+      <span class="badge {% if sheet.group_key == 'rights' %}bg-success{% else %}bg-info text-dark{% endif %}">
+        {{ sheet.group_label }}
+      </span>
+      <span class="badge bg-secondary">
+        {{ sheet.period_label }}{% if sheet.total_pages > 1 %} (หน้า {{ sheet.page_no }}/{{ sheet.total_pages }}){% endif %}
+      </span>
+    </div>
+    <span class="small text-muted">จำนวน {{ sheet.count }} คน</span>
+  </div>
+
+  <!-- หัวใบลงชื่อ: ซ้าย = ตราโรงเรียนเทพศิรินทร์ · กลาง = ข้อความ สอวน. · ขวา = ตรา สอวน. -->
+  <div class="signin-header">
+    <div class="signin-logo-box">
+      {% if setting.logo_school %}
+        <img src="{{ setting.logo_school.url }}" alt="ตราโรงเรียนเทพศิรินทร์">
+      {% else %}
+        <span class="small text-muted no-print" style="font-size:0.65rem;">ตราโรงเรียน</span>
+      {% endif %}
+    </div>
+    <div class="signin-title-box">
+      <div class="signin-title-l1">ศูนย์ส่งเสริมโอลิมปิกวิชาการและพัฒนามาตรฐานวิทยาศาสตร์ศึกษา</div>
+      <div class="signin-title-l2">ในพระอุปถัมภ์สมเด็จพระเจ้าพี่นางเธอ เจ้าฟ้ากัลยาณิวัฒนา กรมหลวงนราธิวาสราชนครินทร์ (สอวน.)</div>
+      <div class="signin-title-l3">สาขาวิชาคอมพิวเตอร์ ค่าย {{ camp }} ศูนย์โรงเรียนเทพศิรินทร์  {{ sheet.date_thai_header }}</div>
+      <div class="signin-title-l4">
+        {{ sheet.title_line4 }}
+        {% if sheet.total_pages > 1 %} — หน้า {{ sheet.page_no }}/{{ sheet.total_pages }}{% endif %}
+      </div>
+    </div>
+    <div class="signin-logo-box">
+      {% if setting.logo_posn %}
+        <img src="{{ setting.logo_posn.url }}" alt="ตรา สอวน.">
+      {% elif setting.logo_center %}
+        <img src="{{ setting.logo_center.url }}" alt="ตรา สอวน.">
+      {% else %}
+        <span class="small text-muted no-print" style="font-size:0.65rem;">ตรา สอวน.</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ตาราง 2 คอลัมน์ซ้าย-ขวา (12 ช่อง) พอดี 50–52 คนใน 1 แผ่น A4 แนวนอน -->
+  <div class="table-responsive">
+    <table class="signin-table">
+      <colgroup>
+        <col style="width:3.5%;">
+        <col style="width:6.8%;">
+        <col style="width:14.5%;">
+        <col style="width:4.2%;">
+        <col style="width:13.0%;">
+        <col style="width:8.0%;">
+        <col style="width:3.5%;">
+        <col style="width:6.8%;">
+        <col style="width:14.5%;">
+        <col style="width:4.2%;">
+        <col style="width:13.0%;">
+        <col style="width:8.0%;">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>ลำดับ</th>
+          <th>เลขประจำตัว<br>ค่าย</th>
+          <th>ชื่อ-นามสกุล</th>
+          <th>ระดับ<br>ชั้น</th>
+          <th>โรงเรียน</th>
+          <th>ลงชื่อ</th>
+          <th class="split-divider">ลำดับ</th>
+          <th>เลขประจำตัว<br>ค่าย</th>
+          <th>ชื่อ-นามสกุล</th>
+          <th>ระดับ<br>ชั้น</th>
+          <th>โรงเรียน</th>
+          <th>ลงชื่อ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pair in sheet.paired_rows %}
+        <tr>
+          <td class="col-no">{{ pair.left.no }}</td>
+          <td class="col-code">{{ pair.left.code }}</td>
+          <td class="col-name">{{ pair.left.full_name }}</td>
+          <td class="col-grade">{{ pair.left.grade }}</td>
+          <td class="col-school" title="{{ pair.left.school }}">{{ pair.left.school }}</td>
+          <td class="col-sign"></td>
+          {% if pair.right %}
+          <td class="col-no split-divider">{{ pair.right.no }}</td>
+          <td class="col-code">{{ pair.right.code }}</td>
+          <td class="col-name">{{ pair.right.full_name }}</td>
+          <td class="col-grade">{{ pair.right.grade }}</td>
+          <td class="col-school" title="{{ pair.right.school }}">{{ pair.right.school }}</td>
+          <td class="col-sign"></td>
+          {% else %}
+          <td class="col-no split-divider"></td>
+          <td class="col-code"></td>
+          <td class="col-name"></td>
+          <td class="col-grade"></td>
+          <td class="col-school"></td>
+          <td class="col-sign"></td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="12" class="text-center text-muted py-4">
+            {% if sheet.group_key == 'rights' %}
+              ยังไม่มีผู้ยืนยันใช้สิทธิ์สอบท้ายค่าย {{ camp }} ในปีการศึกษา {{ year }}
+            {% else %}
+              ไม่พบรายชื่อนักเรียนในปีการศึกษา {{ year }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="alert alert-secondary text-center py-4">
+  <i class="bi bi-calendar-x fs-3 d-block mb-2"></i>
+  ช่วงวันที่ที่เลือกไม่มีวันอบรมหรือวันสอบ (อาจเป็นวันหยุดทั้งหมด) กรุณาเลือกช่วงวันที่ใหม่
+</div>
+{% endfor %}
+{% endblock %}

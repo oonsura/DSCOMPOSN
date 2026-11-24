@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}{{ title }}{% endblock %}
+{% block breadcrumb %}<a href="{% url 'composn:admin_users' %}">ผู้ใช้ (นักเรียน/สมาชิก)</a> / {{ title }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-file-earmark-excel me-2 text-success"></i>{{ title }}
+      {% info_tip "อัปโหลดไฟล์ Excel (.xlsx) หรือ CSV (.csv) เพื่อนำเข้าหรืออัปเดตข้อมูลสมาชิก คอลัมน์ในไฟล์สามารถเรียงลำดับสลับกันได้ ระบบจะจับคู่ลงฐานข้อมูลตามชื่อหัวคอลัมน์" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-success btn-sm" href="{% url template_url %}">
+      <i class="bi bi-file-earmark-arrow-down me-1"></i>ดาวน์โหลดไฟล์ตัวอย่าง (Template ภาษาไทย)
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{% url template_url %}?lang=en">
+      <i class="bi bi-file-earmark-code me-1"></i>Template (หัวตารางอังกฤษ)
+    </a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'composn:admin_users' %}">
+      <i class="bi bi-people me-1"></i>ผู้ใช้ (นักเรียน/สมาชิก)
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Upload Card -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header fw-bold">
+        <i class="bi bi-cloud-upload me-2 text-primary"></i>ขั้นตอนที่ 1: เลือกไฟล์ Excel (.xlsx)
+        {% if notes %}{% info_tip "• " notes|join:"\n• " %}{% endif %}
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ไฟล์ Excel (.xlsx / .csv) <span class="text-danger">*</span></label>
+            {{ form.file }}
+            {% for e in form.file.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            {% if supports_preview %}
+            <button type="submit" name="action" value="preview" class="btn btn-outline-primary flex-grow-1">
+              <i class="bi bi-eye me-1"></i>ตรวจสอบข้อมูลก่อน (Preview)
+            </button>
+            {% endif %}
+            <button type="submit" name="action" value="import" class="btn btn-primary flex-grow-1">
+              <i class="bi bi-cloud-arrow-up me-1"></i>อัปโหลดและนำเข้าทันที
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table me-2 text-info"></i>หัวตารางที่รองรับ</span>
+        {% if notes %}{% info_tip "ข้อกำหนดเพิ่มเติม:\n• " notes|join:"\n• " %}{% endif %}
+      </div>
+      <div class="card-body small py-2">
+        <div class="mb-2">
+          <strong class="text-success d-block mb-1">ภาษาไทย:</strong>
+          <div class="d-flex flex-wrap gap-1">
+            {% for c in columns %}<span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">{{ c }}</span>{% endfor %}
+          </div>
+        </div>
+        {% if columns_en %}
+        <div>
+          <strong class="text-primary d-block mb-1">ภาษาอังกฤษ:</strong>
+          <div class="d-flex flex-wrap gap-1">
+            {% for c in columns_en %}<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle code">{{ c }}</span>{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Preview or Result -->
+  <div class="col-lg-8">
+    {% if preview %}
+    <div class="card mb-3">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-list-check me-2 text-primary"></i>ขั้นตอนที่ 2: ตรวจสอบผลการอ่านข้อมูล ({{ preview.total }} แถว)</span>
+        <div>
+          <span class="badge bg-success me-1">ถูกต้อง: {{ preview.valid_count }}</span>
+          <span class="badge bg-danger">ผิดพลาด: {{ preview.invalid_count }}</span>
+        </div>
+      </div>
+      {% if preview.matched_columns or preview.ignored_columns %}
+      <div class="px-3 py-2 bg-light border-bottom small">
+        {% if preview.matched_columns %}
+        <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+          <span class="fw-semibold text-primary me-1"><i class="bi bi-diagram-3 me-1"></i>จับคู่คอลัมน์:</span>
+          {% for mc in preview.matched_columns %}
+            <span class="badge bg-white text-dark border">{{ mc.col_letter }}: {{ mc.header }} &rarr; <strong class="text-primary">{{ mc.label }}</strong></span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if preview.ignored_columns %}
+        <div class="d-flex flex-wrap align-items-center gap-1 text-muted">
+          <span class="me-1">คอลัมน์ที่ข้าม:</span>
+          {% for ic in preview.ignored_columns %}
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border">{{ ic }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height:460px; overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0 text-nowrap" style="font-size:0.8rem;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th>แถว</th>
+                <th>รหัสค่าย 1</th>
+                <th>ชื่อ-นามสกุล</th>
+                <th>ชื่อเล่น</th>
+                <th>โรงเรียน</th>
+                <th>วันเกิด</th>
+                <th>ปี</th>
+                <th>ชั้น</th>
+                <th>เบอร์นักเรียน</th>
+                <th>เบอร์ผู้ปกครอง</th>
+                <th>อีเมล</th>
+                <th>โรคประจำตัว</th>
+                <th>แพ้อาหาร</th>
+                <th>อิสลาม</th>
+                <th>หมายเหตุ</th>
+                <th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in preview.rows %}
+              <tr class="{% if not r.valid %}table-danger{% elif r.is_update %}table-warning{% endif %}">
+                <td>{{ r.rownum }}</td>
+                <td class="code fw-bold">{{ r.camp1_code }}</td>
+                <td>{{ r.first_name }} {{ r.last_name }}</td>
+                <td>{{ r.nickname|default:"-" }}</td>
+                <td>{{ r.school_name|default:"-"|truncatechars:22 }}</td>
+                <td>{{ r.birth_date|default:"-" }}</td>
+                <td>{{ r.academic_year|default:"-" }}</td>
+                <td>{{ r.current_level|default:"-" }}</td>
+                <td>{{ r.student_phone|default:"-" }}</td>
+                <td>{{ r.parent_phone|default:"-" }}</td>
+                <td>{{ r.email|default:"-" }}</td>
+                <td>{{ r.chronic_disease|default:"-"|truncatechars:18 }}</td>
+                <td>{{ r.food_allergy|default:"-"|truncatechars:18 }}</td>
+                <td class="text-center">{% if r.is_muslim %}<span class="badge bg-success">ใช่</span>{% else %}-{% endif %}</td>
+                <td>{{ r.note|default:"-"|truncatechars:18 }}</td>
+                <td>
+                  {% if r.valid %}
+                    {% if r.is_update %}<span class="badge bg-warning text-dark">ทับข้อมูลเดิม</span>
+                    {% else %}<span class="badge bg-success">สร้างใหม่</span>{% endif %}
+                    {% if r.warnings %}<div class="text-warning small">{{ r.warnings|join:", " }}</div>{% endif %}
+                  {% else %}
+                    <span class="text-danger small">{{ r.errors|join:", " }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-between align-items-center bg-light">
+        <span class="small text-muted">
+          ตรวจสอบข้อมูลให้ถูกต้องก่อนกดยืนยัน
+          {% info_tip "สมาชิกใหม่จะใช้รหัสค่าย 1 เป็นรหัสผ่านเริ่มต้น และระบบบังคับให้เปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก" %}
+        </span>
+        {% if preview.valid_count > 0 %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="confirm_import">
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check2-circle me-1"></i>ยืนยันนำเข้าข้อมูลที่ถูกต้อง ({{ preview.valid_count }} รายการ)
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-check-circle-fill text-success me-2"></i>ผลการนำเข้าข้อมูล (ทั้งหมด {{ result.total }} แถว)</span>
+      </div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          {% if result.created is not None %}
+            <span class="badge bg-success fs-6">สร้างใหม่ {{ result.created }} คน</span>
+            <span class="badge bg-primary fs-6">ทับข้อมูลเดิม {{ result.updated }} คน</span>
+          {% else %}
+            <span class="badge bg-success fs-6">อัปเดต {{ result.updated }} คน</span>
+          {% endif %}
+          <span class="badge {% if result.errors %}bg-danger{% else %}bg-secondary{% endif %} fs-6">
+            ข้อผิดพลาด/คำเตือน {{ result.errors|length }} รายการ
+          </span>
+        </div>
+        {% if result.errors %}
+        <div class="table-responsive" style="max-height:360px; overflow-y:auto;">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light"><tr><th style="width:80px;">แถวที่</th><th>รายละเอียดปัญหา / คำเตือน</th></tr></thead>
+            <tbody>
+              {% for r, m in result.errors %}
+              <tr><td class="text-center fw-bold">{{ r }}</td><td class="text-danger">{{ m }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-success mb-0">นำเข้าข้อมูลครบทุกแถวโดยไม่มีข้อผิดพลาด</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

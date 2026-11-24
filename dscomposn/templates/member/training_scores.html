@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ข้อมูลการอบรม{% if selected_year %} (ปีการศึกษา {{ selected_year }}){% endif %}{% endblock %}
+{% block breadcrumb %}ข้อมูลการอบรม{% if selected_year %} / ปีการศึกษา {{ selected_year }}{% endif %}{% endblock %}
+{% block extra_css %}
+<style>
+  .yr-collapse-btn[aria-expanded="true"] .yr-chev {
+    transform: rotate(180deg);
+  }
+  .yr-chev {
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }
+  .score-cat-toggle {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  .score-cat-toggle:hover {
+    background-color: #f0f6ff !important;
+  }
+  .att-day-chip {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fff;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+  }
+  .att-slot-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .att-slot-present { background: #e8f5e9; color: #1b5e20; }
+  .att-slot-absent { background: #fdecea; color: #b71c1c; }
+  .att-slot-sick { background: #fff3e0; color: #c85a00; }
+  .att-slot-personal { background: #f3e8ff; color: #6f42c1; }
+  .att-slot-none { background: #f1f3f5; color: #6c757d; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-journal-text me-2 text-primary"></i>ข้อมูลการอบรม
+      {% if selected_year %}<span class="text-muted fw-normal fs-5">· ปีการศึกษา {{ selected_year }}</span>{% endif %}
+      {% info_tip "แสดงผลคะแนน เวลาเรียน และผลการคัดเลือกประจำปีการศึกษาที่เลือก" %}
+    </h4>
+  </div>
+  {% if member_training_years|length > 1 %}
+  <div class="btn-group btn-group-sm">
+    {% for myr in member_training_years %}
+    <a href="{% url 'composn:training_scores_year' myr.year %}"
+       class="btn {% if selected_year == myr.year %}btn-primary{% else %}btn-outline-primary{% endif %}">
+      ปีการศึกษา {{ myr.year }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% include "member/_year_results.html" with hide_section_title=True %}
+{% endblock %}

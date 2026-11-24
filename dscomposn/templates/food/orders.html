@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}รายการอาหาร{% endblock %}
+{% block breadcrumb %}รายการอาหาร{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-calendar-week me-2 text-primary"></i>รายการอาหาร
+      {% info_tip "จัดการรายการอาหารและเมนูประจำวัน (หัวการ์ดเปลี่ยนสีตามวันในสัปดาห์)" %}
+    </h4>
+  </div>
+  <a href="{% url 'food:order_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>สร้างรายการใหม่
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-3">
+        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหาชื่อร้านอาหาร">
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="" {% if not flt %}selected{% endif %}>ทุกสถานะ</option>
+          <option value="active" {% if flt == 'active' %}selected{% endif %}>กำลังดำเนินการ (เปิดเลือก)</option>
+          <option value="closed" {% if flt == 'closed' %}selected{% endif %}>ปิดการแก้ไข</option>
+          <option value="completed" {% if flt == 'completed' %}selected{% endif %}>ดำเนินการเรียบร้อย</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+        <a href="{% url 'food:orders' %}?reset=1" class="btn btn-outline-secondary btn-sm ms-1">ล้าง</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Food Order Cards -->
+<div class="row g-3">
+  {% for o in orders %}
+  {% with status=o.get_status %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card food-card h-100 shadow-sm {% if status == 'completed' %}completed{% endif %}">
+      <!-- การ์ดตามสีวันในสัปดาห์ -->
+      <div class="food-header" style="background: linear-gradient(135deg, {{ o.day_color }}, {{ o.day_color }}dd); color: #fff; padding: 0.9rem 1rem;">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+          <div class="d-flex align-items-center gap-1 flex-wrap">
+            <span class="badge bg-white text-dark shadow-sm" style="font-size:0.75rem;">วัน{{ o.day_name }}</span>
+            <div class="btn-group btn-group-sm bg-white rounded p-0 shadow-sm" role="group">
+              <a href="{% url 'food:order_detail' o.pk %}" class="btn btn-light btn-sm text-primary py-0 px-2" title="จัดการเมนู / ดูยอด">
+                <i class="bi bi-list-ul"></i> เมนู/ยอด
+              </a>
+              <a href="{% url 'food:order_report' o.pk %}" class="btn btn-light btn-sm text-success py-0 px-2" title="สรุป &amp; พิมพ์ A4">
+                <i class="bi bi-file-earmark-bar-graph"></i> สรุป/A4
+              </a>
+              <a href="{% url 'food:order_edit' o.pk %}" class="btn btn-light btn-sm text-warning py-0 px-1" title="แก้ไข">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'food:order_copy' o.pk %}" class="btn btn-light btn-sm text-info py-0 px-1" title="คัดลอก">
+                <i class="bi bi-copy"></i>
+              </a>
+              <form method="post" action="{% url 'food:order_action' o.pk %}" class="d-inline"
+                    onsubmit="return confirm('ลบรายการอาหาร {{ o.restaurant_name }}?')">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" class="btn btn-light btn-sm text-danger py-0 px-1" title="ลบ">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div class="text-end">
+            <div>
+              {% if status == 'active' %}<span class="badge bg-success shadow-sm">กำลังเปิดเลือก</span>
+              {% elif status == 'closed' %}<span class="badge bg-warning text-dark shadow-sm">ปิดแก้ไข</span>
+              {% else %}<span class="badge bg-light text-dark shadow-sm">เสร็จสิ้น</span>{% endif %}
+            </div>
+            <div class="mt-1">
+              <form method="post" action="{% url 'food:order_action' o.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit"
+                        class="btn btn-sm {% if o.edit_toggle_open %}btn-dark{% else %}btn-secondary{% endif %} py-0 px-2"
+                        style="font-size: 0.72rem;"
+                        {% if status == 'completed' %}disabled{% endif %}>
+                  <i class="bi bi-toggle-{% if o.edit_toggle_open %}on text-success{% else %}off{% endif %} me-1"></i>
+                  {% if o.edit_toggle_open %}เปิดให้แก้ไข{% else %}ปิดแก้ไข{% endif %}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h6 class="fw-bold mb-1 fs-5 text-white">{{ o.restaurant_name }}</h6>
+          <div class="text-white opacity-95 small">
+            <i class="bi bi-calendar3 me-1"></i>{{ o.date_full }}
+            <span class="badge bg-white text-dark ms-1 fw-semibold">เลือกแล้ว {{ o.selected_student_count }} คน / {{ o.eligible_student_count }} คน</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-1 mb-2">
+          <span class="badge bg-light text-dark border">เลือกได้ {{ o.max_selection_count }} อย่าง</span>
+          <span class="badge bg-light text-dark border">{{ o.get_selection_mode_display }}</span>
+          {% if o.allow_current_students %}<span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">นักเรียนปัจจุบัน</span>{% endif %}
+          {% if o.allow_rights_students %}<span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">นักเรียนใช้สิทธิ์</span>{% endif %}
+        </div>
+
+        <div class="border rounded p-2 bg-light mb-1">
+          <div class="small fw-bold text-muted mb-1"><i class="bi bi-list-ul me-1"></i>รายการเมนูทั้งหมด ({{ o.menus.all|length }} เมนู):</div>
+          <ol class="mb-0 ps-3 small" style="max-height:115px; overflow-y:auto;">
+            {% for m in o.menus.all %}
+            <li class="py-0">
+              <span class="fw-semibold text-dark">{{ m.menu_name }}</span>
+              {% if m.menu_description %}<span class="text-muted" style="font-size:0.75rem;"> - {{ m.menu_description }}</span>{% endif %}
+            </li>
+            {% empty %}
+            <li class="text-muted">ยังไม่ได้เพิ่มเมนูอาหาร</li>
+            {% endfor %}
+          </ol>
+        </div>
+
+        {% if o.additional_detail %}
+        <p class="small text-muted mb-0 pt-1"><i class="bi bi-info-circle me-1"></i>{{ o.additional_detail }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% empty %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+        <h5>ไม่พบรายการอาหาร</h5>
+        <p class="small mb-0">คลิกปุ่ม "สร้างรายการใหม่" ด้านบนเพื่อเพิ่มรายการอาหาร</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}สรุปเวลาเรียน{% endblock %}
+{% block content %}
+{% include "food/_attendance_tabs.html" %}
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    สรุปเวลาเรียน ปีการศึกษา {{ year }} <small class="text-muted">(ขาดอบรมสูงสุด {{ setting.max_absences }} ครั้ง)</small>
+    {% info_tip "ขาดอบรม, ลาป่วย และ ลากิจ นับรวมเป็นจำนวนครั้งขาดอบรมทั้งหมด" %}
+  </h4>
+  <a class="btn btn-sm btn-outline-secondary" href="?year={{ year }}&center={{ center|urlencode }}&q={{ q|urlencode }}&only={{ only|urlencode }}&export=xlsx"><i class="bi bi-download"></i> Excel</a>
+</div>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <select name="year" class="form-select" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+      {% for y in academic_year_choices %}
+        <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4"><input class="form-control" name="q" value="{{ q }}" placeholder="ค้นหารหัส/ชื่อ"></div>
+  <div class="col-md-3"><select class="form-select" name="only"><option value="">ทุกคน</option><option value="warn" {% if only == 'warn' %}selected{% endif %}>เฉพาะที่เคยขาดอบรม</option></select></div>
+  <div class="col-md-2 col-lg-1"><button class="btn btn-primary w-100">แสดง</button></div>
+</form>
+<div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm table-hover mb-0">
+  <thead class="table-light">
+    <tr>
+      <th>รหัส</th>
+      <th>ชื่อ-นามสกุล</th>
+      <th class="text-center">เข้าอบรม</th>
+      <th class="text-center">ขาดอบรม</th>
+      <th class="text-center">ลาป่วย</th>
+      <th class="text-center">ลากิจ</th>
+      <th class="text-center">รวมขาดอบรม</th>
+      <th>สถานะ</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td class="code"><a href="{% url 'food:attendance_history' r.user.pk %}">{{ r.user.camp1_code }}</a></td>
+    <td>{{ r.user.get_full_name }}</td>
+    <td class="text-center text-success">{{ r.present }}</td>
+    <td class="text-center text-danger">{{ r.absent_only }}</td>
+    <td class="text-center" style="color:#c85a00;">{{ r.sick }}</td>
+    <td class="text-center" style="color:#6f42c1;">{{ r.personal }}</td>
+    <td class="text-center fw-bold text-danger">{{ r.absent }}</td>
+    <td><span class="badge text-dark" style="background: {{ r.absence.color|default:'#e9ecef' }}">{{ r.absence.text }}</span></td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="8" class="text-center text-muted py-4">ไม่มีข้อมูล</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div></div></div>
+{% endblock %}

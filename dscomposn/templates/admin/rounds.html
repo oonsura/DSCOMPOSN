@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ตั้งค่าการใช้สิทธิ์{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-toggle-on me-2 text-primary"></i>ตั้งค่าการใช้สิทธิ์
+      {% info_tip "เปิด-ปิดรอบการใช้สิทธิ์ ตั้งเวลาเปิด-ปิด และกำหนดข้อความแจ้งเตือนการใช้สิทธิ์" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'composn:admin_import_rights' %}" class="btn btn-success btn-sm">
+      <i class="bi bi-person-check-fill me-1"></i>นำเข้าผู้ใช้สิทธิ์
+    </a>
+    <a href="{% url 'composn:admin_use_records' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-list-check me-1"></i>แสดงรายชื่อผู้ใช้สิทธิ์
+    </a>
+  </div>
+</div>
+
+{% if is_year_approved %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2" id="rounds-approved-lock-banner">
+  <i class="bi bi-lock-fill fs-5 text-warning"></i>
+  <div>
+    <strong>ปีการศึกษา {{ setting.current_academic_year }} อนุมัติประกาศผลแล้ว — ล็อกการเปิดรอบการใช้สิทธิ์ใหม่</strong>
+    <span class="small d-block text-muted">ยังสามารถปิดรอบที่ค้างอยู่และบันทึกข้อความแจ้งเตือน/วันสอบได้ · หากต้องการเปิดรอบใหม่ของปีนี้ กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ setting.current_academic_year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; ยกเลิกประกาศผล</a></span>
+  </div>
+</div>
+{% endif %}
+
+<!-- 1. เปิดรอบใช้สิทธิ์ใหม่ -->
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-plus-circle me-2 text-success"></i>1. เปิดรอบการใช้สิทธิ์ใหม่
+    {% info_tip "หากไม่ระบุเวลาเริ่ม/เวลาปิด ระบบจะเปิดให้ยืนยันใช้สิทธิ์ได้ทันทีจนกว่าจะกดปิดรอบ · เมื่อปิดรอบระบบจะสำรองไฟล์ Excel อัตโนมัติ" %}
+  </div>
+  <div class="card-body">
+    <fieldset {% if is_year_approved %}disabled{% endif %}>
+      <form method="post" action="{% url 'composn:admin_open_round' %}" class="row g-2 align-items-end">
+        {% csrf_token %}
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">ปีการศึกษา</label>
+          <input type="text" class="form-control form-control-sm bg-light fw-bold" value="{{ setting.current_academic_year }}" readonly title="กำหนดปีการศึกษาที่เมนู ตั้งค่าระบบ">
+          <input type="hidden" name="academic_year" value="{{ setting.current_academic_year }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">{{ form.camp_level.label }}</label>
+          {{ form.camp_level }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">{{ form.title.label }}</label>
+          {{ form.title }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">เวลาเริ่มเปิด (ไม่บังคับ)</label>
+          {{ form.scheduled_open_at }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">เวลาปิดอัตโนมัติ (ไม่บังคับ)</label>
+          {{ form.scheduled_close_at }}
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-success w-100"><i class="bi bi-power me-1"></i>เปิดรอบ</button>
+        </div>
+      </form>
+    </fieldset>
+  </div>
+</div>
+
+<!-- 2. ตารางรอบใช้สิทธิ์ทั้งหมด -->
+<div class="card mb-3">
+  <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <span><i class="bi bi-list-ul me-2 text-primary"></i>2. รายการรอบการใช้สิทธิ์ทั้งหมด (เปิด-ปิด การใช้สิทธิ์)</span>
+    <form class="d-flex gap-1 align-items-center" method="get" action="{% url 'composn:admin_year_report' %}">
+      <select class="form-select form-select-sm" style="width:150px;" name="year">
+        {% for y in academic_year_choices %}
+        <option value="{{ y }}" {% if y == setting.current_academic_year %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-sm btn-outline-success text-nowrap"><i class="bi bi-file-earmark-excel me-1"></i>Export ปีการศึกษา</button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:0.88rem;">
+      <thead>
+        <tr>
+          <th>ค่าย</th>
+          <th>ปีการศึกษา</th>
+          <th>ชื่อรอบ</th>
+          <th>สถานะ</th>
+          <th class="text-center">ยืนยันแล้ว</th>
+          <th class="text-center">สละสิทธิ์</th>
+          <th>เวลาเปิด - เวลาปิด</th>
+          <th>ไฟล์สำรอง</th>
+          <th style="width:220px;">การจัดการ (เปิด/ปิด/แก้ไขเวลา)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in page %}
+        <tr>
+          <td><span class="badge {% if r.camp_level == 1 %}bg-primary{% else %}bg-warning text-dark{% endif %}">ค่าย {{ r.camp_level }}</span></td>
+          <td class="fw-bold">{{ r.academic_year }}</td>
+          <td>{{ r.title|default:"-" }}</td>
+          <td>
+            {% if r.is_open %}
+              {% if r.is_within_schedule %}
+                <span class="badge bg-success">กำลังเปิดใช้สิทธิ์</span>
+              {% else %}
+                <span class="badge bg-info text-dark">เปิดรอบ (รอ/นอกเวลาตั้งไว้)</span>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-secondary">ปิดแล้ว</span>
+            {% endif %}
+          </td>
+          <td class="text-center"><span class="badge bg-success">{{ r.confirmed }}</span></td>
+          <td class="text-center"><span class="badge bg-secondary">{{ r.waived }}</span></td>
+          <td class="small">
+            <div>เปิด: {{ r.opened_at|datetime_thai }}</div>
+            {% if r.closed_at %}<div class="text-muted">ปิด: {{ r.closed_at|datetime_thai }}</div>{% endif %}
+            {% if r.scheduled_open_at or r.scheduled_close_at %}
+              <div class="text-primary">
+                ตั้งเวลา: {{ r.scheduled_open_at|date:"d/m/Y H:i"|default:"ทันที" }} ถึง {{ r.scheduled_close_at|date:"d/m/Y H:i"|default:"ไม่กำหนด" }}
+              </div>
+            {% endif %}
+          </td>
+          <td class="small">
+            {% if r.backup_file %}
+              <a href="{% url 'composn:admin_backup_download' r.backup_file %}"><i class="bi bi-download me-1"></i>{{ r.backup_file }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td class="text-nowrap">
+            <div class="d-flex gap-1">
+              <a class="btn btn-sm btn-outline-primary py-0 px-2" href="{% url 'composn:admin_round_detail' r.pk %}">
+                <i class="bi bi-eye"></i> รายละเอียด/เวลา
+              </a>
+              {% if r.is_open %}
+              <form method="post" action="{% url 'composn:admin_close_round' r.pk %}" class="d-inline"
+                    onsubmit="return confirm('ปิดรอบค่าย {{ r.camp_level }} ปี {{ r.academic_year }} ?')">
+                {% csrf_token %}
+                <input type="hidden" name="mark_waived" value="1">
+                <input type="hidden" name="next" value="composn:admin_rounds">
+                <button class="btn btn-sm btn-danger py-0 px-2"><i class="bi bi-stop-circle me-1"></i>ปิดรอบ</button>
+              </form>
+              {% else %}
+              <form method="post" action="{% url 'composn:admin_reopen_round' r.pk %}" class="d-inline"
+                    onsubmit="return confirm('เปิดรอบค่าย {{ r.camp_level }} ปี {{ r.academic_year }} ใหม่อีกครั้ง?')">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="composn:admin_rounds">
+                <button class="btn btn-sm btn-success py-0 px-2" {% if r.academic_year in approved_years %}disabled title="ปีการศึกษา {{ r.academic_year }} อนุมัติประกาศผลแล้ว"{% endif %}><i class="bi bi-arrow-clockwise me-1"></i>เปิดรอบใหม่</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">ยังไม่มีรอบการใช้สิทธิ์</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 3. ตั้งค่าการใช้สิทธิ์ (ข้อความแจ้งเตือนและวันสอบท้ายค่าย) -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-sliders me-2 text-primary"></i>3. ตั้งค่าการใช้สิทธิ์ (ข้อความแจ้งเตือนและวันสอบท้ายค่าย)</div>
+  <div class="card-body">
+    <form method="post" action="{% url 'composn:admin_rights_settings' %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_rights_settings">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold small">หัวข้อหน้าสรุปการใช้สิทธิ์ (/display)</label>
+          <input type="text" name="display_title" class="form-control form-control-sm" value="{{ setting.display_title }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold small">ข้อความแจ้งเตือนบนหน้าการใช้สิทธิ์ของนักเรียน</label>
+          <input type="text" name="rights_warning_text" class="form-control form-control-sm" value="{{ setting.rights_warning_text }}">
+        </div>
+        <div class="col-md-6">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-semibold small mb-0">ข้อความวันสอบท้ายค่าย 1</label>
+            {% if auto_exam_camp1 %}
+            <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" style="font-size:0.78rem;"
+                    onclick="document.getElementById('id_exam_date_camp1').value='{{ auto_exam_camp1 }}'">
+              <i class="bi bi-magic me-1"></i>ดึงวันสอบทฤษฎี/ปฏิบัติอัตโนมัติ
+            </button>
+            {% endif %}
+          </div>
+          <input type="text" name="exam_date_camp1" id="id_exam_date_camp1" class="form-control form-control-sm"
+                 value="{{ setting.exam_date_camp1|default:auto_exam_camp1 }}" placeholder="เช่น สอบทฤษฎี: 15 ต.ค. 2569, สอบปฏิบัติ: 16 ต.ค. 2569">
+          {% if auto_exam_camp1 %}
+          <div class="form-text small text-muted">วันสอบจากตารางอบรม: {{ auto_exam_camp1 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold small">ข้อความวันสอบท้ายค่าย 2</label>
+          <input type="text" name="exam_date_camp2" class="form-control form-control-sm" value="{{ setting.exam_date_camp2 }}" placeholder="เช่น สอบท้ายค่าย 2: 20 ก.ย. 2569">
+        </div>
+      </div>
+      <div class="text-end mt-3">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+          <i class="bi bi-floppy me-1"></i>บันทึกตั้งค่าการใช้สิทธิ์
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

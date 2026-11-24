@@ -1,0 +1,26 @@
+{% with cur_url=request.resolver_match.url_name %}
+<ul class="nav nav-tabs mb-3 no-print">
+  {% if user.can_attendance %}
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'staff_attendance' or cur_url == 'attendance_history' %}active{% endif %}"
+       href="{% url 'food:staff_attendance' %}{% if year %}?year={{ year }}{% endif %}">
+      <i class="bi bi-calendar2-check me-1 text-primary"></i>บันทึกเวลาเรียน
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'attendance_summary' %}active{% endif %}"
+       href="{% url 'food:attendance_summary' %}{% if year %}?year={{ year }}{% endif %}">
+      <i class="bi bi-clipboard-data me-1 text-info"></i>สรุปเวลาเรียน
+    </a>
+  </li>
+  {% endif %}
+  {% if user.can_signin_sheet %}
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'signin_sheet' %}active{% endif %}"
+       href="{% url 'food:signin_sheet' %}{% if year %}?year={{ year }}{% endif %}">
+      <i class="bi bi-card-checklist me-1 text-danger"></i>แบบลงชื่อ
+    </a>
+  </li>
+  {% endif %}
+</ul>
+{% endwith %}

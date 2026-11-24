@@ -1,0 +1,1372 @@
+{% load composn_tags %}<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ site_setting.site_title_inline|default:"ระบบ DS-COMPOSN" }}{% endblock %}</title>
+  {% if site_setting.site_favicon %}
+  <link rel="icon" href="{{ site_setting.site_favicon.url }}">
+  <link rel="shortcut icon" href="{{ site_setting.site_favicon.url }}">
+  <link rel="apple-touch-icon" href="{{ site_setting.site_favicon.url }}">
+  {% endif %}
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Google Fonts Sarabun (Thai) -->
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      {% if user.is_authenticated and user.role == 'member' %}
+      --primary: {{ site_setting.member_theme_primary|default:'#1b5e20' }};
+      --primary-dark: {{ site_setting.member_theme_gradient|default:'#2e7d32' }};
+      --sidebar-grad-1: {{ site_setting.member_theme_primary|default:'#1b5e20' }};
+      --sidebar-grad-2: {{ site_setting.member_theme_gradient|default:'#2e7d32' }};
+      {% elif user.is_authenticated and user.role == 'staff' %}
+      --primary: {{ site_setting.staff_theme_primary|default:'#0f4c5c' }};
+      --primary-dark: {{ site_setting.staff_theme_gradient|default:'#1a759f' }};
+      --sidebar-grad-1: {{ site_setting.staff_theme_primary|default:'#0f4c5c' }};
+      --sidebar-grad-2: {{ site_setting.staff_theme_gradient|default:'#1a759f' }};
+      {% else %}
+      --primary: #1a73e8;
+      --primary-dark: #1557b0;
+      --sidebar-grad-1: #1a237e;
+      --sidebar-grad-2: #283593;
+      {% endif %}
+      --success: #34a853;
+      --danger: #ea4335;
+      --warning: #fbbc04;
+      --gray-light: #f8f9fa;
+      --sidebar-width: 270px;
+    }
+    * { font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif; }
+    body { background-color: #f0f2f5; min-height: 100vh; }
+
+    /* Sidebar (รูปแบบระบบ Food) */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: linear-gradient(180deg, var(--sidebar-grad-1) 0%, var(--sidebar-grad-2) 100%);
+      overflow-y: auto;
+      z-index: 1040;
+      transition: transform 0.3s ease;
+    }
+    .sidebar-brand {
+      padding: 1.25rem 1.1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .sidebar-brand h5 {
+      color: #fff;
+      font-weight: 700;
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    .sidebar-brand small {
+      color: rgba(255,255,255,0.72);
+      font-size: 0.78rem;
+      display: block;
+      margin-top: 2px;
+    }
+    .sidebar .nav-link {
+      color: rgba(255,255,255,0.85);
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      margin: 3px 10px;
+      font-size: 0.86rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+    }
+    .sidebar .nav-link:hover,
+    .sidebar .nav-link.active {
+      color: #fff;
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.35);
+      font-weight: 600;
+      transform: translateX(2px);
+    }
+    .sidebar .nav-link i { margin-right: 9px; font-size: 1rem; }
+    .sidebar .nav-link.sidebar-top-link {
+      font-size: calc(0.86rem + 2px);
+      font-weight: 700;
+    }
+    .sidebar-section {
+      padding: 0.6rem 1rem 0.25rem;
+      color: #ffeb3b;
+      font-size: calc(0.78rem + 2px);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-top: 0.35rem;
+    }
+    .sidebar-section.sidebar-group-toggle {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.55rem 0.9rem;
+      margin: 4px 10px 2px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: background 0.2s;
+    }
+    .sidebar-section.sidebar-group-toggle:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .sidebar-group-items {
+      padding-left: 0.35rem;
+    }
+    .sidebar-group-items.collapsed {
+      display: none;
+    }
+
+    /* Main Content & Topbar Menu Buttons */
+    .main-content {
+      margin-left: var(--sidebar-width);
+      min-height: 100vh;
+      min-width: 0;
+      max-width: calc(100vw - var(--sidebar-width));
+    }
+    .main-content.no-sidebar {
+      margin-left: 0;
+      max-width: 100vw;
+    }
+    .topbar {
+      background: #fff;
+      padding: 0.65rem 1.25rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+    }
+    .top-nav-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .top-nav-btn {
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: calc(0.84rem + 2px);
+      padding: 0.38rem 0.8rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid #d0d7de;
+      background: #f8f9fa;
+      color: #1a237e;
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+    .top-nav-btn:hover {
+      background: #e8f0fe;
+      border-color: #1a73e8;
+      color: #0d47a1;
+    }
+    .top-nav-btn.active {
+      background: linear-gradient(135deg, #1a73e8, #0d47a1);
+      color: #fff !important;
+      border-color: #0d47a1;
+      box-shadow: 0 2px 6px rgba(26,115,232,0.3);
+    }
+    .topbar-user {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+    .content-area {
+      padding: 1.5rem;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    /* Scrollbar แนวนอนอัตโนมัติกรณีข้อมูลจำนวนมาก */
+    .table-responsive {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .table-responsive::-webkit-scrollbar,
+    .content-area::-webkit-scrollbar {
+      height: 10px;
+      width: 10px;
+    }
+    .table-responsive::-webkit-scrollbar-track,
+    .content-area::-webkit-scrollbar-track {
+      background: #f1f3f5;
+      border-radius: 6px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb,
+    .content-area::-webkit-scrollbar-thumb {
+      background: #adb5bd;
+      border-radius: 6px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb:hover,
+    .content-area::-webkit-scrollbar-thumb:hover {
+      background: #6c757d;
+    }
+    .page-header { margin-bottom: 1.25rem; }
+    .page-header h4, h4 {
+      font-weight: 700;
+      color: #1a237e;
+    }
+
+    /* Cards & Stats */
+    .card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card-header {
+      background: #fff;
+      border-bottom: 1px solid #e9ecef;
+      border-radius: 12px 12px 0 0 !important;
+      padding: 0.9rem 1.25rem;
+      font-weight: 600;
+    }
+    .stat-card {
+      border-radius: 12px;
+      padding: 1.25rem;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .stat-card .stat-icon {
+      font-size: 2.5rem;
+      opacity: 0.28;
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .stat-card .stat-value, .stat { font-size: 2rem; font-weight: 700; }
+    .stat-card .stat-label { font-size: 0.82rem; opacity: 0.9; }
+
+    /* Status badges & Food cards */
+    .badge-active { background: #e8f5e9; color: #2e7d32; }
+    .badge-closed { background: #fff3e0; color: #e65100; }
+    .badge-completed { background: #e9ecef; color: #6c757d; }
+    .food-card { border-radius: 12px; overflow: hidden; transition: transform 0.2s; }
+    .food-card:hover { transform: translateY(-2px); }
+    .food-card.completed { opacity: 0.78; }
+    .food-card .food-header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: #fff; padding: 1rem; }
+    .food-card.completed .food-header { background: linear-gradient(135deg, #6c757d, #495057); }
+
+    /* Table */
+    .table-hover tbody tr:hover { background-color: #f0f7ff; }
+    .table thead th {
+      background: #f8f9fa;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #495057;
+      border-bottom: 2px solid #dee2e6;
+    }
+    table.table td, table.table th { vertical-align: middle; }
+    .code { font-family: Consolas, monospace; font-weight: 600; }
+    .alert { border-radius: 10px; }
+
+    /* Mobile Sidebar Toggle & Bottom Nav */
+    .sidebar-toggle-btn { display: none; }
+    .sidebar-close-btn {
+      position: absolute;
+      top: 0.6rem;
+      right: 0.6rem;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .mobile-bottom-nav { display: none; }
+    @media (max-width: 991.98px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.show { transform: translateX(0); }
+      .main-content { margin-left: 0; max-width: 100vw; }
+      .sidebar-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        min-height: 38px;
+        padding: 0.35rem 0.65rem;
+      }
+      .top-nav-pills { display: none !important; }
+      .topbar {
+        padding: 0.5rem 0.75rem;
+        flex-wrap: nowrap;
+        gap: 0.45rem;
+      }
+      .topbar-user {
+        flex-shrink: 0;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+      }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1035;
+      }
+      .sidebar-overlay.show { display: block; }
+      body.sidebar-open { overflow: hidden; }
+      .content-area {
+        padding: 1rem 0.85rem calc(78px + env(safe-area-inset-bottom));
+      }
+      .mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 1030;
+        background: #ffffff;
+        border-top: 1px solid #dee2e6;
+        box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+        padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+        justify-content: space-around;
+        align-items: stretch;
+      }
+      .mobile-bottom-nav .mbn-item {
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 5px 2px;
+        border-radius: 10px;
+        color: #495057;
+        text-decoration: none;
+        background: transparent;
+        border: 0;
+        font-size: 0.68rem;
+        font-weight: 600;
+        position: relative;
+        line-height: 1.15;
+        touch-action: manipulation;
+      }
+      .mobile-bottom-nav .mbn-item i { font-size: 1.18rem; line-height: 1; }
+      .mobile-bottom-nav .mbn-item .mbn-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .mobile-bottom-nav .mbn-item.active {
+        color: var(--primary);
+        background: rgba(26,115,232,0.08);
+        font-weight: 700;
+      }
+      .mobile-bottom-nav .mbn-badge {
+        position: absolute;
+        top: 1px;
+        right: calc(50% - 19px);
+        font-size: 0.6rem;
+        padding: 1px 5px;
+        border-radius: 999px;
+      }
+    }
+    @media (max-width: 767.98px) {
+      .content-area { padding: 0.85rem 0.65rem calc(78px + env(safe-area-inset-bottom)); }
+      .page-header { margin-bottom: 0.9rem; }
+      .page-header h4, h4 { font-size: 1.15rem; }
+      .card-header { padding: 0.7rem 0.9rem; }
+      .card-body { padding: 0.85rem 0.9rem; }
+      .stat-card { padding: 0.9rem; }
+      .stat-card .stat-value, .stat { font-size: 1.5rem; }
+      .nav-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .nav-tabs::-webkit-scrollbar { display: none; }
+      .nav-tabs .nav-link { white-space: nowrap; font-size: 0.86rem; padding: 0.45rem 0.75rem; }
+      input.form-control:not(.form-control-color):not(.excel-cell-input),
+      select.form-select,
+      textarea.form-control {
+        font-size: 16px;
+        min-height: 38px;
+      }
+      input.form-control-sm:not(.form-control-color):not(.excel-cell-input),
+      select.form-select-sm {
+        font-size: 0.95rem;
+        min-height: 36px;
+      }
+      .btn { touch-action: manipulation; }
+      .card-header.d-flex { flex-wrap: wrap !important; gap: 0.45rem !important; }
+      .page-header.d-flex { flex-wrap: wrap !important; gap: 0.5rem !important; }
+      .btn-group:not(#att-mobile-view-switch) { flex-wrap: wrap; max-width: 100%; }
+      .btn-group:not(#att-mobile-view-switch) > .btn { white-space: normal; }
+      .modal-dialog { margin: 0.5rem; max-width: calc(100vw - 1rem); }
+      .modal-body { max-height: 75vh; overflow-y: auto; }
+      #announcement-pdf-iframe, #cert-pdf-iframe, #sc-ann-pdf-iframe { height: 60vh !important; }
+    }
+    /* Info Tooltip Icon */
+    .info-tip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #0d6efd;
+      cursor: help;
+      font-size: 0.92em;
+      vertical-align: middle;
+      margin-left: 0.28rem;
+      opacity: 0.78;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      line-height: 1;
+    }
+    .info-tip-icon:hover,
+    .info-tip-icon:focus {
+      opacity: 1;
+      transform: scale(1.1);
+      outline: none;
+    }
+    .text-white .info-tip-icon {
+      color: rgba(255, 255, 255, 0.92);
+    }
+    .tooltip.info-tip-tooltip {
+      --bs-tooltip-bg: #1e293b;
+      --bs-tooltip-color: #f8fafc;
+      --bs-tooltip-max-width: 360px;
+      --bs-tooltip-opacity: 0.96;
+    }
+    .tooltip.info-tip-tooltip .tooltip-inner {
+      max-width: 360px;
+      text-align: left;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      background-color: #1e293b;
+      color: #f8fafc;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+      border-radius: 8px;
+      white-space: pre-line;
+    }
+
+    @media print {
+      .sidebar, .topbar, .no-print, .info-tip-icon, .mobile-bottom-nav { display: none !important; }
+      .main-content { margin-left: 0 !important; max-width: 100% !important; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+{% with url_name=request.resolver_match.url_name %}
+<!-- Sidebar Overlay (Mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar Navigation -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand text-center position-relative">
+    <button type="button" class="sidebar-close-btn d-lg-none" onclick="toggleSidebar()" aria-label="ปิดเมนู">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    <div class="mb-2">
+      {% if site_setting.logo_center %}
+        <img src="{{ site_setting.logo_center.url }}" alt="รูปศูนย์อบรม"
+             class="logo-transparent"
+             style="background:transparent; {% if user.role == 'member' %}max-height:54px;max-width:155px;{% else %}max-height:66px;max-width:185px;{% endif %}object-fit:contain;">
+      {% else %}
+        <i class="bi bi-mortarboard-fill" style="font-size: {% if user.role == 'member' %}2rem{% else %}2.5rem{% endif %}; color: #fff; line-height: 1;"></i>
+      {% endif %}
+    </div>
+    {% if user.role == 'member' %}
+      <h5 class="mb-2" style="line-height:1.3;">
+        <span class="d-block">{{ site_setting.site_title|default:"DEBSIRIN POSN COMPUTER" }}</span>
+        {% if site_setting.site_title_line2 %}
+          <span class="d-block fw-semibold opacity-90" style="font-size:0.84rem; margin-top:2px;">{{ site_setting.site_title_line2 }}</span>
+        {% endif %}
+      </h5>
+      <div class="pt-2 border-top border-white border-opacity-25" style="font-size: 0.84rem; line-height: 1.45;">
+        {% if user.profile_photo %}
+          <div class="mb-2">
+            <img src="{{ user.profile_photo.url }}"
+                 alt="รูปประจำตัว {{ user.get_full_name }}"
+                 onclick="openPhotoLightbox('{{ user.profile_photo.url }}', '{{ user.camp1_code }} {{ user.get_full_name|escapejs }}')"
+                 class="rounded-circle border border-2 border-white shadow-sm"
+                 style="width:68px;height:68px;object-fit:cover;cursor:zoom-in;"
+                 title="คลิกเพื่อดูรูปขนาดใหญ่">
+          </div>
+        {% else %}
+          <div class="mx-auto mb-2 d-flex align-items-center justify-content-center rounded-circle border border-2 border-white border-opacity-50"
+               style="width:68px;height:68px;background:rgba(255,255,255,0.14);">
+            <i class="bi bi-person-fill text-white" style="font-size:2.1rem;line-height:1;"></i>
+          </div>
+        {% endif %}
+        <div class="text-white fw-semibold">รหัสค่าย 1 : {{ user.camp1_code }}</div>
+        {% if user.camp2_code %}<div class="fw-semibold" style="color:#ffe082;">รหัสค่าย 2 : {{ user.camp2_code }}</div>{% endif %}
+        {% if user.get_full_name %}<div class="text-white opacity-90 mt-1">{{ user.get_full_name }}</div>{% endif %}
+      </div>
+    {% else %}
+      <h5 class="mb-2" style="line-height:1.3;">
+        <span class="d-block">{{ site_setting.site_title|default:"DEBSIRIN POSN COMPUTER" }}</span>
+        {% if site_setting.site_title_line2 %}
+          <span class="d-block fw-semibold opacity-90" style="font-size:0.84rem; margin-top:2px;">{{ site_setting.site_title_line2 }}</span>
+        {% endif %}
+      </h5>
+      <div class="pt-2 border-top border-white border-opacity-25" style="font-size: 0.84rem; line-height: 1.4;">
+        <div class="text-white fw-semibold">{{ user.get_role_display }} : {{ user.camp1_code }}</div>
+        {% if user.get_full_name %}<div class="text-white opacity-90">{{ user.get_full_name }}</div>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <ul class="nav flex-column py-2">
+    {% if user.role == 'admin' %}
+      <!-- แดชบอร์ด -->
+      <li class="nav-item">
+        <a class="nav-link sidebar-top-link {% if url_name == 'admin_dashboard' %}active{% endif %}" href="{% url 'composn:admin_dashboard' %}">
+          <i class="bi bi-speedometer2"></i>แดชบอร์ด
+        </a>
+      </li>
+
+      <!-- ผู้ใช้ -->
+      <div class="sidebar-section sidebar-group-toggle" data-group="grp-users" onclick="toggleSidebarGroup('grp-users')">
+        <span><i class="bi bi-people-fill me-2"></i>ผู้ใช้</span>
+        <i class="bi bi-chevron-right grp-chevron" id="chev-grp-users"></i>
+      </div>
+      <div class="sidebar-group-items collapsed" id="grp-users">
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_admins' or url_name == 'admin_admin_create' %}active{% endif %}" href="{% url 'composn:admin_admins' %}">
+            <i class="bi bi-person-gear"></i>ผู้ดูแลและเจ้าหน้าที่
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_users' or url_name == 'admin_user_create' or url_name == 'admin_user_detail' or url_name == 'admin_user_edit' or url_name == 'admin_import_students' or url_name == 'admin_import_camp2' or url_name == 'admin_calculate_level' %}active{% endif %}" href="{% url 'composn:admin_users' %}">
+            <i class="bi bi-people"></i>ผู้ใช้ (นักเรียน/สมาชิก)
+          </a>
+        </li>
+      </div>
+    {% endif %}
+
+    {% if user.role == 'staff' and user.can_view_users %}
+      <!-- ผู้ใช้ (เจ้าหน้าที่: ดูอย่างเดียว) -->
+      <div class="sidebar-section">
+        <span><i class="bi bi-people-fill me-2"></i>ผู้ใช้</span>
+      </div>
+      <div class="sidebar-group-items">
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_users' or url_name == 'admin_user_detail' %}active{% endif %}" href="{% url 'composn:admin_users' %}">
+            <i class="bi bi-people"></i>ผู้ใช้ (นักเรียน/สมาชิก)
+          </a>
+        </li>
+      </div>
+    {% endif %}
+
+    {% if user.role == 'admin' or user.role == 'staff' %}
+      {% if user.can_scores or user.can_attendance or user.can_signin_sheet or user.can_exam_seating %}
+      <!-- เวลาเรียน / คะแนน -->
+      <div class="sidebar-section {% if user.role == 'admin' %}sidebar-group-toggle{% endif %}" data-group="grp-scores" {% if user.role == 'admin' %}onclick="toggleSidebarGroup('grp-scores')"{% endif %}>
+        <span><i class="bi bi-clipboard2-data-fill me-2"></i>เวลาเรียน / คะแนน</span>
+        {% if user.role == 'admin' %}<i class="bi bi-chevron-right grp-chevron" id="chev-grp-scores"></i>{% endif %}
+      </div>
+      <div class="sidebar-group-items {% if user.role == 'admin' %}collapsed{% endif %}" id="grp-scores">
+        {% if user.can_attendance %}
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'staff_attendance' or url_name == 'attendance_history' or url_name == 'attendance_summary' or url_name == 'signin_sheet' %}active{% endif %}" href="{% url 'food:staff_attendance' %}">
+            <i class="bi bi-calendar2-check"></i>บันทึกเวลาเรียน
+          </a>
+        </li>
+        {% elif user.can_signin_sheet %}
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'signin_sheet' %}active{% endif %}" href="{% url 'food:signin_sheet' %}">
+            <i class="bi bi-calendar2-check"></i>บันทึกเวลาเรียน
+          </a>
+        </li>
+        {% endif %}
+        {% if user.can_scores %}
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'staff_scores' or url_name == 'score_summary' %}active{% endif %}" href="{% url 'food:staff_scores' %}">
+            <i class="bi bi-pencil-square"></i>บันทึกคะแนน
+          </a>
+        </li>
+        {% endif %}
+        {% if user.can_exam_seating %}
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'exam_seating' or url_name == 'exam_rooms_manage' or url_name == 'exam_room_layout' or url_name == 'exam_seating_print' %}active{% endif %}" href="{% url 'food:exam_seating' %}">
+            <i class="bi bi-grid-3x3-gap-fill"></i>จัดที่นั่งสอบ
+          </a>
+        </li>
+        {% endif %}
+        {% if user.can_scores %}
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_certificates' %}active{% endif %}" href="{% url 'food:admin_certificates' %}">
+            <i class="bi bi-award"></i>เกียรติบัตร
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'score_announcement' %}active{% endif %}" href="{% url 'food:score_announcement' %}">
+            <i class="bi bi-megaphone"></i>การประกาศผล
+          </a>
+        </li>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if user.can_manage_food %}
+      <!-- อาหาร -->
+      <div class="sidebar-section {% if user.role == 'admin' %}sidebar-group-toggle{% endif %}" data-group="grp-food" {% if user.role == 'admin' %}onclick="toggleSidebarGroup('grp-food')"{% endif %}>
+        <span><i class="bi bi-egg-fried me-2"></i>อาหาร</span>
+        {% if user.role == 'admin' %}<i class="bi bi-chevron-right grp-chevron" id="chev-grp-food"></i>{% endif %}
+      </div>
+      <div class="sidebar-group-items {% if user.role == 'admin' %}collapsed{% endif %}" id="grp-food">
+        <li class="nav-item">
+          <a class="nav-link {% if 'order' in url_name %}active{% endif %}" href="{% url 'food:orders' %}">
+            <i class="bi bi-cup-hot-fill"></i>รายการอาหาร
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'surveys_manage' %}active{% endif %}" href="{% url 'food:surveys_manage' %}">
+            <i class="bi bi-clipboard2-pulse-fill"></i>แบบสอบถาม
+          </a>
+        </li>
+      </div>
+      {% endif %}
+    {% endif %}
+
+    {% if user.role == 'admin' %}
+      <!-- การใช้สิทธิ์ -->
+      <div class="sidebar-section sidebar-group-toggle" data-group="grp-rights" onclick="toggleSidebarGroup('grp-rights')">
+        <span><i class="bi bi-award-fill me-2"></i>การใช้สิทธิ์</span>
+        <i class="bi bi-chevron-right grp-chevron" id="chev-grp-rights"></i>
+      </div>
+      <div class="sidebar-group-items collapsed" id="grp-rights">
+        <li class="nav-item">
+          <a class="nav-link {% if 'round' in url_name or url_name == 'admin_rights_settings' %}active{% endif %}" href="{% url 'composn:admin_rounds' %}">
+            <i class="bi bi-toggle-on"></i>ตั้งค่าการใช้สิทธิ์
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_import_rights' %}active{% endif %}" href="{% url 'composn:admin_import_rights' %}">
+            <i class="bi bi-person-check-fill"></i>นำเข้าผู้ใช้สิทธิ์
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_use_records' or url_name == 'display' or url_name == 'display_center' %}active{% endif %}" href="{% url 'composn:admin_use_records' %}">
+            <i class="bi bi-list-check"></i>แสดงรายชื่อผู้ใช้สิทธิ์
+          </a>
+        </li>
+      </div>
+
+      <!-- ตั้งค่าระบบ -->
+      <div class="sidebar-section sidebar-group-toggle" data-group="grp-settings" onclick="toggleSidebarGroup('grp-settings')">
+        <span><i class="bi bi-gear-fill me-2"></i>ตั้งค่าระบบ</span>
+        <i class="bi bi-chevron-right grp-chevron" id="chev-grp-settings"></i>
+      </div>
+      <div class="sidebar-group-items collapsed" id="grp-settings">
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_users_settings' or url_name == 'admin_school_requests' %}active{% endif %}" href="{% url 'composn:admin_users_settings' %}">
+            <i class="bi bi-person-lines-fill"></i>ผู้ใช้
+            {% if pending_school_requests %}<span class="badge bg-danger ms-auto">{{ pending_school_requests }}</span>{% endif %}
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_settings' %}active{% endif %}" href="{% url 'composn:admin_settings' %}">
+            <i class="bi bi-palette"></i>ตั้งค่าสี ข้อความ
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'score_categories' %}active{% endif %}" href="{% url 'food:score_categories' %}">
+            <i class="bi bi-calendar3"></i>กำหนดปีการศึกษา
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'food_settings' %}active{% endif %}" href="{% url 'food:food_settings' %}">
+            <i class="bi bi-palette2"></i>รายการอาหาร
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if url_name == 'admin_backups' or url_name == 'admin_exports' or url_name == 'admin_audit_logs' or url_name == 'admin_trash' %}active{% endif %}" href="{% url 'composn:admin_backups' %}">
+            <i class="bi bi-hdd-stack"></i>บันทึกสำรอง
+          </a>
+        </li>
+      </div>
+    {% endif %}
+
+    {% if user.role == 'member' %}
+      <div class="sidebar-section">เมนูสมาชิก</div>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'profile' %}active{% endif %}" href="{% url 'composn:profile' %}">
+          <i class="bi bi-person-badge"></i>{% if is_current_member %}ข้อมูลส่วนตัว{% else %}ข้อมูลส่วนตัว &amp; ใช้สิทธิ์{% endif %}
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'training_scores' or url_name == 'training_scores_year' %}active{% endif %}"
+           href="javascript:void(0)" role="button" onclick="toggleSidebarGroup('grp-member-training')">
+          <i class="bi bi-journal-text"></i><span class="flex-grow-1">ข้อมูลการอบรม</span>
+          <i class="bi bi-chevron-down grp-chevron me-0" id="chev-grp-member-training" style="font-size:0.8rem;"></i>
+        </a>
+      </li>
+      <div class="sidebar-group-items" id="grp-member-training" style="padding-left: 0.9rem;">
+        {% for myr in member_training_years %}
+        <li class="nav-item">
+          <a class="nav-link py-1 {% if url_name == 'training_scores' or url_name == 'training_scores_year' %}{% if selected_year == myr.year %}active{% endif %}{% endif %}"
+             href="{% url 'composn:training_scores_year' myr.year %}" style="font-size:0.82rem;">
+            <i class="bi bi-calendar3"></i>
+            <span class="flex-grow-1">ปีการศึกษา {{ myr.year }}</span>
+            <span class="badge {% if myr.is_training_year %}bg-light text-dark{% else %}bg-warning text-dark{% endif %}" style="font-size:0.65rem;">
+              {% if myr.is_training_year %}อบรม{% else %}ใช้สิทธิ์{% endif %}
+            </span>
+          </a>
+        </li>
+        {% empty %}
+        <li class="nav-item">
+          <a class="nav-link py-1 {% if url_name == 'training_scores' %}active{% endif %}"
+             href="{% url 'composn:training_scores' %}" style="font-size:0.82rem;">
+            <i class="bi bi-calendar3"></i>ดูข้อมูลการอบรม
+          </a>
+        </li>
+        {% endfor %}
+      </div>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'member_exam_seating' %}active{% endif %}" href="{% url 'food:member_exam_seating' %}">
+          <i class="bi bi-grid-3x3-gap-fill"></i><span class="flex-grow-1">ที่นั่งสอบ</span>
+          {% if member_open_exam_seats_count %}
+            <span class="badge bg-success rounded-pill ms-auto">{{ member_open_exam_seats_count }}</span>
+          {% endif %}
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'my_food' or url_name == 'my_food_detail' or url_name == 'my_selections' %}active{% endif %}" href="{% url 'food:my_food' %}">
+          <i class="bi bi-cup-hot-fill"></i><span class="flex-grow-1">รายการอาหาร</span>
+          {% if pending_food_orders_count %}
+            <span class="badge bg-danger rounded-pill ms-auto" title="ยังไม่ได้เลือก {{ pending_food_orders_count }} รายการ">{{ pending_food_orders_count }}</span>
+          {% endif %}
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'member_surveys' %}active{% endif %}" href="{% url 'food:member_surveys' %}">
+          <i class="bi bi-clipboard2-check"></i><span class="flex-grow-1">แบบสอบถาม</span>
+          {% if pending_surveys_count %}
+            <span class="badge bg-danger rounded-pill ms-auto" title="ยังไม่ได้ตอบ {{ pending_surveys_count }} รายการ">{{ pending_surveys_count }}</span>
+          {% endif %}
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if url_name == 'display' or url_name == 'display_center' %}active{% endif %}" href="{% url 'composn:display' %}">
+          <i class="bi bi-list-check"></i>แสดงรายชื่อผู้ใช้สิทธิ์
+        </a>
+      </li>
+    {% endif %}
+
+    <div class="sidebar-section">บัญชี</div>
+    <li class="nav-item">
+      <a class="nav-link {% if url_name == 'change_password' %}active{% endif %}" href="{% url 'composn:change_password' %}">
+        <i class="bi bi-key"></i>เปลี่ยนรหัสผ่าน
+      </a>
+    </li>
+    <li class="nav-item pb-3">
+      <form method="post" action="{% url 'composn:logout' %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="nav-link text-warning bg-transparent border-0 w-100 text-start">
+          <i class="bi bi-box-arrow-left"></i>ออกจากระบบ
+        </button>
+      </form>
+    </li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="d-flex align-items-center gap-2 flex-wrap min-w-0">
+      <button class="btn btn-sm btn-outline-secondary sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="เปิดเมนู">
+        <i class="bi bi-list fs-5 lh-1"></i>
+      </button>
+
+      {% if user.role == 'admin' %}
+      <span class="d-lg-none fw-bold text-primary text-truncate" style="max-width:44vw; font-size:0.92rem;">
+        {{ site_setting.site_title_inline|default:"DS-COMPOSN" }}
+      </span>
+      <div class="top-nav-pills">
+        <!-- แดชบอร์ด (ไม่มีเลขข้อ) -->
+        <a href="{% url 'composn:admin_dashboard' %}" class="top-nav-btn {% if url_name == 'admin_dashboard' %}active{% endif %}">
+          <i class="bi bi-speedometer2"></i>แดชบอร์ด
+        </a>
+
+        <!-- ผู้ใช้ -->
+        <div class="dropdown">
+          <button class="top-nav-btn dropdown-toggle {% if url_name == 'admin_users' or url_name == 'admin_user_create' or url_name == 'admin_user_detail' or url_name == 'admin_user_edit' or 'admin_admin' in url_name or url_name == 'admin_import_students' or url_name == 'admin_import_camp2' or url_name == 'admin_calculate_level' %}active{% endif %}" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-people-fill"></i>ผู้ใช้
+          </button>
+          <ul class="dropdown-menu shadow-sm">
+            <li><a class="dropdown-item" href="{% url 'composn:admin_admins' %}"><i class="bi bi-person-gear me-2 text-primary"></i>ผู้ดูแลและเจ้าหน้าที่</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_users' %}"><i class="bi bi-people me-2 text-success"></i>ผู้ใช้ (นักเรียน/สมาชิก)</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_import_students' %}"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Import ข้อมูลนักเรียน</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_import_camp2' %}"><i class="bi bi-patch-plus me-2 text-info"></i>Import รหัสค่าย 2</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_calculate_level' %}"><i class="bi bi-calculator me-2 text-secondary"></i>คำนวณระดับชั้น +1~+5</a></li>
+          </ul>
+        </div>
+
+        <!-- เวลาเรียน / คะแนน -->
+        <div class="dropdown">
+          <button class="top-nav-btn dropdown-toggle {% if url_name == 'staff_scores' or url_name == 'score_summary' or url_name == 'score_announcement' or url_name == 'admin_certificates' or 'attendance' in url_name or url_name == 'signin_sheet' or url_name == 'exam_seating' or url_name == 'exam_rooms_manage' or url_name == 'exam_room_layout' or url_name == 'exam_seating_print' %}active{% endif %}" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-clipboard2-data-fill"></i>เวลาเรียน / คะแนน
+          </button>
+          <ul class="dropdown-menu shadow-sm">
+            <li><a class="dropdown-item" href="{% url 'food:staff_attendance' %}"><i class="bi bi-calendar2-check me-2 text-primary"></i>บันทึกเวลาเรียน</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'food:staff_scores' %}"><i class="bi bi-pencil-square me-2 text-success"></i>บันทึกคะแนน</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'food:exam_seating' %}"><i class="bi bi-grid-3x3-gap-fill me-2 text-info"></i>จัดที่นั่งสอบ</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'food:admin_certificates' %}"><i class="bi bi-award me-2 text-warning"></i>เกียรติบัตร</a></li>
+            <li><a class="dropdown-item" href="{% url 'food:score_announcement' %}"><i class="bi bi-megaphone me-2 text-warning"></i>การประกาศผล</a></li>
+          </ul>
+        </div>
+
+        <!-- อาหาร -->
+        <div class="dropdown">
+          <button class="top-nav-btn dropdown-toggle {% if 'order' in url_name or url_name == 'surveys_manage' %}active{% endif %}" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-egg-fried"></i>อาหาร
+          </button>
+          <ul class="dropdown-menu shadow-sm">
+            <li><a class="dropdown-item" href="{% url 'food:orders' %}"><i class="bi bi-cup-hot-fill me-2 text-success"></i>รายการอาหาร</a></li>
+            <li><a class="dropdown-item" href="{% url 'food:surveys_manage' %}"><i class="bi bi-clipboard2-pulse-fill me-2 text-danger"></i>แบบสอบถาม</a></li>
+          </ul>
+        </div>
+
+        <!-- การใช้สิทธิ์ -->
+        <div class="dropdown">
+          <button class="top-nav-btn dropdown-toggle {% if 'round' in url_name or url_name == 'admin_import_rights' or url_name == 'admin_use_records' or url_name == 'display' %}active{% endif %}" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-award-fill"></i>การใช้สิทธิ์
+          </button>
+          <ul class="dropdown-menu shadow-sm">
+            <li><a class="dropdown-item" href="{% url 'composn:admin_rounds' %}"><i class="bi bi-toggle-on me-2 text-success"></i>ตั้งค่าการใช้สิทธิ์</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_import_rights' %}"><i class="bi bi-person-check-fill me-2 text-primary"></i>นำเข้าผู้ใช้สิทธิ์</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_use_records' %}"><i class="bi bi-list-check me-2 text-info"></i>แสดงรายชื่อผู้ใช้สิทธิ์</a></li>
+          </ul>
+        </div>
+
+        <!-- ตั้งค่าระบบ (รวมการตั้งค่าทุกส่วนไว้ที่เดียว) -->
+        <div class="dropdown">
+          <button class="top-nav-btn dropdown-toggle {% if url_name == 'admin_settings' or url_name == 'admin_users_settings' or url_name == 'admin_school_requests' or url_name == 'score_categories' or url_name == 'food_settings' or url_name == 'admin_rights_settings' or url_name == 'admin_backups' or url_name == 'admin_exports' or url_name == 'admin_audit_logs' or url_name == 'admin_trash' %}active{% endif %}" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-gear-fill"></i>ตั้งค่าระบบ
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+            <li><a class="dropdown-item" href="{% url 'composn:admin_users_settings' %}"><i class="bi bi-person-lines-fill me-2 text-primary"></i>ผู้ใช้</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_settings' %}"><i class="bi bi-palette me-2 text-primary"></i>ตั้งค่าสี ข้อความ</a></li>
+            <li><a class="dropdown-item" href="{% url 'food:score_categories' %}"><i class="bi bi-calendar3 me-2 text-success"></i>กำหนดปีการศึกษา</a></li>
+            <li><a class="dropdown-item" href="{% url 'food:food_settings' %}"><i class="bi bi-palette2 me-2 text-warning"></i>รายการอาหาร</a></li>
+            <li><a class="dropdown-item" href="{% url 'composn:admin_backups' %}"><i class="bi bi-hdd-stack me-2 text-info"></i>บันทึกสำรอง</a></li>
+          </ul>
+        </div>
+      </div>
+      {% else %}
+      <span class="text-muted small">
+        {% block breadcrumb %}{{ site_setting.site_title_inline|default:"ระบบ DS-COMPOSN" }} · ปีการศึกษา {{ site_setting.current_academic_year|default:"2569" }}{% endblock %}
+      </span>
+      {% endif %}
+    </div>
+
+    <div class="topbar-user ms-auto">
+      <a href="{% if user.role == 'admin' %}{% url 'composn:admin_use_records' %}{% else %}{% url 'composn:display' %}{% endif %}" class="btn btn-sm btn-outline-primary py-1 px-2" title="แสดงรายชื่อผู้ใช้สิทธิ์">
+        <i class="bi bi-list-check me-sm-1"></i><span class="d-none d-sm-inline">แสดงรายชื่อผู้ใช้สิทธิ์</span><span class="d-inline d-sm-none">ใช้สิทธิ์</span>
+      </a>
+      <span class="fw-semibold code">{{ user.camp1_code }}</span>
+      <span class="text-muted d-none d-xl-inline">{{ user.get_full_name }}</span>
+      {% if user.role != 'member' %}
+      <span class="badge {% if user.role == 'admin' %}bg-primary{% else %}bg-warning text-dark{% endif %}">
+        {{ user.get_role_display }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+{% endwith %}
+{% else %}
+<div class="main-content no-sidebar">
+{% endif %}
+
+  <!-- Content Area -->
+  <div class="content-area">
+    {% if user.is_authenticated and user.role == 'member' and pending_food_orders and request.resolver_match.url_name != 'my_food_detail' %}
+    <div class="alert alert-warning border-warning shadow-sm d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 mb-3" role="alert">
+      <div>
+        <i class="bi bi-bell-fill text-danger me-2"></i>
+        <strong>แจ้งเตือนการเลือกอาหาร:</strong>
+        มีรายการอาหารที่เปิดให้เลือกและท่านยังไม่ได้ดำเนินการ <strong>{{ pending_food_orders_count }} รายการ</strong>
+        {% for po in pending_food_orders|slice:":3" %}
+          <a href="{% url 'food:my_food_detail' po.pk %}" class="badge bg-danger text-white text-decoration-none ms-1">
+            {{ po.restaurant_name }} ({{ po.food_date|date_thai_short }})
+          </a>
+        {% endfor %}
+      </div>
+      <a href="{% if pending_food_orders_count == 1 %}{% url 'food:my_food_detail' pending_food_orders.0.pk %}{% else %}{% url 'food:my_food' %}?status=active{% endif %}"
+         class="btn btn-sm btn-danger fw-semibold">
+        <i class="bi bi-cart-plus me-1"></i>ดำเนินการเลือกอาหาร
+      </a>
+    </div>
+    {% endif %}
+    {% for m in messages %}
+      <div class="alert alert-{% if m.tags == 'error' %}danger{% else %}{{ m.tags|default:'info' }}{% endif %} alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-{% if m.tags == 'error' %}exclamation-triangle{% elif m.tags == 'warning' %}exclamation-circle{% elif m.tags == 'success' %}check-circle{% else %}info-circle{% endif %} me-2"></i>
+        {{ m }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+{% if user.is_authenticated %}
+{% with url_name=request.resolver_match.url_name %}
+<!-- แถบเมนูลัดด้านล่างสำหรับมือถือ (Mobile Bottom Navigation) -->
+<nav class="mobile-bottom-nav no-print" id="mobileBottomNav" aria-label="เมนูหลักมือถือ">
+  {% if user.role == 'member' %}
+    <a href="{% url 'composn:profile' %}" class="mbn-item {% if url_name == 'profile' %}active{% endif %}">
+      <i class="bi bi-person-badge"></i>
+      <span class="mbn-label">ส่วนตัว</span>
+    </a>
+    <a href="{% url 'composn:training_scores' %}" class="mbn-item {% if url_name == 'training_scores' or url_name == 'training_scores_year' %}active{% endif %}">
+      <i class="bi bi-journal-text"></i>
+      <span class="mbn-label">การอบรม</span>
+    </a>
+    <a href="{% url 'food:my_food' %}" class="mbn-item {% if url_name == 'my_food' or url_name == 'my_food_detail' or url_name == 'my_selections' %}active{% endif %}">
+      <i class="bi bi-cup-hot-fill"></i>
+      <span class="mbn-label">อาหาร</span>
+      {% if pending_food_orders_count %}
+        <span class="badge bg-danger mbn-badge">{{ pending_food_orders_count }}</span>
+      {% endif %}
+    </a>
+    <a href="{% url 'food:member_surveys' %}" class="mbn-item {% if url_name == 'member_surveys' %}active{% endif %}">
+      <i class="bi bi-clipboard2-check"></i>
+      <span class="mbn-label">แบบสอบถาม</span>
+      {% if pending_surveys_count %}
+        <span class="badge bg-danger mbn-badge">{{ pending_surveys_count }}</span>
+      {% endif %}
+    </a>
+  {% elif user.role == 'admin' %}
+    <a href="{% url 'composn:admin_dashboard' %}" class="mbn-item {% if url_name == 'admin_dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i>
+      <span class="mbn-label">แดชบอร์ด</span>
+    </a>
+    <a href="{% url 'food:staff_attendance' %}" class="mbn-item {% if url_name == 'staff_attendance' or url_name == 'attendance_summary' or url_name == 'attendance_history' or url_name == 'signin_sheet' %}active{% endif %}">
+      <i class="bi bi-calendar2-check"></i>
+      <span class="mbn-label">เวลาเรียน</span>
+    </a>
+    <a href="{% url 'food:staff_scores' %}" class="mbn-item {% if url_name == 'staff_scores' or url_name == 'score_summary' %}active{% endif %}">
+      <i class="bi bi-pencil-square"></i>
+      <span class="mbn-label">คะแนน</span>
+    </a>
+    <a href="{% url 'food:orders' %}" class="mbn-item {% if 'order' in url_name or url_name == 'surveys_manage' %}active{% endif %}">
+      <i class="bi bi-cup-hot-fill"></i>
+      <span class="mbn-label">อาหาร</span>
+    </a>
+  {% else %}
+    {% if user.can_attendance %}
+    <a href="{% url 'food:staff_attendance' %}" class="mbn-item {% if url_name == 'staff_attendance' or url_name == 'attendance_summary' or url_name == 'attendance_history' or url_name == 'signin_sheet' %}active{% endif %}">
+      <i class="bi bi-calendar2-check"></i>
+      <span class="mbn-label">เวลาเรียน</span>
+    </a>
+    {% elif user.can_signin_sheet %}
+    <a href="{% url 'food:signin_sheet' %}" class="mbn-item {% if url_name == 'signin_sheet' %}active{% endif %}">
+      <i class="bi bi-card-checklist"></i>
+      <span class="mbn-label">ใบลงชื่อ</span>
+    </a>
+    {% endif %}
+    {% if user.can_scores %}
+    <a href="{% url 'food:staff_scores' %}" class="mbn-item {% if url_name == 'staff_scores' or url_name == 'score_summary' %}active{% endif %}">
+      <i class="bi bi-pencil-square"></i>
+      <span class="mbn-label">คะแนน</span>
+    </a>
+    <a href="{% url 'food:score_announcement' %}" class="mbn-item {% if url_name == 'score_announcement' %}active{% endif %}">
+      <i class="bi bi-megaphone"></i>
+      <span class="mbn-label">ประกาศผล</span>
+    </a>
+    {% endif %}
+    {% if user.can_manage_food %}
+    <a href="{% url 'food:orders' %}" class="mbn-item {% if 'order' in url_name or url_name == 'surveys_manage' %}active{% endif %}">
+      <i class="bi bi-cup-hot-fill"></i>
+      <span class="mbn-label">อาหาร</span>
+    </a>
+    {% endif %}
+    {% if user.can_view_users and not user.can_attendance or user.can_view_users and not user.can_scores %}
+    <a href="{% url 'composn:admin_users' %}" class="mbn-item {% if url_name == 'admin_users' or url_name == 'admin_user_detail' %}active{% endif %}">
+      <i class="bi bi-people"></i>
+      <span class="mbn-label">นักเรียน</span>
+    </a>
+    {% endif %}
+  {% endif %}
+  <button type="button" class="mbn-item" onclick="toggleSidebar()">
+    <i class="bi bi-list"></i>
+    <span class="mbn-label">เมนู</span>
+  </button>
+</nav>
+{% endwith %}
+{% endif %}
+
+<!-- Photo Zoom Lightbox Modal (คลิกรูปผู้ใช้เพื่อย่อ/ขยายได้) -->
+<div class="modal fade" id="photoZoomModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content bg-dark text-white border-0">
+      <div class="modal-header border-secondary py-2 flex-wrap gap-2">
+        <h6 class="modal-title mb-0"><i class="bi bi-person-bounding-box me-2"></i><span id="photoZoomTitleText">รูปภาพประจำตัว</span></h6>
+        <div class="d-flex align-items-center gap-1 ms-auto me-2">
+          <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" id="pzZoomOut" title="ย่อ"><i class="bi bi-zoom-out"></i></button>
+          <input type="range" class="form-range" id="pzSlider" min="50" max="300" step="10" value="100" style="width:85px;">
+          <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" id="pzZoomIn" title="ขยาย"><i class="bi bi-zoom-in"></i></button>
+          <button type="button" class="btn btn-sm btn-outline-warning py-0 px-2" id="pzReset" title="ขนาดปกติ"><span id="pzPct">100%</span></button>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0 d-flex align-items-center justify-content-center position-relative"
+           id="pzStage" style="height:68vh; overflow:hidden; background:#111; cursor:grab; user-select:none; touch-action:none;">
+        <img id="pzImg" src="" alt="รูปภาพผู้ใช้"
+             style="max-height:62vh; max-width:90%; object-fit:contain; transition:transform 0.08s ease-out; pointer-events:none; border-radius:8px;">
+      </div>
+      <div class="modal-footer border-secondary py-1 justify-content-between small text-white-50">
+        <span><i class="bi bi-mouse me-1"></i>เลื่อนลูกกลิ้งเมาส์หรือกดปุ่ม + / - เพื่อย่อ-ขยาย · ลากภาพเพื่อเลื่อนดูเมื่อขยาย</span>
+        <button type="button" class="btn btn-sm btn-secondary py-0 px-2" data-bs-dismiss="modal">ปิด</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  var pzScale = 1, pzX = 0, pzY = 0, pzDrag = false, pzSX = 0, pzSY = 0;
+  function applyPz() {
+    var img = document.getElementById('pzImg');
+    var pct = document.getElementById('pzPct');
+    var slider = document.getElementById('pzSlider');
+    if (img) img.style.transform = 'translate(' + pzX + 'px,' + pzY + 'px) scale(' + pzScale + ')';
+    if (pct) pct.textContent = Math.round(pzScale * 100) + '%';
+    if (slider) slider.value = Math.round(pzScale * 100);
+  }
+  function setScale(s) {
+    pzScale = Math.max(0.5, Math.min(3.0, s));
+    if (pzScale <= 1) { pzX = 0; pzY = 0; }
+    applyPz();
+  }
+  window.openPhotoLightbox = function (src, title) {
+    if (!src) return;
+    var img = document.getElementById('pzImg');
+    var ttl = document.getElementById('photoZoomTitleText');
+    var modalEl = document.getElementById('photoZoomModal');
+    if (!img || !modalEl) return;
+    img.src = src;
+    if (ttl) ttl.textContent = title || 'รูปภาพประจำตัว';
+    pzScale = 1; pzX = 0; pzY = 0;
+    applyPz();
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  };
+  document.addEventListener('DOMContentLoaded', function () {
+    var bIn = document.getElementById('pzZoomIn');
+    var bOut = document.getElementById('pzZoomOut');
+    var bReset = document.getElementById('pzReset');
+    var slider = document.getElementById('pzSlider');
+    var stage = document.getElementById('pzStage');
+    if (bIn) bIn.addEventListener('click', function () { setScale(pzScale + 0.25); });
+    if (bOut) bOut.addEventListener('click', function () { setScale(pzScale - 0.25); });
+    if (bReset) bReset.addEventListener('click', function () { pzScale = 1; pzX = 0; pzY = 0; applyPz(); });
+    if (slider) slider.addEventListener('input', function () { setScale(parseInt(slider.value, 10) / 100); });
+    if (stage) {
+      stage.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        setScale(pzScale + (e.deltaY < 0 ? 0.15 : -0.15));
+      }, {passive: false});
+      stage.addEventListener('mousedown', function (e) {
+        if (pzScale <= 1) return;
+        pzDrag = true; pzSX = e.clientX - pzX; pzSY = e.clientY - pzY;
+        stage.style.cursor = 'grabbing';
+      });
+      window.addEventListener('mousemove', function (e) {
+        if (!pzDrag) return;
+        pzX = e.clientX - pzSX; pzY = e.clientY - pzSY;
+        applyPz();
+      });
+      window.addEventListener('mouseup', function () {
+        if (pzDrag) { pzDrag = false; stage.style.cursor = 'grab'; }
+      });
+      var lastTapTime = 0;
+      stage.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) return;
+        var now = Date.now();
+        if (now - lastTapTime < 280) {
+          setScale(pzScale > 1.1 ? 1.0 : 2.0);
+          lastTapTime = 0;
+          return;
+        }
+        lastTapTime = now;
+        if (pzScale > 1) {
+          pzDrag = true;
+          pzSX = e.touches[0].clientX - pzX;
+          pzSY = e.touches[0].clientY - pzY;
+        }
+      }, {passive: true});
+      stage.addEventListener('touchmove', function (e) {
+        if (!pzDrag || e.touches.length !== 1) return;
+        e.preventDefault();
+        pzX = e.touches[0].clientX - pzSX;
+        pzY = e.touches[0].clientY - pzSY;
+        applyPz();
+      }, {passive: false});
+      stage.addEventListener('touchend', function () { pzDrag = false; });
+    }
+  });
+})();
+</script>
+<script>
+var _DS_USER_PREFIX = '{% if user.is_authenticated %}u{{ user.pk }}:{% else %}anon:{% endif %}';
+function _dsStoreGet(k) {
+  try { return sessionStorage.getItem(_DS_USER_PREFIX + k); } catch (e) { return null; }
+}
+function _dsStoreSet(k, v) {
+  try { sessionStorage.setItem(_DS_USER_PREFIX + k, v); } catch (e) {}
+}
+function _dsStoreDel(k) {
+  try { sessionStorage.removeItem(_DS_USER_PREFIX + k); } catch (e) {}
+}
+
+function toggleSidebar(forceOpen) {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar) return;
+  const open = (typeof forceOpen === 'boolean') ? forceOpen : !sidebar.classList.contains('show');
+  sidebar.classList.toggle('show', open);
+  if (overlay) overlay.classList.toggle('show', open);
+  document.body.classList.toggle('sidebar-open', open);
+}
+function toggleSidebarGroup(groupId, forceExpand, skipSave) {
+  const box = document.getElementById(groupId);
+  const chev = document.getElementById('chev-' + groupId);
+  if (!box) return;
+  const shouldCollapse = (typeof forceExpand === 'boolean') ? !forceExpand : !box.classList.contains('collapsed');
+  box.classList.toggle('collapsed', shouldCollapse);
+  if (chev) {
+    chev.className = shouldCollapse ? 'bi bi-chevron-right grp-chevron' : 'bi bi-chevron-down grp-chevron';
+  }
+  if (!skipSave) {
+    try {
+      var saved = JSON.parse(_dsStoreGet('sidebar_groups') || '{}');
+      saved[groupId] = !shouldCollapse;
+      _dsStoreSet('sidebar_groups', JSON.stringify(saved));
+    } catch (e) {}
+  }
+}
+document.addEventListener('DOMContentLoaded', function () {
+  var params = new URLSearchParams(window.location.search);
+  var pathKey = window.location.pathname;
+  var fullKey = window.location.pathname + window.location.search;
+
+  // ล้างสถานะฝั่งเบราว์เซอร์เมื่อกดปุ่ม "ล้าง" (?reset=1)
+  if (params.has('reset')) {
+    _dsStoreDel('tab:' + pathKey);
+    try {
+      var prefix = _DS_USER_PREFIX + 'scroll:' + pathKey;
+      Object.keys(sessionStorage).forEach(function (k) {
+        if (k.indexOf(prefix) === 0) sessionStorage.removeItem(k);
+      });
+    } catch (e) {}
+  }
+
+  // 0. เปิดใช้งาน Bootstrap Tooltip สำหรับไอคอน (i) และ elements ที่มี data-bs-toggle="tooltip" (รองรับการแตะบนมือถือ)
+  if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+    var tipEls = Array.prototype.slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tipEls.forEach(function (el) {
+      bootstrap.Tooltip.getOrCreateInstance(el, {
+        trigger: 'hover focus click',
+        container: 'body',
+        customClass: el.classList.contains('info-tip-icon') ? 'info-tip-tooltip' : ''
+      });
+    });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('[data-bs-toggle="tooltip"]')) {
+        tipEls.forEach(function (el) {
+          var inst = bootstrap.Tooltip.getInstance(el);
+          if (inst) inst.hide();
+        });
+      }
+    });
+  }
+  // ปิด Sidebar อัตโนมัติบนมือถือเมื่อกดปุ่ม Escape ปัดซ้าย หรือคลิกลิงก์เมนู
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') toggleSidebar(false);
+  });
+  var sbNode = document.getElementById('sidebar');
+  if (sbNode) {
+    var sbTouchX = null;
+    sbNode.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 1) sbTouchX = e.touches[0].clientX;
+    }, {passive: true});
+    sbNode.addEventListener('touchend', function (e) {
+      if (sbTouchX !== null && e.changedTouches.length === 1) {
+        if (sbTouchX - e.changedTouches[0].clientX > 55) toggleSidebar(false);
+      }
+      sbTouchX = null;
+    }, {passive: true});
+    sbNode.querySelectorAll('a.nav-link[href]:not([href="javascript:void(0)"])').forEach(function (a) {
+      a.addEventListener('click', function () {
+        if (window.innerWidth < 992) toggleSidebar(false);
+      });
+    });
+  }
+
+  // 1. คืนค่าสถานะ Sidebar (กลุ่มเมนูที่เปิด/ปิด และตำแหน่งเลื่อนของ Sidebar)
+  try {
+    var savedGroups = JSON.parse(_dsStoreGet('sidebar_groups') || '{}');
+    Object.keys(savedGroups).forEach(function (gid) {
+      toggleSidebarGroup(gid, !!savedGroups[gid], true);
+    });
+  } catch (e) {}
+  document.querySelectorAll('.sidebar-group-items').forEach(function (box) {
+    if (box.querySelector('.nav-link.active')) {
+      toggleSidebarGroup(box.id, true, true);
+    }
+  });
+  var sidebarEl = document.getElementById('sidebar');
+  if (sidebarEl) {
+    var sbScroll = parseInt(_dsStoreGet('sidebar_scroll') || '0', 10);
+    if (sbScroll > 0) sidebarEl.scrollTop = sbScroll;
+    sidebarEl.addEventListener('scroll', function () {
+      _dsStoreSet('sidebar_scroll', String(sidebarEl.scrollTop));
+    }, {passive: true});
+  }
+
+  // 2. จดจำและคืนค่าแท็บ (Bootstrap Tabs) ของแต่ละหน้า พร้อมซิงก์สถานะแท็บกับเซิร์ฟเวอร์
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (btn) {
+    btn.addEventListener('shown.bs.tab', function () {
+      var tabName = btn.getAttribute('data-tab-name') || '';
+      _dsStoreSet('tab:' + pathKey, JSON.stringify({
+        id: btn.id || '',
+        target: btn.getAttribute('data-bs-target') || btn.getAttribute('href') || '',
+        tabName: tabName
+      }));
+      if (tabName) {
+        try {
+          var syncUrl = new URL(window.location.href);
+          syncUrl.searchParams.set('tab', tabName);
+          syncUrl.searchParams.delete('reset');
+          if (history.replaceState) {
+            history.replaceState(null, '', syncUrl.toString());
+          }
+          fetch(syncUrl.toString(), {
+            credentials: 'same-origin',
+            headers: {'X-Sync-Page-State': '1'}
+          }).catch(function () {});
+        } catch (e) {}
+      }
+    });
+  });
+  if (!params.has('tab') && !params.has('reset')) {
+    try {
+      var savedTab = JSON.parse(_dsStoreGet('tab:' + pathKey) || 'null');
+      if (savedTab) {
+        var tabBtn = (savedTab.id && document.getElementById(savedTab.id)) ||
+                     (savedTab.target && document.querySelector('[data-bs-toggle="tab"][data-bs-target="' + savedTab.target + '"]'));
+        if (tabBtn && typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+          bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. จดจำและคืนค่าตำแหน่ง Scroll (หน้าจอ, พื้นที่เนื้อหา, และตารางเลื่อนซ้าย-ขวา/ขึ้น-ลง)
+  var contentEl = document.querySelector('.content-area');
+  function saveScrollState() {
+    var tables = [];
+    document.querySelectorAll('.table-responsive, .att-scroll-wrap').forEach(function (t) {
+      tables.push({x: t.scrollLeft, y: t.scrollTop});
+    });
+    _dsStoreSet('scroll:' + fullKey, JSON.stringify({
+      winY: window.scrollY || window.pageYOffset || 0,
+      contentY: contentEl ? contentEl.scrollTop : 0,
+      tables: tables
+    }));
+  }
+  var scrollTimer;
+  function scheduleSaveScroll() {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(saveScrollState, 180);
+  }
+  window.addEventListener('scroll', scheduleSaveScroll, {passive: true});
+  if (contentEl) contentEl.addEventListener('scroll', scheduleSaveScroll, {passive: true});
+  window.addEventListener('pagehide', saveScrollState);
+  window.addEventListener('beforeunload', saveScrollState);
+
+  if (!window.location.hash && !params.has('reset')) {
+    try {
+      var savedScroll = JSON.parse(_dsStoreGet('scroll:' + fullKey) || 'null');
+      if (savedScroll) {
+        requestAnimationFrame(function () {
+          if (savedScroll.winY > 0) window.scrollTo(0, savedScroll.winY);
+          if (contentEl && savedScroll.contentY > 0) contentEl.scrollTop = savedScroll.contentY;
+          if (Array.isArray(savedScroll.tables)) {
+            var domTables = document.querySelectorAll('.table-responsive, .att-scroll-wrap');
+            savedScroll.tables.forEach(function (pos, i) {
+              if (domTables[i]) {
+                if (pos.x > 0) domTables[i].scrollLeft = pos.x;
+                if (pos.y > 0) domTables[i].scrollTop = pos.y;
+              }
+            });
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  // 4. ล้างสถานะในเบราว์เซอร์เมื่อออกจากระบบ
+  document.querySelectorAll('a[href*="logout"]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try {
+        Object.keys(sessionStorage).forEach(function (k) {
+          if (k.indexOf(_DS_USER_PREFIX) === 0) sessionStorage.removeItem(k);
+        });
+      } catch (e) {}
+    });
+  });
+});
+</script>
+{% if user.is_authenticated %}
+<script>
+// Auto Logout เมื่อไม่มีการทำงาน {{ AUTO_LOGOUT_MINUTES }} นาที ({{ AUTO_LOGOUT_SECONDS }} วินาที)
+(function () {
+  var limit = {{ AUTO_LOGOUT_SECONDS }} * 1000, timer;
+  function out() { window.location.href = "{% url 'composn:logout' %}?timeout=1"; }
+  function reset() { clearTimeout(timer); if (limit > 0) timer = setTimeout(out, limit); }
+  if (limit > 0) {
+    ['click', 'keydown', 'mousemove', 'scroll', 'touchstart', 'input'].forEach(function (e) {
+      document.addEventListener(e, reset, {passive: true});
+    });
+    reset();
+  }
+  setInterval(function () {
+    fetch("{% url 'composn:session_ping' %}", {credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { if (r.status === 401) window.location.href = "{% url 'composn:login' %}?timeout=1"; }).catch(function () {});
+  }, 30000);
+})();
+</script>
+{% endif %}
+{% block extra_js %}{% endblock %}
+</body>
+</html>

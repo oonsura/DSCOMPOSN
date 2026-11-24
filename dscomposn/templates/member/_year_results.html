@@ -1,0 +1,306 @@
+{% load composn_tags %}
+<!-- ข้อมูลการอบรม (Dropdown ทั้งระดับปีการศึกษา, คะแนน และเวลาเรียน) -->
+{% if not hide_section_title %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+  <h5 class="mb-0">
+    <i class="bi bi-journal-text me-1 text-primary"></i>ข้อมูลการอบรม
+    {% if year_results|length > 1 %}{% info_tip "คลิกที่แถบปีการศึกษาเพื่อเปิด/พับรายละเอียด" %}{% endif %}
+  </h5>
+</div>
+{% endif %}
+
+{% for yr in year_results %}
+<div class="card mb-3 border-start border-4 {% if yr.is_training_year %}border-primary{% else %}border-success{% endif %}">
+  <!-- หัวข้อปีการศึกษา (Dropdown) -->
+  <div class="card-header p-0">
+    <button type="button"
+            class="btn w-100 text-start d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-0 bg-transparent yr-collapse-btn"
+            data-bs-toggle="collapse"
+            data-bs-target="#yr-body-{{ yr.year }}"
+            aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}"
+            aria-controls="yr-body-{{ yr.year }}">
+      <div class="d-flex align-items-center flex-wrap gap-2">
+        <i class="bi bi-chevron-down yr-chev text-primary"></i>
+        <span class="fw-bold fs-6 text-dark">ปีการศึกษา {{ yr.year }}</span>
+        {% if yr.is_training_year %}
+          <span class="badge bg-primary">ปีที่เข้าอบรม</span>
+        {% else %}
+          <span class="badge bg-success">ปีที่ใช้สิทธิ์{% if yr.use_record %} ค่าย {{ yr.use_record.camp_level }} (รหัส {{ yr.use_record.rights_code }}){% endif %}</span>
+        {% endif %}
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        {% if yr.show_scores and yr.total is not None %}
+          <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">คะแนนรวม {{ yr.total|floatformat:2 }}</span>
+        {% endif %}
+        {% if yr.show_result %}
+          {% if yr.result and yr.result.passed %}
+            <span class="badge bg-success"><i class="bi bi-trophy-fill me-1"></i>ผ่านการคัดเลือกเข้าค่าย 2</span>
+          {% elif yr.result %}
+            <span class="badge bg-secondary">ไม่ผ่านการคัดเลือกเข้าค่าย 2</span>
+          {% else %}
+            <span class="badge bg-light text-dark border">ไม่มีผลการคัดเลือก</span>
+          {% endif %}
+        {% else %}
+          <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>รอประกาศผล</span>
+        {% endif %}
+      </div>
+    </button>
+  </div>
+
+  <!-- เนื้อหาของปีการศึกษา -->
+  <div id="yr-body-{{ yr.year }}" class="collapse {% if forloop.first %}show{% endif %}">
+    <div class="card-body">
+      <!-- สิทธิ์สอบท้ายค่าย (แสดงเมื่อประกาศผลการผ่านคัดเลือกแล้วเท่านั้น) -->
+      {% if yr.show_exam_status %}
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2 px-3 mb-3 rounded border bg-light">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          {% if yr.exam_status_camp == 2 %}
+            <span class="badge fs-6" style="background-color:#d84315; color:#fff;">
+              <i class="bi bi-check-circle-fill me-1"></i>สถานะ: {{ yr.exam_status_text }}
+            </span>
+          {% else %}
+            <span class="badge bg-primary fs-6">
+              <i class="bi bi-check-circle-fill me-1"></i>สถานะ: {{ yr.exam_status_text }}
+            </span>
+          {% endif %}
+          {% info_tip "สถานะสิทธิ์สอบท้ายค่ายประจำปีการศึกษา " yr.year " แสดงเมื่อประกาศผลการผ่านคัดเลือกแล้ว" %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if yr.pending_reasons %}
+        <div class="alert alert-warning py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>{{ yr.pending_reasons|join:" · " }}
+        </div>
+      {% endif %}
+
+      {% if yr.show_result and yr.result %}
+        <div class="row g-2 text-center mb-3">
+          <div class="col-6 col-sm-4"><div class="p-2 rounded bg-light border"><div class="fw-bold fs-5 text-primary">{{ yr.result.total|floatformat:2 }}</div><div class="small text-muted">คะแนนรวม</div></div></div>
+          <div class="col-6 col-sm-4"><div class="p-2 rounded bg-light border"><div class="fw-bold fs-5">{{ yr.result.rank }}</div><div class="small text-muted">อันดับ</div></div></div>
+          <div class="col-12 col-sm-4"><div class="p-2 rounded {% if yr.result.passed %}bg-success text-white{% else %}bg-light border{% endif %}"><div class="fw-bold fs-6">{% if yr.result.passed %}ผ่าน{% else %}ไม่ผ่าน{% endif %}</div><div class="small {% if not yr.result.passed %}text-muted{% endif %}">คัดเลือกเข้าค่าย 2</div></div></div>
+        </div>
+      {% endif %}
+
+      <!-- 1. ส่วนคะแนน (อยู่บนสุด · คะแนนรวมแต่ละหัวข้อติดกับชื่อหัวข้อใหญ่ · ไม่มีคำว่า "เต็ม" · หัวข้อย่อยกว้าง/สูงเท่ากัน 4 ช่อง/บรรทัด) -->
+      {% if yr.show_scores %}
+      <div class="border rounded mb-3 overflow-hidden">
+        <button type="button"
+                class="btn w-100 text-start d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 bg-light border-0 yr-collapse-btn"
+                data-bs-toggle="collapse"
+                data-bs-target="#yr-scores-{{ yr.year }}"
+                aria-expanded="true"
+                aria-controls="yr-scores-{{ yr.year }}">
+          <span class="fw-bold text-dark">
+            <i class="bi bi-bar-chart-fill me-2 text-primary"></i>คะแนน
+            <span class="badge bg-primary ms-2">รวมสุทธิ {{ yr.total|floatformat:2 }}</span>
+          </span>
+          <i class="bi bi-chevron-down yr-chev text-muted"></i>
+        </button>
+
+        <div id="yr-scores-{{ yr.year }}" class="collapse show">
+          <div class="list-group list-group-flush">
+            {% for b in yr.breakdown %}
+            <div class="list-group-item p-0">
+              <button type="button"
+                      class="btn w-100 text-start d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-0 bg-white score-cat-toggle yr-collapse-btn"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#yr-sc-{{ yr.year }}-{{ b.category.pk }}"
+                      aria-expanded="false"
+                      aria-controls="yr-sc-{{ yr.year }}-{{ b.category.pk }}">
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                  <i class="bi bi-chevron-down yr-chev small text-muted"></i>
+                  <span class="fw-semibold text-dark">{{ forloop.counter }}. {{ b.category.name }}</span>
+                  <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary-subtle fw-bold">
+                    {% if b.weighted is not None %}{{ b.weighted|floatformat:2 }}{% else %}-{% endif %} / {{ b.category.weight|floatformat:2 }}
+                  </span>
+                </div>
+                <div class="d-flex align-items-center gap-2" style="min-width:130px;">
+                  <div class="progress flex-grow-1" style="height:6px; min-width:80px;">
+                    <div class="progress-bar bg-primary" role="progressbar" style="width: {{ b.pct }}%;"></div>
+                  </div>
+                  <span class="small text-muted">{{ b.pct|floatformat:0 }}%</span>
+                </div>
+              </button>
+
+              <!-- รายละเอียดหัวข้อย่อย (กว้าง/สูงเท่ากัน บรรทัดละ 4 หัวข้อย่อย) -->
+              <div id="yr-sc-{{ yr.year }}-{{ b.category.pk }}" class="collapse">
+                <div class="px-3 pb-3 pt-2 bg-light border-top">
+                  {% if b.sub_breakdown %}
+                    <div class="row row-cols-2 row-cols-md-4 g-2">
+                      {% for sb in b.sub_breakdown %}
+                      <div class="col">
+                        <div class="p-2 rounded bg-white border text-center d-flex flex-column justify-content-between h-100" style="min-height:68px;">
+                          <div class="small text-muted fw-semibold text-truncate" title="{{ forloop.parentloop.counter }}.{{ sb.index }} {{ sb.category.name }}">
+                            {{ forloop.parentloop.counter }}.{{ sb.index }} {{ sb.category.name }}
+                          </div>
+                          <div class="fw-bold text-primary mt-1" style="font-size:0.92rem;">
+                            {% if sb.weighted is not None %}{{ sb.weighted|floatformat:2 }}{% else %}-{% endif %} / {{ sb.category.default_max_score|floatformat:2 }}
+                          </div>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    {% if b.earned_sum is not None %}
+                    <div class="small text-muted mt-2">
+                      รวมคะแนนดิบ: <strong class="text-dark">{{ b.earned_sum|floatformat:2 }} / {{ b.max_sum|floatformat:2 }}</strong>
+                      → คิดตามสัดส่วน: <strong class="text-primary">{% if b.weighted is not None %}{{ b.weighted|floatformat:2 }}{% else %}-{% endif %} / {{ b.category.weight|floatformat:2 }}</strong>
+                    </div>
+                    {% endif %}
+                  {% else %}
+                    <div class="small">
+                      {% for s in b.scores %}
+                        <span class="badge bg-white text-dark border me-1">{{ s.score|floatformat:2 }} / {{ s.max_score|floatformat:2 }}</span>
+                      {% empty %}
+                        <span class="text-muted">ยังไม่มีคะแนนในหัวข้อนี้</span>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% empty %}
+            <div class="list-group-item text-muted small">ยังไม่มีหมวดคะแนน</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% elif not yr.is_training_year %}
+        <div class="alert alert-light border small text-muted mb-3">
+          <i class="bi bi-lock me-1"></i>คะแนนจะแสดงเมื่อใช้สิทธิ์แล้ว ปิดระบบการใช้สิทธิ์แล้ว และผู้ดูแลระบบอนุมัติประกาศผลแล้ว
+        </div>
+      {% endif %}
+
+      <!-- 2. ส่วนเวลาเรียน (แสดงวันอบรม + วันสอบ [เข้าสอบ/ขาดสอบ] + วันหยุด [ไม่มีการอบรม] พร้อมวันย่อ จ. อ. พ. ... · วันสอบ/วันหยุดไม่นับเป็นวันอบรม) -->
+      {% if yr.is_training_year %}
+      <div class="border rounded overflow-hidden">
+        <button type="button"
+                class="btn w-100 text-start px-3 py-2 bg-light border-0 yr-collapse-btn"
+                data-bs-toggle="collapse"
+                data-bs-target="#yr-att-{{ yr.year }}"
+                aria-expanded="false"
+                aria-controls="yr-att-{{ yr.year }}">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+              <i class="bi bi-calendar2-check-fill text-success"></i>
+              <span class="fw-bold text-dark">เวลาเรียน</span>
+              {% if yr.att_summary %}
+                <span class="badge bg-success">เข้าอบรม {{ yr.att_summary.percent|floatformat:0 }}%</span>
+                <span class="badge rounded-pill" style="{% if yr.att_summary.total_absent %}background:#fdecea;color:#b71c1c;{% else %}background:#e8f5e9;color:#1b5e20;{% endif %}">
+                  ขาดอบรม {{ yr.att_summary.total_absent }} ภาคเวลา จาก {{ yr.att_summary.display_total_sessions }} ภาคเวลา
+                </span>
+                <span class="badge rounded-pill {% if yr.att_summary.missed_exams %}bg-danger text-white{% endif %}" {% if not yr.att_summary.missed_exams %}style="background:#e8f5e9;color:#1b5e20;"{% endif %}>
+                  ขาดสอบ {{ yr.att_summary.missed_exams }} ครั้ง
+                </span>
+                {% if yr.att_summary.sick %}<span class="badge rounded-pill" style="background:#fff3e0;color:#c85a00;">ลาป่วย {{ yr.att_summary.sick }}</span>{% endif %}
+                {% if yr.att_summary.personal %}<span class="badge rounded-pill" style="background:#f3e8ff;color:#6f42c1;">ลากิจ {{ yr.att_summary.personal }}</span>{% endif %}
+                {% if yr.att_summary.exam_days %}<span class="badge bg-danger">วันสอบ {{ yr.att_summary.exam_days }} วัน</span>{% endif %}
+                {% if yr.att_summary.holiday_days %}<span class="badge bg-dark">วันหยุด {{ yr.att_summary.holiday_days }} วัน</span>{% endif %}
+              {% endif %}
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <span class="badge text-dark border text-wrap text-start" style="background: {{ yr.absence.color|default:'#e9f7ef' }};">
+                เกณฑ์ขาดได้สูงสุด {{ yr.absence.max }} ภาคเวลา{% if yr.absence.count > yr.absence.max %} (เกินเกณฑ์){% elif yr.absence.reached %} (ครบเกณฑ์สูงสุด){% elif yr.absence.near_max %} (ใกล้ครบเกณฑ์){% endif %}
+              </span>
+              <span class="small text-primary fw-semibold">
+                รายวัน ({{ yr.att_days|length }} วัน) <i class="bi bi-chevron-down yr-chev"></i>
+              </span>
+            </div>
+          </div>
+          {% if yr.att_summary and yr.att_summary.total_sessions %}
+          <div class="progress mt-2" style="height:7px;">
+            <div class="progress-bar bg-success" style="width: {{ yr.att_summary.present_pct }}%;" title="เข้าอบรม"></div>
+            <div class="progress-bar bg-danger" style="width: {{ yr.att_summary.absent_pct }}%;" title="ขาดอบรม"></div>
+            <div class="progress-bar" style="width: {{ yr.att_summary.sick_pct }}%; background:#fd7e14;" title="ลาป่วย"></div>
+            <div class="progress-bar" style="width: {{ yr.att_summary.personal_pct }}%; background:#6f42c1;" title="ลากิจ"></div>
+          </div>
+          {% endif %}
+        </button>
+
+        <div id="yr-att-{{ yr.year }}" class="collapse">
+          <div class="p-3 bg-white border-top">
+            <div class="small text-muted mb-2">
+              <span class="badge bg-primary me-1">วันอบรม</span>
+              <span class="badge bg-danger me-1">วันสอบ (ไม่นับเป็นวันอบรม)</span>
+              <span class="badge bg-dark me-1">วันหยุด (ไม่มีการอบรม)</span>
+            </div>
+            {% if yr.att_days %}
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-2">
+              {% for day in yr.att_days %}
+              <div class="col">
+                <div class="att-day-chip h-100 {% if day.event_type == 'holiday' %}border-dark{% elif day.event_type == 'exam' %}border-danger{% else %}border-primary border-opacity-25{% endif %}"
+                     {% if day.event_type == 'holiday' %}style="background:#212529; color:#fff;"{% elif day.event_type == 'exam' %}style="background:#fff5f5;"{% endif %}>
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold {% if day.event_type == 'holiday' %}text-white{% else %}text-dark{% endif %}" style="font-size:0.8rem;">
+                      {{ day.date|date_thai_short_weekday }}
+                    </span>
+                    {% if day.event_type == 'holiday' %}
+                      <span class="badge bg-dark border border-light" style="font-size:0.65rem;">วันหยุด</span>
+                    {% elif day.event_type == 'exam' %}
+                      <span class="badge bg-danger" style="font-size:0.65rem;">วันสอบ</span>
+                    {% else %}
+                      <span class="badge bg-primary" style="font-size:0.65rem;">วันอบรม</span>
+                    {% endif %}
+                  </div>
+                  {% if day.event_type == 'holiday' %}
+                    <div class="small text-white-50" style="font-size:0.74rem;">ไม่มีการอบรม{% if day.title %} ({{ day.title }}){% endif %}</div>
+                  {% elif day.event_type == 'exam' %}
+                    <div class="d-flex flex-wrap gap-1">
+                      {% if day.has_morning %}
+                        {% if day.morning %}
+                          {% if day.morning.status == 'present' %}
+                            <span class="att-slot-badge att-slot-present">เช้า: เข้าสอบ</span>
+                          {% else %}
+                            <span class="att-slot-badge att-slot-absent">เช้า: ขาดสอบ</span>
+                          {% endif %}
+                        {% else %}
+                          <span class="att-slot-badge att-slot-none">เช้า: รอสอบ</span>
+                        {% endif %}
+                      {% endif %}
+                      {% if day.has_afternoon %}
+                        {% if day.afternoon %}
+                          {% if day.afternoon.status == 'present' %}
+                            <span class="att-slot-badge att-slot-present">บ่าย: เข้าสอบ</span>
+                          {% else %}
+                            <span class="att-slot-badge att-slot-absent">บ่าย: ขาดสอบ</span>
+                          {% endif %}
+                        {% else %}
+                          <span class="att-slot-badge att-slot-none">บ่าย: รอสอบ</span>
+                        {% endif %}
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <div class="d-flex flex-wrap gap-1">
+                      {% if day.morning %}
+                      <span class="att-slot-badge att-slot-{{ day.morning.status }}" {% if day.morning.note %}title="{{ day.morning.note }}"{% endif %}>
+                        เช้า: {{ day.morning.get_status_display }}
+                      </span>
+                      {% else %}
+                      <span class="att-slot-badge att-slot-none">เช้า: {% if day.is_future %}ยังไม่ถึงวัน{% else %}-{% endif %}</span>
+                      {% endif %}
+                      {% if day.afternoon %}
+                      <span class="att-slot-badge att-slot-{{ day.afternoon.status }}" {% if day.afternoon.note %}title="{{ day.afternoon.note }}"{% endif %}>
+                        บ่าย: {{ day.afternoon.get_status_display }}
+                      </span>
+                      {% else %}
+                      <span class="att-slot-badge att-slot-none">บ่าย: {% if day.is_future %}ยังไม่ถึงวัน{% else %}-{% endif %}</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-muted small text-center py-2">ยังไม่มีบันทึกเวลาเรียนในปีการศึกษานี้</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="card mb-3"><div class="card-body text-muted">ยังไม่มีข้อมูลการอบรมหรือการใช้สิทธิ์</div></div>
+{% endfor %}

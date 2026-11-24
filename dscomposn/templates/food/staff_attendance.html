@@ -1,0 +1,1240 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}บันทึกเวลาเรียน{% endblock %}
+{% block extra_head %}
+<style>
+  .att-top-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .att-top-scroll-inner { height: 1px; }
+  .att-scroll-wrap {
+    overflow-x: auto !important;
+    overflow-y: auto;
+    max-height: 70vh;
+    width: 100%;
+    scrollbar-width: auto;
+    scrollbar-color: #6c757d #e9ecef;
+  }
+  .att-scroll-wrap::-webkit-scrollbar,
+  .att-top-scroll::-webkit-scrollbar {
+    height: 14px;
+    width: 12px;
+  }
+  .att-scroll-wrap::-webkit-scrollbar-track,
+  .att-top-scroll::-webkit-scrollbar-track {
+    background: #e9ecef;
+    border-radius: 6px;
+  }
+  .att-scroll-wrap::-webkit-scrollbar-thumb,
+  .att-top-scroll::-webkit-scrollbar-thumb {
+    background: #6c757d;
+    border-radius: 6px;
+    border: 2px solid #e9ecef;
+  }
+  .att-scroll-wrap::-webkit-scrollbar-thumb:hover,
+  .att-top-scroll::-webkit-scrollbar-thumb:hover {
+    background: #495057;
+  }
+  #att-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    --sticky-col2-left: 86px;
+    --pinned-sub1-left: 261px;
+    --pinned-sub2-left: 329px;
+  }
+  #att-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+  }
+  #att-table thead th {
+    background: #f8f9fa;
+    vertical-align: middle;
+  }
+  #att-table .sticky-col-1 {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: #fff;
+    min-width: 86px;
+    width: 86px;
+  }
+  #att-table .sticky-col-2 {
+    position: sticky;
+    left: var(--sticky-col2-left);
+    z-index: 4;
+    background: #fff;
+    min-width: 175px;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+  }
+  #att-table thead .sticky-col-1,
+  #att-table thead .sticky-col-2 {
+    z-index: 9;
+    background: #f8f9fa;
+  }
+  #att-table .pinned-day-top {
+    position: sticky;
+    left: var(--pinned-sub1-left);
+    z-index: 8;
+  }
+  #att-table .pinned-day-sub-1 {
+    position: sticky;
+    left: var(--pinned-sub1-left);
+    z-index: 4;
+  }
+  #att-table .pinned-day-sub-2 {
+    position: sticky;
+    left: var(--pinned-sub2-left);
+    z-index: 4;
+  }
+  #att-table thead .pinned-day-sub-1,
+  #att-table thead .pinned-day-sub-2 {
+    z-index: 8;
+  }
+  #att-table .pinned-day-last {
+    border-right: 2px solid #0d6efd !important;
+    box-shadow: 3px 0 6px rgba(13, 110, 253, 0.16);
+  }
+  #att-table tbody td.pinned-day-sub-1:not(.td-day-holiday),
+  #att-table tbody td.pinned-day-sub-2:not(.td-day-holiday) {
+    background-color: #f8fbff !important;
+  }
+  #att-table tbody td.pinned-day-sub-1.pinned-active-period:not(.td-day-holiday),
+  #att-table tbody td.pinned-day-sub-2.pinned-active-period:not(.td-day-holiday) {
+    background-color: #fff8db !important;
+  }
+  #att-table tbody tr:hover td.pinned-day-sub-1:not(.td-day-holiday),
+  #att-table tbody tr:hover td.pinned-day-sub-2:not(.td-day-holiday) {
+    background-color: #edf4ff !important;
+  }
+  #att-table .day-group-start {
+    border-left: 2px solid #adb5bd !important;
+  }
+  #att-table .sub-period-th {
+    font-size: 0.74rem;
+    padding: 3px 4px;
+    background: #f1f3f5;
+    min-width: 68px;
+  }
+  #att-table thead th.th-day-training {
+    background: #0d6efd !important;
+    color: #fff !important;
+  }
+  #att-table thead th.th-day-exam {
+    background: #dc3545 !important;
+    color: #fff !important;
+  }
+  #att-table thead th.th-day-holiday {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  #att-table thead th.sub-day-training {
+    background: #dbeafe !important;
+    color: #084298 !important;
+  }
+  #att-table thead th.sub-day-exam {
+    background: #fee2e2 !important;
+    color: #842029 !important;
+  }
+  #att-table td.td-day-holiday {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+  .att-cell-btn {
+    min-width: 62px;
+    padding: 3px 7px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1.25;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    white-space: nowrap;
+    transition: transform 0.08s ease, filter 0.12s ease;
+  }
+  .att-cell-btn:hover { filter: brightness(0.95); }
+  .att-cell-btn:active { transform: scale(0.96); }
+  .att-cell-btn.saving { opacity: 0.65; pointer-events: none; }
+  .att-cell-btn[data-status="present"] { background: #e8f5e9; color: #198754; border-color: #a3cfbb; }
+  .att-cell-btn[data-status="absent"] { background: #dc3545; color: #fff; border-color: #b02a37; }
+  .att-cell-btn[data-status="sick"] { background: #fd7e14; color: #fff; border-color: #ca6510; }
+  .att-cell-btn[data-status="personal"] { background: #6f42c1; color: #fff; border-color: #59359a; }
+  #att-status-popover {
+    position: fixed;
+    z-index: 2050;
+    display: none;
+    min-width: 162px;
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    padding: 6px;
+  }
+  #att-status-popover .att-pop-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #6c757d;
+    padding: 2px 8px 4px;
+    border-bottom: 1px solid #f1f3f5;
+    margin-bottom: 4px;
+  }
+  #att-status-popover .att-pop-opt {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    text-align: left;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #212529;
+  }
+  #att-status-popover .att-pop-opt:hover,
+  #att-status-popover .att-pop-opt.pop-hover { background: #f1f3f5; }
+  #att-status-popover .att-pop-opt.current { background: #e9f2ff; border-color: #86b7fe; }
+  #att-status-popover .att-pop-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  @keyframes attSavedPulse {
+    0% { box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.55); transform: scale(1.04); }
+    100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); transform: scale(1); }
+  }
+  .att-cell-btn.just-saved {
+    animation: attSavedPulse 0.6s ease-out;
+  }
+  #att-save-toast {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 2100;
+    display: none;
+    background: #198754;
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  }
+  .att-mobile-card {
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  .mobile-att-btn {
+    min-height: 44px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    border-radius: 8px;
+  }
+  @media (max-width: 767.98px) {
+    #att-table .sticky-col-1 {
+      min-width: 72px;
+      font-size: 0.78rem;
+      padding: 4px;
+    }
+    #att-table .sticky-col-2 {
+      left: 72px;
+      min-width: 120px;
+      max-width: 155px;
+      white-space: normal;
+      font-size: 0.8rem;
+      padding: 4px 6px;
+    }
+    #att-table .pinned-day-top,
+    #att-table .pinned-day-sub-1,
+    #att-table .pinned-day-sub-2 {
+      position: static !important;
+      left: auto !important;
+      box-shadow: none !important;
+    }
+    #att-save-toast {
+      bottom: 74px;
+      right: 12px;
+    }
+  }
+</style>
+{% endblock %}
+{% block content %}
+{% include "food/_attendance_tabs.html" %}
+<form id="att-csrf-form" class="d-none">{% csrf_token %}</form>
+
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-calendar2-check me-2 text-primary"></i>บันทึกเวลาเรียน ปีการศึกษา {{ year }}
+      {% info_tip "1 วันอบรมแบ่งเป็น 2 ช่อง (ภาคเช้า / ภาคบ่าย) · วันสอบเลือกได้ทั้งเช้า/บ่ายหรืออย่างใดอย่างหนึ่ง (เข้าสอบ / ขาดสอบ) · วันสอบและวันหยุดไม่นับเป็นวันอบรม\nสีน้ำเงิน = วันอบรม · สีแดง = วันสอบ · สีดำ = วันหยุด" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if user.can_signin_sheet %}
+    <a class="btn btn-outline-success btn-sm" href="{% url 'food:signin_sheet' %}?year={{ year }}&date={{ date|date:'Y-m-d' }}">
+      <i class="bi bi-printer me-1"></i>แบบลงชื่อ
+    </a>
+    {% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'food:attendance_summary' %}?year={{ year }}">
+      <i class="bi bi-bar-chart me-1"></i>สรุปเวลาเรียน
+    </a>
+    {% if user.role == 'admin' %}
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'food:score_categories' %}?year={{ year }}&tab=dates">
+      <i class="bi bi-calendar-event me-1"></i>ตั้งค่าวันอบรม/สอบ/หยุด
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ตัวกรองและเลือกคอลัมน์วันที่ที่ต้องการแสดง -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ปีการศึกษา</label>
+        <select class="form-select form-select-sm" name="year" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+          {% for y in academic_year_choices %}
+            <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปี {{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if training_dates %}
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">วันที่ปักหมุด / บันทึก</label>
+        <select class="form-select form-select-sm" name="date" onchange="this.form.submit()">
+          {% for td in training_dates %}
+          <option value="{{ td.date|date:'Y-m-d' }}" {% if td.date == date %}selected{% endif %}>
+            {{ td.date|day_short_thai }} {{ td.date|date_thai }} · {{ td.get_event_type_display }}{% if td.event_type == 'exam' %} ({{ td.get_exam_period_display }}){% endif %}{% if td.is_future %} [ยังไม่ถึงวัน]{% endif %}{% if td.title %} ({{ td.title }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">วันที่บันทึก</label>
+        <input type="date" class="form-control form-control-sm" name="date" value="{{ date|date:'Y-m-d' }}" onchange="this.form.submit()">
+      </div>
+      {% endif %}
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">ช่วงหมายเหตุ</label>
+        <select class="form-select form-select-sm" name="period" onchange="this.form.submit()">
+          {% for k, v in period_choices %}<option value="{{ k }}" {% if period == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">ค้นหา</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="ค้นหารหัส/ชื่อ">
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i> แสดง</button>
+      </div>
+    </form>
+
+    {% if training_dates %}
+    <hr class="my-2">
+    <div class="d-flex flex-wrap align-items-center gap-2 small">
+      <span class="fw-semibold text-primary"><i class="bi bi-layout-three-columns me-1"></i>แสดงคอลัมน์วันที่:</span>
+      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" id="btn-col-all">แสดงทุกวัน</button>
+      <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" id="btn-col-training">เฉพาะวันอบรม</button>
+      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" id="btn-col-exam">เฉพาะวันสอบ</button>
+      <button type="button" class="btn btn-outline-dark btn-sm py-0 px-2" id="btn-col-selected">เฉพาะวันที่เลือก</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" id="btn-col-none">ซ่อนคอลัมน์วันที่</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 ms-auto"
+              data-bs-toggle="collapse" data-bs-target="#colDateCheckboxes" aria-expanded="true" aria-controls="colDateCheckboxes">
+        <i class="bi bi-calendar3 me-1"></i>เลือกวันที่ที่ต้องการแสดง ({{ training_dates|length }} วัน) <i class="bi bi-chevron-down"></i>
+      </button>
+    </div>
+    <div class="collapse show mt-2 pt-2 border-top" id="colDateCheckboxes">
+      <div class="d-flex flex-wrap gap-2 small">
+        {% for td in training_dates %}
+        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded border {% if td.is_pinned %}border-primary bg-primary bg-opacity-10{% else %}bg-light{% endif %}">
+          <input type="checkbox" class="form-check-input m-0 col-date-toggle" id="chk-col-{{ td.date|date:'Y-m-d' }}" data-col-date="{{ td.date|date:'Y-m-d' }}" data-col-type="{{ td.event_type }}" checked title="แสดง/ซ่อนคอลัมน์วันนี้">
+          <a href="?year={{ year }}&date={{ td.date|date:'Y-m-d' }}&period={{ period }}&center={{ center|urlencode }}&q={{ q|urlencode }}"
+             class="text-decoration-none fw-semibold {% if td.event_type == 'holiday' %}text-dark{% elif td.event_type == 'exam' %}text-danger{% else %}text-primary{% endif %}"
+             title="คลิกเพื่อเลือกและปักหมุดวันนี้ไว้ชิดชื่อนักเรียน">
+            {% if td.is_pinned %}<i class="bi bi-pin-angle-fill text-primary me-1"></i>{% endif %}{{ td.date|day_short_thai }} {{ td.date|date:"d/m" }} ({{ td.get_event_type_display }})
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- แถบสรุปสถานะของวันที่เลือก + เครื่องมือคลิกบันทึกเวลาเรียน (เข้าใจง่าย ไม่ต้องกดค้าง) -->
+<div class="card mb-2 border-primary border-opacity-25 bg-light">
+  <div class="card-body py-2 px-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+    <div class="small">
+      <span class="fw-semibold me-2">
+        <i class="bi bi-pin-angle-fill text-primary me-1"></i>วันที่ปักหมุด {{ date|date_thai }} ({{ period_label }}):
+        {% if active_td %}
+          {% if active_td.event_type == 'holiday' %}
+            <span class="badge bg-dark">วันหยุด ({{ active_td.title|default:"ไม่มีการลงเวลาเรียน" }})</span>
+          {% elif active_td.event_type == 'exam' %}
+            <span class="badge bg-danger">วันสอบ ({{ active_td.title|default:"-" }})</span>
+          {% else %}
+            <span class="badge bg-primary">วันอบรม ({{ active_td.title|default:"-" }})</span>
+          {% endif %}
+        {% endif %}
+        {% if is_future %}
+          <span class="badge bg-secondary ms-1"><i class="bi bi-lock me-1"></i>ยังไม่ถึงวัน</span>
+        {% endif %}
+      </span>
+      เข้าอบรม <b id="c-present" class="text-success">{{ stats.present }}</b> ·
+      ขาดอบรม <b id="c-absent" class="text-danger">{{ stats.absent }}</b> ·
+      ลาป่วย <b id="c-sick" style="color:#c85a00;">{{ stats.sick }}</b> ·
+      ลากิจ <b id="c-personal" style="color:#6f42c1;">{{ stats.personal }}</b>
+      <span class="text-muted ms-1">(รวมขาดอบรม <b id="c-total-absent" class="text-danger">{{ stats.total_absent }}</b> คน)</span>
+      <span id="att-pinned-day-summary" class="ms-2 badge bg-white text-dark border"></span>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="small fw-bold text-dark"><i class="bi bi-hand-index-thumb me-1 text-primary"></i>วิธีคลิกในตาราง:</span>
+      <div class="btn-group btn-group-sm" role="group" aria-label="เครื่องมือคลิกบันทึกเวลาเรียน" id="att-mode-group">
+        <button type="button" class="btn btn-primary active fw-semibold" data-att-tool="menu" title="คลิกที่ช่องเพื่อเปิดเมนูเลือก มา / ขาด / ลาป่วย / ลากิจ">
+          <i class="bi bi-list-check me-1"></i>เลือกจากเมนู
+        </button>
+        <button type="button" class="btn btn-outline-success fw-semibold" data-att-tool="stamp:present" title="คลิกช่องนักเรียนเพื่อบันทึกเป็น เข้าอบรม/เข้าสอบ ทันที">
+          ✓ มา
+        </button>
+        <button type="button" class="btn btn-outline-danger fw-semibold" data-att-tool="stamp:absent" title="คลิกช่องนักเรียนเพื่อบันทึกเป็น ขาดอบรม/ขาดสอบ ทันที (คลิกซ้ำเพื่อคืนเป็น มา)">
+          ✗ ขาด
+        </button>
+        <button type="button" class="btn btn-outline-warning text-dark fw-semibold" data-att-tool="stamp:sick" title="คลิกช่องนักเรียนเพื่อบันทึกเป็น ลาป่วย ทันที (คลิกซ้ำเพื่อคืนเป็น มา)">
+          ลาป่วย
+        </button>
+        <button type="button" class="btn btn-outline-secondary fw-semibold" data-att-tool="stamp:personal" title="คลิกช่องนักเรียนเพื่อบันทึกเป็น ลากิจ ทันที (คลิกซ้ำเพื่อคืนเป็น มา)">
+          ลากิจ
+        </button>
+      </div>
+      <span id="att-tool-hint" class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">คลิกที่ช่องใดก็ได้เพื่อเลือกสถานะ</span>
+    </div>
+  </div>
+</div>
+
+{% if is_year_approved %}
+<div class="alert alert-warning d-flex align-items-center gap-2 py-2 mb-2" id="att-approved-lock-banner">
+  <i class="bi bi-lock-fill fs-5 text-warning"></i>
+  <div>
+    <strong>ปีการศึกษา {{ year }} อนุมัติประกาศผลแล้ว — ล็อกการแก้ไขเวลาเรียน</strong>
+    <span class="small d-block text-muted">ดูข้อมูลได้อย่างเดียว ไม่สามารถบันทึกหรือแก้ไขเวลาเรียนได้
+      {% if user.role == 'admin' %}· หากต้องการแก้ไข กรุณาไปที่ <a href="{% url 'food:score_announcement' %}?year={{ year }}&tab=qualification" class="fw-semibold">การประกาศผล &rarr; ยกเลิกประกาศผล</a>{% endif %}
+    </span>
+  </div>
+</div>
+{% endif %}
+
+{% if is_holiday %}
+<div class="alert alert-dark py-2 mb-2">
+  <i class="bi bi-calendar-x me-1"></i>วันที่ <strong>{{ date|date_thai }}</strong> ถูกกำหนดเป็น <strong>วันหยุด</strong> ({{ active_td.title|default:"ไม่มีการอบรม" }}) จึงไม่มีการบันทึกเวลาเรียนในวันนี้
+</div>
+{% elif is_future %}
+<div class="alert alert-warning py-2 mb-2">
+  <i class="bi bi-lock-fill me-1"></i>วันที่ <strong>{{ date|date_thai }}</strong> <strong>ยังไม่ถึงวัน</strong> ไม่สามารถบันทึกเวลาเรียนล่วงหน้าได้ (บันทึกได้เมื่อถึงวันนั้นแล้ว หรือแก้ไขย้อนหลังได้)
+</div>
+{% endif %}
+
+<!-- ตัวสลับมุมมองบนมือถือ -->
+<div class="d-md-none mb-2">
+  <div class="btn-group w-100" role="group" id="att-mobile-view-switch" aria-label="สลับมุมมองเวลาเรียน">
+    <button type="button" class="btn btn-primary btn-sm fw-semibold active" data-att-view="cards">
+      <i class="bi bi-card-list me-1"></i>มุมมองการ์ด (มือถือ)
+    </button>
+    <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" data-att-view="table">
+      <i class="bi bi-table me-1"></i>มุมมองตาราง
+    </button>
+  </div>
+</div>
+
+<!-- มุมมองการ์ดสำหรับมือถือ (แสดงวันที่และช่วงเวลาที่เลือก) -->
+<div id="att-mobile-cards" class="d-md-none mb-3">
+  {% for r in rows %}
+  <div class="att-mobile-card mb-2" data-mobile-user="{{ r.user.pk }}" data-exam="{% if is_exam_active %}1{% else %}0{% endif %}">
+    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+      <div>
+        <a href="{% url 'food:attendance_history' r.user.pk %}" class="fw-bold text-decoration-none code">{{ r.user.camp1_code }}</a>
+        <div class="fw-semibold">{{ r.user.get_full_name }}</div>
+      </div>
+      <span class="badge text-dark mobile-ab-badge" style="background: {{ r.absence.color|default:'#e9ecef' }}">{{ r.absence.text }}</span>
+    </div>
+    <div class="small text-muted mb-2">
+      <i class="bi bi-calendar-event me-1"></i>{{ date|day_short_thai }} {{ date|date_thai }} · {{ period_label }}
+    </div>
+    {% if is_holiday %}
+      <span class="badge bg-dark">วันหยุด (ไม่บันทึกเวลาเรียน)</span>
+    {% elif is_future %}
+      <span class="badge bg-secondary"><i class="bi bi-lock me-1"></i>ยังไม่ถึงวัน</span>
+    {% elif is_exam_active %}
+      <div class="row g-2">
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status == 'present' %}btn-success{% else %}btn-outline-success{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="present" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ✓ เข้าสอบ
+          </button>
+        </div>
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status != 'present' %}btn-danger{% else %}btn-outline-danger{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="absent" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ✗ ขาดสอบ
+          </button>
+        </div>
+      </div>
+    {% else %}
+      <div class="row g-2">
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status == 'present' or not r.status %}btn-success{% else %}btn-outline-success{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="present" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ✓ มา
+          </button>
+        </div>
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status == 'absent' %}btn-danger{% else %}btn-outline-danger{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="absent" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ✗ ขาด
+          </button>
+        </div>
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status == 'sick' %}btn-warning text-dark{% else %}btn-outline-warning text-dark{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="sick" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ลาป่วย
+          </button>
+        </div>
+        <div class="col-6">
+          <button type="button" class="btn w-100 mobile-att-btn {% if r.status == 'personal' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" data-mobile-user="{{ r.user.pk }}" data-st="personal" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+            ลากิจ
+          </button>
+        </div>
+      </div>
+    {% endif %}
+    <input type="text" class="form-control form-control-sm mobile-note-in mt-2" data-mobile-user="{{ r.user.pk }}" value="{{ r.att.note|default:'' }}" placeholder="หมายเหตุ ({{ period_label }})..." {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}>
+  </div>
+  {% empty %}
+  <div class="alert alert-light border text-center text-muted py-3">ไม่พบรายชื่อนักเรียนในปีการศึกษา {{ year }}</div>
+  {% endfor %}
+</div>
+
+<div class="card d-none d-md-block" id="att-table-card">
+  <div class="card-body p-0">
+    <!-- Top Horizontal Scrollbar (ซิงก์กับตารางด้านล่าง) -->
+    <div class="att-top-scroll" id="att-top-scroll">
+      <div class="att-top-scroll-inner" id="att-top-scroll-inner"></div>
+    </div>
+    <div class="att-scroll-wrap" id="att-scroll-wrap">
+      <table class="table table-sm table-bordered table-hover align-middle mb-0" id="att-table" style="font-size:0.84rem;">
+        <thead class="text-center">
+          <tr>
+            <th rowspan="2" class="sticky-col-1">รหัส</th>
+            <th rowspan="2" class="text-start sticky-col-2">ชื่อ-นามสกุล</th>
+            {% for td in display_training_dates %}
+              {% if td.event_type == 'holiday' %}
+              <th rowspan="2" class="col-td-cell day-group-start th-day-holiday {% if td.is_pinned %}pinned-day-top pinned-day-last{% endif %}" data-col-date="{{ td.date|date:'Y-m-d' }}" style="min-width:92px;">
+                <div>
+                  <a href="?year={{ year }}&date={{ td.date|date:'Y-m-d' }}&period={{ period }}&center={{ center|urlencode }}&q={{ q|urlencode }}"
+                     class="text-decoration-none fw-bold text-white">
+                    {% if td.is_pinned %}<i class="bi bi-pin-angle-fill text-warning me-1"></i>{% endif %}{{ td.date|day_short_thai }} {{ td.date|date:"d/m" }}
+                  </a>
+                </div>
+                <div><span class="badge bg-dark border border-light">วันหยุด</span></div>
+              </th>
+              {% else %}
+              <th colspan="{{ td.col_span }}" class="col-td-cell day-group-start {% if td.event_type == 'exam' %}th-day-exam{% else %}th-day-training{% endif %} {% if td.is_pinned %}pinned-day-top pinned-day-last border-warning border-2{% endif %}" data-col-date="{{ td.date|date:'Y-m-d' }}">
+                <div class="d-flex justify-content-center align-items-center gap-1 flex-wrap">
+                  <a href="?year={{ year }}&date={{ td.date|date:'Y-m-d' }}&period={{ period }}&center={{ center|urlencode }}&q={{ q|urlencode }}"
+                     class="text-decoration-none fw-bold text-white"
+                     title="คลิกเพื่อปักหมุดวันนี้ไว้ชิดกับชื่อนักเรียน">
+                    {% if td.is_pinned %}<i class="bi bi-pin-angle-fill text-warning me-1"></i>{% endif %}{{ td.date|day_short_thai }} {{ td.date|date:"d/m" }}
+                  </a>
+                  {% if td.event_type == 'exam' %}
+                    <span class="badge bg-danger border border-light">วันสอบ</span>
+                  {% else %}
+                    <span class="badge bg-primary border border-light">วันอบรม</span>
+                  {% endif %}
+                </div>
+                {% if td.is_future %}
+                  <div class="text-white-50" style="font-size:0.68rem;"><i class="bi bi-lock"></i> ยังไม่ถึงวัน</div>
+                {% endif %}
+              </th>
+              {% endif %}
+            {% endfor %}
+            {% if not active_td %}
+            <th rowspan="2" class="day-group-start" style="min-width:105px;">สถานะ ({{ date|day_short_thai }} {{ date|date:"d/m" }} · {{ period_label }})</th>
+            {% endif %}
+            <th rowspan="2" class="day-group-start" style="min-width:150px;">หมายเหตุ ({{ date|day_short_thai }} {{ date|date:"d/m" }} · {{ period_label }})</th>
+            <th rowspan="2" style="min-width:210px;">สรุปการขาด</th>
+          </tr>
+          <tr>
+            {% for td in display_training_dates %}
+              {% if td.event_type != 'holiday' %}
+                {% if td.has_morning %}
+                <th class="col-td-cell day-group-start sub-period-th {% if td.event_type == 'exam' %}sub-day-exam{% else %}sub-day-training{% endif %} {% if td.date == date and period == 'morning' %}table-warning{% endif %} {% if td.is_pinned %}pinned-day-sub-1{% if not td.has_afternoon %} pinned-day-last{% endif %}{% endif %}" data-col-date="{{ td.date|date:'Y-m-d' }}">
+                  <a href="?year={{ year }}&date={{ td.date|date:'Y-m-d' }}&period=morning&center={{ center|urlencode }}&q={{ q|urlencode }}"
+                     class="text-decoration-none text-reset fw-semibold">
+                    <i class="bi bi-brightness-high text-warning me-1"></i>{% if td.event_type == 'exam' %}สอบเช้า{% else %}เช้า{% endif %}
+                  </a>
+                </th>
+                {% endif %}
+                {% if td.has_afternoon %}
+                <th class="col-td-cell {% if not td.has_morning %}day-group-start{% endif %} sub-period-th {% if td.event_type == 'exam' %}sub-day-exam{% else %}sub-day-training{% endif %} {% if td.date == date and period == 'afternoon' %}table-warning{% endif %} {% if td.is_pinned %}{% if td.has_morning %}pinned-day-sub-2{% else %}pinned-day-sub-1{% endif %} pinned-day-last{% endif %}" data-col-date="{{ td.date|date:'Y-m-d' }}">
+                  <a href="?year={{ year }}&date={{ td.date|date:'Y-m-d' }}&period=afternoon&center={{ center|urlencode }}&q={{ q|urlencode }}"
+                     class="text-decoration-none text-reset fw-semibold">
+                    <i class="bi bi-sunset text-primary me-1"></i>{% if td.event_type == 'exam' %}สอบบ่าย{% else %}บ่าย{% endif %}
+                  </a>
+                </th>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr data-user="{{ r.user.pk }}">
+            <td class="text-center code sticky-col-1"><a href="{% url 'food:attendance_history' r.user.pk %}">{{ r.user.camp1_code }}</a></td>
+            <td class="fw-semibold sticky-col-2">{{ r.user.get_full_name }}</td>
+            {% for dc in r.date_cells %}
+              {% if dc.td.event_type == 'holiday' %}
+              <td class="text-center p-1 col-td-cell day-group-start td-day-holiday {% if dc.td.is_pinned %}pinned-day-sub-1 pinned-day-last{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                <span class="small text-white fw-semibold">วันหยุด</span>
+              </td>
+              {% elif dc.is_future %}
+                {% if dc.has_morning %}
+                <td class="text-center p-1 col-td-cell day-group-start bg-light text-muted {% if dc.td.is_pinned %}pinned-day-sub-1{% if not dc.has_afternoon %} pinned-day-last{% endif %}{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                  <span class="small text-muted" style="font-size:0.7rem;"><i class="bi bi-lock"></i> ยังไม่ถึงวัน</span>
+                </td>
+                {% endif %}
+                {% if dc.has_afternoon %}
+                <td class="text-center p-1 col-td-cell {% if not dc.has_morning %}day-group-start{% endif %} bg-light text-muted {% if dc.td.is_pinned %}{% if dc.has_morning %}pinned-day-sub-2{% else %}pinned-day-sub-1{% endif %} pinned-day-last{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                  <span class="small text-muted" style="font-size:0.7rem;"><i class="bi bi-lock"></i> ยังไม่ถึงวัน</span>
+                </td>
+                {% endif %}
+              {% elif dc.td.event_type == 'exam' %}
+                {% if dc.has_morning %}
+                <td class="text-center p-1 col-td-cell day-group-start {% if dc.td.date == date and period == 'morning' %}pinned-active-period table-warning bg-opacity-25{% endif %} {% if dc.td.is_pinned %}pinned-day-sub-1{% if not dc.has_afternoon %} pinned-day-last{% endif %}{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                  <button type="button"
+                          class="att-cell-btn matrix-st-btn"
+                          data-date="{{ dc.td.date|date:'Y-m-d' }}"
+                          data-period="morning"
+                          data-event-type="exam"
+                          data-status="{% if dc.morning_status == 'present' %}present{% else %}absent{% endif %}"
+                          title="คลิกสลับ เข้าสอบ/ขาดสอบ · กดค้างหรือคลิกขวาเพื่อเลือก" {% if not can_edit_attendance %}disabled{% endif %}>{% if dc.morning_status == 'present' %}✓ สอบ{% else %}✗ ขาดสอบ{% endif %}</button>
+                </td>
+                {% endif %}
+                {% if dc.has_afternoon %}
+                <td class="text-center p-1 col-td-cell {% if not dc.has_morning %}day-group-start{% endif %} {% if dc.td.date == date and period == 'afternoon' %}pinned-active-period table-warning bg-opacity-25{% endif %} {% if dc.td.is_pinned %}{% if dc.has_morning %}pinned-day-sub-2{% else %}pinned-day-sub-1{% endif %} pinned-day-last{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                  <button type="button"
+                          class="att-cell-btn matrix-st-btn"
+                          data-date="{{ dc.td.date|date:'Y-m-d' }}"
+                          data-period="afternoon"
+                          data-event-type="exam"
+                          data-status="{% if dc.afternoon_status == 'present' %}present{% else %}absent{% endif %}"
+                          title="คลิกสลับ เข้าสอบ/ขาดสอบ · กดค้างหรือคลิกขวาเพื่อเลือก" {% if not can_edit_attendance %}disabled{% endif %}>{% if dc.afternoon_status == 'present' %}✓ สอบ{% else %}✗ ขาดสอบ{% endif %}</button>
+                </td>
+                {% endif %}
+              {% else %}
+              <td class="text-center p-1 col-td-cell day-group-start {% if dc.td.date == date and period == 'morning' %}pinned-active-period table-warning bg-opacity-25{% endif %} {% if dc.td.is_pinned %}pinned-day-sub-1{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                <button type="button"
+                        class="att-cell-btn matrix-st-btn"
+                        data-date="{{ dc.td.date|date:'Y-m-d' }}"
+                        data-period="morning"
+                        data-event-type="training"
+                        data-status="{{ dc.morning_status|default:'present' }}"
+                        title="คลิกสลับ มา/ขาด · กดค้างหรือคลิกขวาเลือก ลาป่วย/ลากิจ" {% if not can_edit_attendance %}disabled{% endif %}>{% if dc.morning_status == 'absent' %}✗ ขาด{% elif dc.morning_status == 'sick' %}ป่วย{% elif dc.morning_status == 'personal' %}กิจ{% else %}✓ มา{% endif %}</button>
+              </td>
+              <td class="text-center p-1 col-td-cell {% if dc.td.date == date and period == 'afternoon' %}pinned-active-period table-warning bg-opacity-25{% endif %} {% if dc.td.is_pinned %}pinned-day-sub-2 pinned-day-last{% endif %}" data-col-date="{{ dc.td.date|date:'Y-m-d' }}">
+                <button type="button"
+                        class="att-cell-btn matrix-st-btn"
+                        data-date="{{ dc.td.date|date:'Y-m-d' }}"
+                        data-period="afternoon"
+                        data-event-type="training"
+                        data-status="{{ dc.afternoon_status|default:'present' }}"
+                        title="คลิกสลับ มา/ขาด · กดค้างหรือคลิกขวาเลือก ลาป่วย/ลากิจ" {% if not can_edit_attendance %}disabled{% endif %}>{% if dc.afternoon_status == 'absent' %}✗ ขาด{% elif dc.afternoon_status == 'sick' %}ป่วย{% elif dc.afternoon_status == 'personal' %}กิจ{% else %}✓ มา{% endif %}</button>
+              </td>
+              {% endif %}
+            {% endfor %}
+            {% if not active_td %}
+            <td class="day-group-start text-center">
+              {% if is_holiday %}
+                <span class="badge bg-dark">วันหยุด (ไม่บันทึกเวลาเรียน)</span>
+              {% elif is_future %}
+                <span class="badge bg-secondary"><i class="bi bi-lock me-1"></i>ยังไม่ถึงวัน</span>
+              {% elif is_exam_active %}
+                <button type="button"
+                        class="att-cell-btn st-btn"
+                        data-date="{{ date|date:'Y-m-d' }}"
+                        data-period="{{ period }}"
+                        data-event-type="exam"
+                        data-status="{% if r.status == 'present' %}present{% else %}absent{% endif %}"
+                        title="คลิกสลับ เข้าสอบ/ขาดสอบ · กดค้างหรือคลิกขวาเพื่อเลือก" {% if not can_edit_attendance %}disabled{% endif %}>{% if r.status == 'present' %}✓ สอบ{% else %}✗ ขาดสอบ{% endif %}</button>
+              {% else %}
+                <button type="button"
+                        class="att-cell-btn st-btn"
+                        data-date="{{ date|date:'Y-m-d' }}"
+                        data-period="{{ period }}"
+                        data-event-type="training"
+                        data-status="{{ r.status|default:'present' }}"
+                        title="คลิกสลับ มา/ขาด · กดค้างหรือคลิกขวาเลือก ลาป่วย/ลากิจ" {% if not can_edit_attendance %}disabled{% endif %}>{% if r.status == 'absent' %}✗ ขาด{% elif r.status == 'sick' %}ป่วย{% elif r.status == 'personal' %}กิจ{% else %}✓ มา{% endif %}</button>
+              {% endif %}
+            </td>
+            {% endif %}
+            <td class="day-group-start"><input class="form-control form-control-sm note-in" value="{{ r.att.note|default:'' }}" {% if not can_record_active or not can_edit_attendance %}disabled{% endif %}></td>
+            <td class="ab-cell"><span class="badge text-dark ab-badge" style="background: {{ r.absence.color|default:'#e9ecef' }}">{{ r.absence.text }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="80" class="text-center text-muted py-4">ไม่พบรายชื่อนักเรียนในปีการศึกษา {{ year }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Popover เลือกสถานะ -->
+<div id="att-status-popover" role="menu" aria-hidden="true">
+  <div class="att-pop-title" id="att-pop-title">เลือกสถานะ</div>
+  <div id="att-pop-options"></div>
+</div>
+<div id="att-save-toast" role="status" aria-live="polite"><i class="bi bi-check-circle-fill me-1"></i><span id="att-save-toast-text">บันทึกแล้ว</span></div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  var DATE = "{{ date|date:'Y-m-d' }}", PERIOD = "{{ period }}", YEAR = "{{ year }}";
+  var IS_YEAR_APPROVED = {% if is_year_approved %}true{% else %}false{% endif %};
+  var CAN_RECORD_ACTIVE = {% if can_record_active %}true{% else %}false{% endif %};
+  var url = "{% url 'food:attendance_save' %}";
+
+  // ซ่อนแผงติ๊กวันที่เริ่มต้นบนมือถือเพื่อประหยัดพื้นที่หน้าจอ
+  var colCollapseEl = document.getElementById('colDateCheckboxes');
+  if (colCollapseEl && window.innerWidth < 768) {
+    colCollapseEl.classList.remove('show');
+    var colBtn = document.querySelector('[data-bs-target="#colDateCheckboxes"]');
+    if (colBtn) colBtn.setAttribute('aria-expanded', 'false');
+  }
+  var csrfEl = document.querySelector('#att-csrf-form [name=csrfmiddlewaretoken]') || document.querySelector('[name=csrfmiddlewaretoken]');
+  var csrf = csrfEl ? csrfEl.value : '';
+
+  // ซิงก์ Scrollbar แนวนอนด้านบนกับตารางด้านล่าง
+  var topScroll = document.getElementById('att-top-scroll');
+  var topInner = document.getElementById('att-top-scroll-inner');
+  var mainWrap = document.getElementById('att-scroll-wrap');
+  var attTable = document.getElementById('att-table');
+  var popover = document.getElementById('att-status-popover');
+  var popTitle = document.getElementById('att-pop-title');
+  var popOpts = document.getElementById('att-pop-options');
+
+  function applyPinnedStickyOffsets() {
+    if (!attTable) return;
+    var th1 = attTable.querySelector('thead .sticky-col-1');
+    var th2 = attTable.querySelector('thead .sticky-col-2');
+    var w1 = th1 ? Math.round(th1.getBoundingClientRect().width) : 86;
+    var w2 = th2 ? Math.round(th2.getBoundingClientRect().width) : 175;
+    if (w1 > 0 && w2 > 0) {
+      attTable.style.setProperty('--sticky-col2-left', w1 + 'px');
+      attTable.style.setProperty('--pinned-sub1-left', (w1 + w2) + 'px');
+      var pinSub1 = attTable.querySelector('thead .pinned-day-sub-1:not(.d-none)');
+      var wSub1 = pinSub1 ? Math.round(pinSub1.getBoundingClientRect().width) : 68;
+      attTable.style.setProperty('--pinned-sub2-left', (w1 + w2 + wSub1) + 'px');
+    }
+  }
+
+  function syncScrollWidth() {
+    applyPinnedStickyOffsets();
+    if (topInner && attTable) {
+      topInner.style.width = attTable.scrollWidth + 'px';
+    }
+  }
+  if (topScroll && mainWrap) {
+    var lockScroll = false;
+    topScroll.addEventListener('scroll', function () {
+      if (lockScroll) return;
+      lockScroll = true;
+      mainWrap.scrollLeft = topScroll.scrollLeft;
+      lockScroll = false;
+      closePopover();
+    }, {passive: true});
+    mainWrap.addEventListener('scroll', function () {
+      if (lockScroll) return;
+      lockScroll = true;
+      topScroll.scrollLeft = mainWrap.scrollLeft;
+      lockScroll = false;
+      closePopover();
+    }, {passive: true});
+    syncScrollWidth();
+    window.addEventListener('resize', syncScrollWidth);
+  }
+
+  // เครื่องมือคลิกบันทึกเวลา: 'menu' (คลิกเลือกจากเมนู), 'stamp:present', 'stamp:absent', 'stamp:sick', 'stamp:personal'
+  var TOOL_KEY = 'att_click_tool:{{ year }}';
+  var activeTool = 'menu';
+  var toolHintEl = document.getElementById('att-tool-hint');
+  var TOOL_META = {
+    'menu': {hint: 'คลิกที่ช่องใดก็ได้เพื่อเลือกสถานะ', cls: 'badge bg-primary-subtle text-primary-emphasis border border-primary-subtle', activeCls: 'btn-primary'},
+    'stamp:present': {hint: 'คลิกช่องนักเรียนเพื่อบันทึก "✓ มา" ทันที', cls: 'badge bg-success text-white', activeCls: 'btn-success'},
+    'stamp:absent': {hint: 'คลิกช่องนักเรียนเพื่อบันทึก "✗ ขาด" ทันที (คลิกซ้ำเพื่อคืนเป็น มา)', cls: 'badge bg-danger text-white', activeCls: 'btn-danger'},
+    'stamp:sick': {hint: 'คลิกช่องนักเรียนเพื่อบันทึก "ลาป่วย" ทันที (คลิกซ้ำเพื่อคืนเป็น มา)', cls: 'badge bg-warning text-dark', activeCls: 'btn-warning text-dark'},
+    'stamp:personal': {hint: 'คลิกช่องนักเรียนเพื่อบันทึก "ลากิจ" ทันที (คลิกซ้ำเพื่อคืนเป็น มา)', cls: 'badge text-white', bg: '#6f42c1', activeCls: 'btn-secondary'}
+  };
+  var TOOL_OUTLINE_MAP = {
+    'menu': 'btn-outline-primary',
+    'stamp:present': 'btn-outline-success',
+    'stamp:absent': 'btn-outline-danger',
+    'stamp:sick': 'btn-outline-warning text-dark',
+    'stamp:personal': 'btn-outline-secondary'
+  };
+
+  function applyToolUI() {
+    document.querySelectorAll('#att-mode-group [data-att-tool]').forEach(function (b) {
+      var t = b.getAttribute('data-att-tool');
+      var isCur = (t === activeTool);
+      var meta = TOOL_META[t] || TOOL_META['menu'];
+      b.className = 'btn fw-semibold ' + (isCur ? meta.activeCls + ' active' : TOOL_OUTLINE_MAP[t]);
+      b.style.backgroundColor = (isCur && t === 'stamp:personal') ? '#6f42c1' : '';
+      b.style.borderColor = (isCur && t === 'stamp:personal') ? '#59359a' : '';
+    });
+    if (toolHintEl) {
+      var m = TOOL_META[activeTool] || TOOL_META['menu'];
+      toolHintEl.textContent = m.hint;
+      toolHintEl.className = m.cls;
+      toolHintEl.style.backgroundColor = m.bg || '';
+    }
+  }
+  if (typeof _dsStoreGet === 'function') {
+    var savedTool = _dsStoreGet(TOOL_KEY);
+    if (TOOL_META[savedTool]) activeTool = savedTool;
+  }
+  applyToolUI();
+  document.querySelectorAll('#att-mode-group [data-att-tool]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      activeTool = b.getAttribute('data-att-tool') || 'menu';
+      applyToolUI();
+      if (typeof _dsStoreSet === 'function') _dsStoreSet(TOOL_KEY, activeTool);
+      closePopover();
+    });
+  });
+
+  var toastTimer = null;
+  function showSaveToast(msg) {
+    var toastEl = document.getElementById('att-save-toast');
+    var txtEl = document.getElementById('att-save-toast-text');
+    if (!toastEl) return;
+    if (txtEl) txtEl.textContent = msg || 'บันทึกแล้ว';
+    toastEl.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.style.display = 'none'; }, 1200);
+  }
+
+  function post(data) {
+    var body = new URLSearchParams(Object.assign({date: DATE, period: PERIOD, year: YEAR}, data));
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+      body: body
+    }).then(function (r) {
+      return r.json().catch(function () { return {ok: false, error: 'เกิดข้อผิดพลาดในการเชื่อมต่อ (' + r.status + ')'}; });
+    }).catch(function () {
+      return {ok: false, error: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้'};
+    });
+  }
+
+  function renderCellBtn(btn, status) {
+    if (!btn) return;
+    var isExam = btn.dataset.eventType === 'exam';
+    var st = status || 'present';
+    if (isExam) {
+      st = (st === 'present') ? 'present' : 'absent';
+      btn.dataset.status = st;
+      btn.textContent = (st === 'present') ? '✓ สอบ' : '✗ ขาดสอบ';
+    } else {
+      btn.dataset.status = st;
+      if (st === 'absent') btn.textContent = '✗ ขาด';
+      else if (st === 'sick') btn.textContent = 'ป่วย';
+      else if (st === 'personal') btn.textContent = 'กิจ';
+      else btn.textContent = '✓ มา';
+    }
+  }
+
+  function activeCellBtnForRow(tr) {
+    return tr.querySelector('.matrix-st-btn[data-date="' + DATE + '"][data-period="' + PERIOD + '"]') || tr.querySelector('.st-btn');
+  }
+
+  function recount() {
+    var c = {present: 0, absent: 0, sick: 0, personal: 0};
+    var mStats = {present: 0, miss: 0, n: 0};
+    var aStats = {present: 0, miss: 0, n: 0};
+    document.querySelectorAll('#att-table tbody tr').forEach(function (tr) {
+      var b = activeCellBtnForRow(tr);
+      if (b && c.hasOwnProperty(b.dataset.status)) c[b.dataset.status]++;
+      var bm = tr.querySelector('.matrix-st-btn[data-date="' + DATE + '"][data-period="morning"]');
+      if (bm) {
+        mStats.n++;
+        if (bm.dataset.status === 'present') mStats.present++;
+        else mStats.miss++;
+      }
+      var ba = tr.querySelector('.matrix-st-btn[data-date="' + DATE + '"][data-period="afternoon"]');
+      if (ba) {
+        aStats.n++;
+        if (ba.dataset.status === 'present') aStats.present++;
+        else aStats.miss++;
+      }
+    });
+    for (var k in c) {
+      var el = document.getElementById('c-' + k);
+      if (el) el.textContent = c[k];
+    }
+    var totAbsEl = document.getElementById('c-total-absent');
+    if (totAbsEl) totAbsEl.textContent = c.absent + c.sick + c.personal;
+    var pinSumEl = document.getElementById('att-pinned-day-summary');
+    if (pinSumEl) {
+      var parts = [];
+      if (mStats.n > 0) parts.push('เช้า: มา ' + mStats.present + ' · ขาด/ลา ' + mStats.miss);
+      if (aStats.n > 0) parts.push('บ่าย: มา ' + aStats.present + ' · ขาด/ลา ' + aStats.miss);
+      pinSumEl.textContent = parts.join(' | ');
+      pinSumEl.classList.toggle('d-none', parts.length === 0);
+    }
+  }
+  recount();
+
+  function setBadge(tr, ab) {
+    var b = tr.querySelector('.ab-badge');
+    if (!b || !ab) return;
+    b.textContent = ab.text;
+    b.style.background = ab.color || '#e9ecef';
+    if (ab.near_max || ab.reached) b.classList.add('border', 'border-dark');
+    else b.classList.remove('border', 'border-dark');
+  }
+
+  function syncMobileCard(userId, status, ab) {
+    var card = document.querySelector('.att-mobile-card[data-mobile-user="' + userId + '"]');
+    if (!card) return;
+    if (ab) {
+      var mb = card.querySelector('.mobile-ab-badge');
+      if (mb) {
+        mb.textContent = ab.text;
+        mb.style.background = ab.color || '#e9ecef';
+        if (ab.near_max || ab.reached) mb.classList.add('border', 'border-dark');
+        else mb.classList.remove('border', 'border-dark');
+      }
+    }
+    if (status) {
+      var styleMap = {
+        present: ['btn-success', 'btn-outline-success'],
+        absent: ['btn-danger', 'btn-outline-danger'],
+        sick: ['btn-warning', 'btn-outline-warning'],
+        personal: ['btn-secondary', 'btn-outline-secondary']
+      };
+      card.querySelectorAll('.mobile-att-btn').forEach(function (b) {
+        var st = b.getAttribute('data-st');
+        var pair = styleMap[st] || ['btn-secondary', 'btn-outline-secondary'];
+        b.classList.remove(pair[0], pair[1]);
+        b.classList.add(st === status ? pair[0] : pair[1]);
+      });
+    }
+  }
+
+  var STATUS_LABEL_SHORT = {present: '✓ มา', absent: '✗ ขาด', sick: 'ลาป่วย', personal: 'ลากิจ'};
+  function saveStatus(tr, dStr, pStr, status) {
+    if (IS_YEAR_APPROVED) return;
+    var note = tr.querySelector('.note-in');
+    var mobileNote = document.querySelector('.mobile-note-in[data-mobile-user="' + tr.dataset.user + '"]');
+    var targetBtns = tr.querySelectorAll(
+      '.matrix-st-btn[data-date="' + dStr + '"][data-period="' + pStr + '"], .st-btn[data-date="' + dStr + '"][data-period="' + pStr + '"]'
+    );
+    targetBtns.forEach(function (btn) { btn.classList.add('saving'); });
+    var payload = {user_id: tr.dataset.user, date: dStr, period: pStr, status: status};
+    if (dStr === DATE && pStr === PERIOD) {
+      payload.note = note ? note.value : (mobileNote ? mobileNote.value : '');
+      if (note && mobileNote && mobileNote.value !== note.value) mobileNote.value = note.value;
+    }
+    post(payload).then(function (d) {
+      targetBtns.forEach(function (btn) { btn.classList.remove('saving'); });
+      if (!d.ok) { alert(d.error || 'บันทึกไม่สำเร็จ'); return; }
+      tr.querySelectorAll('.matrix-st-btn[data-date="' + dStr + '"][data-period="' + pStr + '"]').forEach(function (mb) {
+        renderCellBtn(mb, status);
+        mb.classList.remove('just-saved');
+        void mb.offsetWidth;
+        mb.classList.add('just-saved');
+      });
+      if (dStr === DATE) {
+        if (pStr === PERIOD) {
+          tr.querySelectorAll('.st-btn').forEach(function (sb) {
+            renderCellBtn(sb, status);
+          });
+          syncMobileCard(tr.dataset.user, status, d.absence);
+        } else {
+          syncMobileCard(tr.dataset.user, null, d.absence);
+        }
+        recount();
+      } else {
+        syncMobileCard(tr.dataset.user, null, d.absence);
+      }
+      setBadge(tr, d.absence);
+      showSaveToast('บันทึกแล้ว (' + (STATUS_LABEL_SHORT[status] || status) + ')');
+    });
+  }
+
+  // จัดการ Popover เลือกสถานะ (กดค้าง / คลิกขวา / โหมดเมนู)
+  var TRAINING_OPTIONS = [
+    {status: 'present', label: 'เข้าอบรม', color: '#198754'},
+    {status: 'absent', label: 'ขาดอบรม', color: '#dc3545'},
+    {status: 'sick', label: 'ลาป่วย', color: '#fd7e14'},
+    {status: 'personal', label: 'ลากิจ', color: '#6f42c1'}
+  ];
+  var EXAM_OPTIONS = [
+    {status: 'present', label: 'เข้าสอบ', color: '#198754'},
+    {status: 'absent', label: 'ขาดสอบ', color: '#dc3545'}
+  ];
+  var activePopCtx = null;
+
+  function closePopover() {
+    if (!popover) return;
+    popover.style.display = 'none';
+    popover.setAttribute('aria-hidden', 'true');
+    activePopCtx = null;
+  }
+
+  function openPopover(btn) {
+    if (IS_YEAR_APPROVED) return;
+    if (!popover || !popOpts) return;
+    var tr = btn.closest('tr');
+    if (!tr) return;
+    var isExam = btn.dataset.eventType === 'exam';
+    var opts = isExam ? EXAM_OPTIONS : TRAINING_OPTIONS;
+    var curSt = btn.dataset.status || 'present';
+    activePopCtx = {
+      tr: tr,
+      btn: btn,
+      date: btn.getAttribute('data-date') || DATE,
+      period: btn.getAttribute('data-period') || PERIOD
+    };
+    if (popTitle) popTitle.textContent = isExam ? 'สถานะวันสอบ' : 'เลือกสถานะเวลาเรียน';
+    popOpts.innerHTML = '';
+    opts.forEach(function (opt) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'att-pop-opt' + (opt.status === curSt ? ' current' : '');
+      b.setAttribute('data-status', opt.status);
+      var dot = document.createElement('span');
+      dot.className = 'att-pop-dot';
+      dot.style.background = opt.color;
+      var txt = document.createElement('span');
+      txt.textContent = opt.label;
+      b.appendChild(dot);
+      b.appendChild(txt);
+      b.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var ctx = activePopCtx;
+        closePopover();
+        if (ctx) saveStatus(ctx.tr, ctx.date, ctx.period, opt.status);
+      });
+      popOpts.appendChild(b);
+    });
+
+    popover.style.display = 'block';
+    popover.style.visibility = 'hidden';
+    popover.setAttribute('aria-hidden', 'false');
+    var rect = btn.getBoundingClientRect();
+    var pw = popover.offsetWidth || 165;
+    var ph = popover.offsetHeight || 160;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var left = rect.left;
+    var top = rect.bottom + 4;
+    if (left + pw > vw - 8) left = Math.max(8, rect.right - pw);
+    if (left < 8) left = 8;
+    if (top + ph > vh - 8) top = Math.max(8, rect.top - ph - 4);
+    popover.style.left = left + 'px';
+    popover.style.top = top + 'px';
+    popover.style.visibility = 'visible';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (popover && popover.style.display === 'block') {
+      if (!popover.contains(e.target) && !e.target.closest('.att-cell-btn')) {
+        closePopover();
+      }
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePopover();
+  });
+
+  document.querySelectorAll('#att-table tbody tr').forEach(function (tr) {
+    var cur = function () {
+      var b = activeCellBtnForRow(tr);
+      return b ? b.dataset.status : 'present';
+    };
+    var nIn = tr.querySelector('.note-in');
+    if (nIn) nIn.addEventListener('change', function () {
+      if (IS_YEAR_APPROVED || !CAN_RECORD_ACTIVE) return;
+      saveStatus(tr, DATE, PERIOD, cur());
+    });
+
+    tr.querySelectorAll('.att-cell-btn').forEach(function (btn) {
+      btn.setAttribute('title', 'คลิกเพื่อเลือก/บันทึกสถานะ (คลิกขวาเพื่อเปิดเมนู)');
+
+      btn.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        if (IS_YEAR_APPROVED) return;
+        openPopover(btn);
+      });
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (IS_YEAR_APPROVED) return;
+        var dStr = btn.getAttribute('data-date') || DATE;
+        var pStr = btn.getAttribute('data-period') || PERIOD;
+        var curSt = btn.dataset.status || 'present';
+        var isExam = btn.dataset.eventType === 'exam';
+
+        if (activeTool && activeTool.indexOf('stamp:') === 0) {
+          var targetSt = activeTool.slice(6);
+          if (isExam && targetSt !== 'present' && targetSt !== 'absent') {
+            openPopover(btn);
+            return;
+          }
+          var nextSt = (curSt === targetSt && targetSt !== 'present') ? 'present' : targetSt;
+          closePopover();
+          saveStatus(tr, dStr, pStr, nextSt);
+        } else {
+          if (popover && popover.style.display === 'block' && activePopCtx && activePopCtx.btn === btn) {
+            closePopover();
+          } else {
+            openPopover(btn);
+          }
+        }
+      });
+    });
+  });
+
+  // ตัวเลือกซ่อน/แสดงคอลัมน์วันที่อบรม/วันสอบ/วันหยุด พร้อมจดจำสถานะใน sessionStorage
+  var COL_KEY = 'att_cols:{{ year }}';
+  function saveColVisibility() {
+    if (typeof _dsStoreSet !== 'function') return;
+    var map = {};
+    document.querySelectorAll('.col-date-toggle').forEach(function (chk) {
+      map[chk.getAttribute('data-col-date')] = chk.checked;
+    });
+    _dsStoreSet(COL_KEY, JSON.stringify(map));
+  }
+  function updateColVisibility(skipSave) {
+    document.querySelectorAll('.col-date-toggle').forEach(function (chk) {
+      var dStr = chk.getAttribute('data-col-date');
+      var show = chk.checked;
+      document.querySelectorAll('.col-td-cell[data-col-date="' + dStr + '"]').forEach(function (cell) {
+        cell.classList.toggle('d-none', !show);
+      });
+    });
+    if (!skipSave) saveColVisibility();
+    syncScrollWidth();
+  }
+  if (typeof _dsStoreGet === 'function') {
+    try {
+      var savedCols = JSON.parse(_dsStoreGet(COL_KEY) || 'null');
+      if (savedCols) {
+        document.querySelectorAll('.col-date-toggle').forEach(function (chk) {
+          var k = chk.getAttribute('data-col-date');
+          if (k === DATE) {
+            chk.checked = true;
+          } else if (savedCols.hasOwnProperty(k)) {
+            chk.checked = !!savedCols[k];
+          }
+        });
+        updateColVisibility(true);
+      }
+    } catch (e) {}
+  }
+  applyPinnedStickyOffsets();
+  document.querySelectorAll('.col-date-toggle').forEach(function (chk) {
+    chk.addEventListener('change', function () { updateColVisibility(false); });
+  });
+  var btnAll = document.getElementById('btn-col-all');
+  if (btnAll) btnAll.addEventListener('click', function () {
+    document.querySelectorAll('.col-date-toggle').forEach(function (c) { c.checked = true; });
+    updateColVisibility(false);
+  });
+  var btnTr = document.getElementById('btn-col-training');
+  if (btnTr) btnTr.addEventListener('click', function () {
+    document.querySelectorAll('.col-date-toggle').forEach(function (c) { c.checked = (c.getAttribute('data-col-type') === 'training'); });
+    updateColVisibility(false);
+  });
+  var btnEx = document.getElementById('btn-col-exam');
+  if (btnEx) btnEx.addEventListener('click', function () {
+    document.querySelectorAll('.col-date-toggle').forEach(function (c) { c.checked = (c.getAttribute('data-col-type') === 'exam'); });
+    updateColVisibility(false);
+  });
+  var btnSel = document.getElementById('btn-col-selected');
+  if (btnSel) btnSel.addEventListener('click', function () {
+    document.querySelectorAll('.col-date-toggle').forEach(function (c) { c.checked = (c.getAttribute('data-col-date') === DATE); });
+    updateColVisibility(false);
+  });
+  var btnNone = document.getElementById('btn-col-none');
+  if (btnNone) btnNone.addEventListener('click', function () {
+    document.querySelectorAll('.col-date-toggle').forEach(function (c) { c.checked = false; });
+    updateColVisibility(false);
+  });
+
+  // ตัวสลับมุมมองมือถือ (การ์ด <-> ตาราง) และตัวจัดการปุ่มบนการ์ดมือถือ
+  var mobileCardsEl = document.getElementById('att-mobile-cards');
+  var attTableCardEl = document.getElementById('att-table-card');
+  document.querySelectorAll('#att-mobile-view-switch [data-att-view]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-att-view');
+      document.querySelectorAll('#att-mobile-view-switch [data-att-view]').forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle('active', on);
+        b.classList.toggle('btn-primary', on);
+        b.classList.toggle('btn-outline-primary', !on);
+      });
+      if (mode === 'table') {
+        if (mobileCardsEl) mobileCardsEl.classList.add('d-none');
+        if (attTableCardEl) attTableCardEl.classList.remove('d-none');
+        syncScrollWidth();
+      } else {
+        if (mobileCardsEl) mobileCardsEl.classList.remove('d-none');
+        if (attTableCardEl) attTableCardEl.classList.add('d-none');
+      }
+    });
+  });
+
+  document.querySelectorAll('.mobile-att-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (IS_YEAR_APPROVED || !CAN_RECORD_ACTIVE) return;
+      var uid = btn.getAttribute('data-mobile-user');
+      var st = btn.getAttribute('data-st') || 'present';
+      var tr = document.querySelector('#att-table tbody tr[data-user="' + uid + '"]');
+      if (!tr) return;
+      var mNote = document.querySelector('.mobile-note-in[data-mobile-user="' + uid + '"]');
+      var tNote = tr.querySelector('.note-in');
+      if (tNote && mNote) tNote.value = mNote.value;
+      saveStatus(tr, DATE, PERIOD, st);
+    });
+  });
+
+  document.querySelectorAll('.mobile-note-in').forEach(function (inp) {
+    inp.addEventListener('change', function () {
+      if (IS_YEAR_APPROVED || !CAN_RECORD_ACTIVE) return;
+      var uid = inp.getAttribute('data-mobile-user');
+      var tr = document.querySelector('#att-table tbody tr[data-user="' + uid + '"]');
+      if (!tr) return;
+      var tNote = tr.querySelector('.note-in');
+      if (tNote) tNote.value = inp.value;
+      var activeBtn = activeCellBtnForRow(tr);
+      var st = activeBtn ? (activeBtn.dataset.status || 'present') : 'present';
+      saveStatus(tr, DATE, PERIOD, st);
+    });
+  });
+})();
+</script>
+{% endblock %}

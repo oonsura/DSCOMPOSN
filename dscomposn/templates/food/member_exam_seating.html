@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ที่นั่งสอบของฉัน{% endblock %}
+{% block breadcrumb %}ที่นั่งสอบของฉัน{% endblock %}
+{% block extra_head %}
+<style>
+  .exam-chart-body-wrap { display: flex; align-items: stretch; }
+  .exam-chart-body-wrap.front-top, .exam-chart-body-wrap.front-bottom { flex-direction: column; }
+  .exam-chart-body-wrap.front-left, .exam-chart-body-wrap.front-right { flex-direction: row; }
+  .exam-front-bar {
+    background: #d9ead3; border: 1px solid #93c47d; color: #1b5e20;
+    font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .exam-front-horiz { padding: 6px 12px; width: 100%; }
+  .exam-front-vert { width: 38px; flex: 0 0 38px; writing-mode: vertical-rl; padding: 10px 4px; }
+  .exam-front-left { transform: rotate(180deg); }
+  .exam-grid-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .exam-block-lab { margin-bottom: 12px; }
+  .exam-block-desk { margin-bottom: 8px; }
+  .exam-lab-row, .exam-desk-row { display: grid; align-items: stretch; }
+  .exam-desk-row { gap: 8px; }
+  .exam-desk-row-label { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .exam-seat-cell, .exam-desk-card {
+    display: flex; flex-direction: column; border: 1px solid #495057; background: #fff; min-width: 0;
+  }
+  .exam-lab-row .exam-seat-cell + .exam-seat-cell { border-left: 0; }
+  .exam-lab-row + .exam-lab-row .exam-seat-cell { border-top: 0; }
+  .seat-num {
+    background: #fff2cc; border-bottom: 1px solid #555; text-align: center;
+    font-size: 0.76rem; padding: 2px 3px; font-weight: 600;
+  }
+  .exam-seat-cell:has(.seat-body + .seat-num) .seat-num { border-bottom: 0; border-top: 1px solid #555; }
+  .seat-body {
+    flex: 1; min-height: 28px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 2px 3px; text-align: center;
+  }
+  .seat-code { color: #0000cc; font-weight: 700; font-size: 0.85rem; }
+  .seat-code-current { color: #0000cc !important; }
+  .seat-code-rights { color: #1b5e20 !important; }
+  .seat-reserve { color: #cc0000; font-weight: 700; font-size: 0.8rem; }
+  .seat-blocked { color: #6c757d; font-size: 0.72rem; }
+  .seat-status-blocked .seat-body { background: #eeeeee; }
+  .seat-highlight-me {
+    outline: 3px solid #f59f00 !important;
+    outline-offset: -2px;
+    background: #fff9db !important;
+    z-index: 2;
+  }
+  .seat-highlight-me .seat-num { background: #f59f00 !important; color: #111 !important; }
+  .seat-highlight-me .seat-code { font-size: 0.92rem; }
+  .exam-proctor-bar {
+    background: #fce5cd; border: 1px solid #e6b8af; padding: 8px 12px;
+    text-align: center; font-weight: 700; color: #111; border-radius: 6px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h4 class="mb-0"><i class="bi bi-grid-3x3-gap-fill me-2 text-success"></i>ที่นั่งสอบของฉัน</h4>
+    <small class="text-muted">แสดงห้องสอบ หมายเลขเครื่อง/โต๊ะสอบ และแผนผังที่นั่งสอบที่ผู้ดูแลระบบเปิดประกาศแล้ว</small>
+  </div>
+  <a href="{% url 'composn:profile' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>กลับหน้าข้อมูลส่วนตัว
+  </a>
+</div>
+
+{% if seating_items %}
+  {% for item in seating_items %}
+  <div class="card mb-4 border-success border-opacity-50 shadow-sm">
+    <div class="card-header bg-success bg-opacity-10 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <span class="badge bg-success me-1">{{ item.plan.effective_exam_type_display }}</span>
+        <strong class="text-dark">{{ item.plan.training_date.date|date_thai_full }}</strong>
+        <span class="badge bg-light text-dark border ms-1">{{ item.plan.effective_period_display }}</span>
+      </div>
+      <div class="fw-bold text-success fs-6">
+        {{ item.plan_room.room.name }} ·
+        {% if item.plan_room.room.has_computer %}เครื่องหมายเลข{% else %}ที่นั่งหมายเลข{% endif %}
+        <span class="badge bg-success fs-6 ms-1">{{ item.seat.seat_label }}</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-success py-2 small mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <i class="bi bi-check-circle-fill me-1"></i>
+          รหัสผู้เข้าสอบ: <strong class="code">{{ item.display_code }}</strong> ·
+          ห้องสอบ: <strong>{{ item.plan_room.room.name }}</strong> ·
+          {% if item.plan_room.room.has_computer %}เลขเครื่องคอมพิวเตอร์{% else %}เลขที่นั่งโต๊ะสอบ{% endif %}:
+          <strong class="fs-6">{{ item.seat.seat_label }}</strong>
+          (ที่นั่งของท่านถูกเน้นด้วยสีเขียวในแผนผังด้านล่าง)
+        </div>
+        {% if item.proctors %}
+        <div>
+          <span class="text-muted">กรรมการคุมสอบ:</span>
+          <strong>{% for p in item.proctors %}{{ p.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</strong>
+        </div>
+        {% endif %}
+      </div>
+      {% include "food/_exam_room_map.html" with plan=item.plan plan_room=item.plan_room layout=item.layout proctors=item.proctors interactive=False highlight_user_id=user.pk %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="card">
+    <div class="card-body text-center py-5 text-muted">
+      <i class="bi bi-calendar-x fs-1 d-block mb-2 text-secondary"></i>
+      <div class="fw-semibold fs-6 text-dark mb-1">ยังไม่มีประกาศที่นั่งสอบในขณะนี้</div>
+      <div class="small">เมื่อผู้ดูแลระบบจัดที่นั่งสอบและเปิดประกาศผลแล้ว ข้อมูลห้องสอบและเลขที่นั่งของท่านจะแสดงที่นี่</div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

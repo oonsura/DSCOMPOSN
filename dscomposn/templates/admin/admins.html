@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ผู้ดูแลและเจ้าหน้าที่{% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-person-gear me-2 text-primary"></i>ผู้ดูแลและเจ้าหน้าที่
+      {% info_tip "เพิ่ม ลบ แก้ไข ค้นหา และรีเซ็ตรหัสผ่านของบัญชี Admin และ Staff" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'composn:admin_admin_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>เพิ่มผู้ดูแล / เจ้าหน้าที่
+    </a>
+    <a href="{% url 'composn:admin_users' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-people me-1"></i>ผู้ใช้ (นักเรียน/สมาชิก)
+    </a>
+  </div>
+</div>
+
+<!-- Search Form -->
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-md-4">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="ค้นหา ชื่อผู้ใช้ / ชื่อ-นามสกุล">
+      </div>
+      <div class="col-md-3">
+        <select name="role" class="form-select form-select-sm">
+          <option value="">-- ทุกบทบาท (Admin + Staff) --</option>
+          <option value="admin" {% if role == 'admin' %}selected{% endif %}>ผู้ดูแลระบบ (Admin)</option>
+          <option value="staff" {% if role == 'staff' %}selected{% endif %}>เจ้าหน้าที่ (Staff)</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>ค้นหา</button>
+        <a href="{% url 'composn:admin_admins' %}?reset=1" class="btn btn-outline-secondary btn-sm">ล้าง</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">รายชื่อผู้ดูแลระบบและเจ้าหน้าที่ ({{ admins|length }} บัญชี)</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:0.88rem;">
+      <thead>
+        <tr>
+          <th>ชื่อผู้ใช้ (Username)</th>
+          <th>ชื่อ-นามสกุล</th>
+          <th>บทบาท</th>
+          <th>สิทธิ์ที่ได้รับ</th>
+          <th>สถานะ</th>
+          <th>รหัสผ่าน</th>
+          <th style="width:200px;">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in admins %}
+        <tr class="{% if not a.is_active %}table-secondary{% endif %}">
+          <td class="code"><a href="{% url 'composn:admin_user_detail' a.pk %}" class="text-decoration-none">{{ a.camp1_code }}</a></td>
+          <td class="fw-semibold">{{ a.get_full_name|default:"-" }}</td>
+          <td>
+            {% if a.role == 'admin' %}<span class="badge bg-primary">ผู้ดูแลระบบ (Admin)</span>
+            {% else %}<span class="badge bg-warning text-dark">เจ้าหน้าที่ (Staff)</span>{% endif %}
+          </td>
+          <td>
+            {% if a.role == 'admin' %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">สิทธิ์ทั้งหมด (Admin)</span>
+            {% else %}
+              <div class="d-flex flex-wrap gap-1">
+                {% for pl in a.staff_permission_labels %}
+                  <span class="badge bg-info bg-opacity-10 text-dark border border-info-subtle">{{ pl }}</span>
+                {% empty %}
+                  <span class="text-muted small">ยังไม่ได้กำหนดสิทธิ์</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            {% if a.is_active %}<span class="badge bg-success">ใช้งาน</span>
+            {% else %}<span class="badge bg-danger">ปิด</span>{% endif %}
+          </td>
+          <td>
+            {% if a.is_first_login %}<span class="badge bg-warning text-dark">ยังไม่เปลี่ยน</span>
+            {% else %}<span class="badge bg-light text-muted">เปลี่ยนแล้ว</span>{% endif %}
+          </td>
+          <td class="text-nowrap">
+            <div class="d-flex gap-1">
+              <a href="{% url 'composn:admin_user_edit' a.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2" title="แก้ไข">
+                <i class="bi bi-pencil"></i> แก้ไข
+              </a>
+              <form method="post" action="{% url 'composn:admin_user_reset_password' a.pk %}" class="d-inline"
+                    onsubmit="return confirm('Reset รหัสผ่านของ {{ a.camp1_code }} เป็น 1234 ?')">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn btn-sm btn-outline-warning py-0 px-2" title="Reset รหัสผ่าน"><i class="bi bi-key"></i></button>
+              </form>
+              {% if a.pk != user.pk %}
+              <form method="post" action="{% url 'composn:admin_user_toggle' a.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" title="เปิด/ปิดใช้งาน">
+                  <i class="bi bi-{% if a.is_active %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                </button>
+              </form>
+              <form method="post" action="{% url 'composn:admin_user_delete' a.pk %}" class="d-inline"
+                    onsubmit="return confirm('ลบบัญชี {{ a.camp1_code }} ?')">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" title="ลบ"><i class="bi bi-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">ไม่พบข้อมูล</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

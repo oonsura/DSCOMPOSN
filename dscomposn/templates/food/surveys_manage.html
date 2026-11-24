@@ -1,0 +1,343 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}แบบสอบถาม (ปี {{ year }}){% endblock %}
+{% block content %}
+<div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-clipboard2-pulse me-2 text-primary"></i>แบบสอบถาม (ปี {{ year }})
+      {% info_tip "สร้างแบบสอบถามสำหรับนักเรียน และดูสรุปข้อมูลอาหาร (ศาสนาอิสลาม, แพ้อาหาร, โรคประจำตัว, ผลสำรวจอาหาร)" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <form method="get" class="d-inline-flex align-items-center">
+      <select name="year" class="form-select form-select-sm fw-semibold" onchange="this.form.submit()" title="เลือกปีการศึกษาที่มีข้อมูล">
+        {% for y in academic_year_choices %}
+          <option value="{{ y }}" {% if y|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}>ปีการศึกษา {{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <form method="post" class="d-inline">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <input type="hidden" name="action" value="create_default_food_survey">
+      <button type="submit" class="btn btn-success btn-sm">
+        <i class="bi bi-magic me-1"></i>+ สร้างแบบสอบถามสำรวจการสั่งอาหารมาตรฐาน (1 คลิก)
+      </button>
+    </form>
+    <a href="{% url 'food:orders' %}?year={{ year }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-bowl-hot me-1"></i>รายการอาหาร
+    </a>
+    {% if user.role == 'admin' %}
+    <a href="{% url 'composn:admin_dashboard' %}?year={{ year }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-speedometer2 me-1"></i>แดชบอร์ด
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- สรุปภาพรวมข้อมูลอาหารของนักเรียนในค่าย (จากฐานข้อมูลหลัก) -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-start border-4 border-primary text-center">
+      <div class="stat text-primary">{{ member_total }}</div>
+      <div class="small text-muted">นักเรียนในปี {{ year }} ทั้งหมด</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-start border-4 border-success text-center">
+      <div class="stat text-success">{{ muslim_students|length }}</div>
+      <div class="small text-muted">ศาสนาอิสลาม (อาหารฮาลาล)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-start border-4 border-danger text-center">
+      <div class="stat text-danger">{{ allergy_students|length }}</div>
+      <div class="small text-muted">แพ้อาหาร</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 border-start border-4 border-warning text-center">
+      <div class="stat text-warning">{{ disease_students|length }}</div>
+      <div class="small text-muted">มีโรคประจำตัว</div>
+    </div>
+  </div>
+</div>
+
+{% if muslim_students or allergy_students or disease_students %}
+<div class="card mb-3">
+  <div class="card-header fw-bold"><i class="bi bi-heart-pulse me-2 text-danger"></i>รายชื่อนักเรียนที่มีข้อจำกัดด้านอาหารและสุขภาพ (สำหรับการสั่งอาหารในค่าย)</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <h6 class="text-success fw-bold"><i class="bi bi-check2-circle me-1"></i>ศาสนาอิสลาม / ฮาลาล ({{ muslim_students|length }} คน)</h6>
+        <ul class="small mb-0 ps-3">
+          {% for u in muslim_students %}
+            <li><span class="code">{{ u.camp1_code }}</span> {{ u.get_full_name }}</li>
+          {% empty %}
+            <li class="text-muted">ไม่มี</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <h6 class="text-danger fw-bold"><i class="bi bi-exclamation-triangle me-1"></i>แพ้อาหาร ({{ allergy_students|length }} คน)</h6>
+        <ul class="small mb-0 ps-3">
+          {% for u in allergy_students %}
+            <li><span class="code">{{ u.camp1_code }}</span> {{ u.get_full_name }}: <strong class="text-danger">{{ u.food_allergy }}</strong></li>
+          {% empty %}
+            <li class="text-muted">ไม่มี</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="col-md-4">
+        <h6 class="text-warning text-dark fw-bold"><i class="bi bi-hospital me-1"></i>โรคประจำตัว ({{ disease_students|length }} คน)</h6>
+        <ul class="small mb-0 ps-3">
+          {% for u in disease_students %}
+            <li><span class="code">{{ u.camp1_code }}</span> {{ u.get_full_name }}: <strong>{{ u.chronic_disease }}</strong></li>
+          {% empty %}
+            <li class="text-muted">ไม่มี</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <!-- สร้างแบบสอบถามใหม่ -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header fw-bold"><i class="bi bi-plus-circle me-2 text-primary"></i>สร้างแบบสอบถามใหม่สำหรับนักเรียนในค่าย</div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="action" value="create_survey">
+          <input type="hidden" name="target_groups_submitted" value="1">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">หัวข้อแบบสอบถาม <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control form-control-sm" placeholder="เช่น สำรวจเมนูอาหารมื้อกลางวันค่าย 1" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">คำอธิบายเพิ่มเติม</label>
+            <textarea name="description" rows="2" class="form-control form-control-sm" placeholder="ระบุรายละเอียดให้นักเรียนทราบ..."></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold d-block mb-1">
+              กลุ่มผู้มีสิทธิ์ตอบแบบสอบถาม <span class="text-danger">*</span>
+              {% info_tip "ค่าเริ่มต้น: นักเรียนปัจจุบันอย่างเดียว · นักเรียนในกลุ่มที่เลือกจะเห็นแบบสอบถามและได้รับการแจ้งเตือน" %}
+            </label>
+            <div class="border rounded p-2 px-3 bg-light d-flex flex-wrap gap-3 align-items-center">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="allow_current_students" value="1" id="sv_create_curr" checked>
+                <label class="form-check-label small fw-semibold text-primary" for="sv_create_curr">
+                  <i class="bi bi-person-fill me-1"></i>นักเรียนปัจจุบัน
+                </label>
+              </div>
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="allow_rights_students" value="1" id="sv_create_rights">
+                <label class="form-check-label small fw-semibold text-success" for="sv_create_rights">
+                  <i class="bi bi-patch-check-fill me-1"></i>นักเรียนใช้สิทธิ์
+                </label>
+              </div>
+            </div>
+          </div>
+          <hr class="my-2">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">คำถามข้อที่ 1 (เพิ่มข้อต่อไปได้ภายหลัง)</label>
+            <input type="text" name="first_question" class="form-control form-control-sm" placeholder="เช่น เมนูอาหารที่ต้องการสั่ง">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">รูปแบบคำถาม</label>
+            <select name="first_question_type" class="form-select form-select-sm">
+              {% for k, v in type_choices %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">ตัวเลือก (คั่นด้วยเครื่องหมายจุลภาค ,)</label>
+            <input type="text" name="first_choices" class="form-control form-control-sm" placeholder="เช่น กะเพราไก่, ข้าวผัดกุ้ง, ก๋วยเตี๋ยว, ฮาลาล">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-check2-circle me-1"></i>สร้างแบบสอบถาม
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {% if order_stats %}
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-bowl-hot me-2 text-success"></i>สรุปยอดการสั่งอาหารรายมื้อ (ปี {{ year }})</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0" style="font-size:0.84rem;">
+            <thead class="table-light">
+              <tr><th>วันที่</th><th>ร้านอาหาร</th><th class="text-center">ผู้เลือก</th><th class="text-center">รวมจาน</th></tr>
+            </thead>
+            <tbody>
+              {% for st in order_stats %}
+              <tr>
+                <td>{{ st.order.food_date|date:"d/m/Y" }}</td>
+                <td><a href="{% url 'food:order_detail' st.order.pk %}">{{ st.order.restaurant_name }}</a></td>
+                <td class="text-center">{{ st.user_count }} คน</td>
+                <td class="text-center fw-bold text-success">{{ st.total_quantity }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- รายการแบบสอบถามและผลสรุป -->
+  <div class="col-lg-8">
+    {% for s_sum in survey_summaries %}
+    {% with s=s_sum.survey %}
+    <div class="card mb-3">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="d-flex flex-wrap align-items-center gap-1">
+          <span class="fw-bold">{{ s.title }}</span>
+          {% if s.is_open %}
+            <span class="badge bg-success">เปิดรับคำตอบ</span>
+          {% else %}
+            <span class="badge bg-secondary">ปิดแล้ว</span>
+          {% endif %}
+          {% if s.allow_current_students %}
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">นักเรียนปัจจุบัน</span>
+          {% endif %}
+          {% if s.allow_rights_students %}
+            <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">นักเรียนใช้สิทธิ์</span>
+          {% endif %}
+          <span class="badge bg-primary">ผู้ตอบแล้ว {{ s_sum.respondent_count }} คน</span>
+        </div>
+        <div class="d-flex gap-1">
+          <form method="post" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="action" value="toggle_survey">
+            <input type="hidden" name="survey_id" value="{{ s.pk }}">
+            <button class="btn btn-sm {% if s.is_open %}btn-outline-warning text-dark{% else %}btn-outline-success{% endif %} py-0 px-2">
+              {% if s.is_open %}ปิดรับคำตอบ{% else %}เปิดรับคำตอบ{% endif %}
+            </button>
+          </form>
+          <form method="post" class="d-inline" onsubmit="return confirm('ลบแบบสอบถาม {{ s.title|escapejs }} ?');">
+            {% csrf_token %}
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="action" value="delete_survey">
+            <input type="hidden" name="survey_id" value="{{ s.pk }}">
+            <button class="btn btn-sm btn-outline-danger py-0 px-2"><i class="bi bi-trash"></i></button>
+          </form>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if s.description %}<p class="small text-muted mb-2">{{ s.description }}</p>{% endif %}
+
+        <form method="post" class="d-flex flex-wrap align-items-center gap-3 p-2 px-3 mb-3 rounded border bg-light small">
+          {% csrf_token %}
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="action" value="update_survey_groups">
+          <input type="hidden" name="survey_id" value="{{ s.pk }}">
+          <span class="fw-semibold text-muted">กลุ่มผู้มีสิทธิ์ตอบ:</span>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="allow_current_students" value="1"
+                   id="sv_curr_{{ s.pk }}" {% if s.allow_current_students %}checked{% endif %}>
+            <label class="form-check-label fw-semibold text-primary" for="sv_curr_{{ s.pk }}">นักเรียนปัจจุบัน</label>
+          </div>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="allow_rights_students" value="1"
+                   id="sv_rights_{{ s.pk }}" {% if s.allow_rights_students %}checked{% endif %}>
+            <label class="form-check-label fw-semibold text-success" for="sv_rights_{{ s.pk }}">นักเรียนใช้สิทธิ์</label>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm py-0 px-2 ms-auto">
+            <i class="bi bi-check2 me-1"></i>บันทึกกลุ่ม
+          </button>
+        </form>
+
+        {% for q_item in s_sum.questions %}
+        {% with q=q_item.question %}
+        <div class="border rounded p-3 mb-2 bg-light bg-opacity-50">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <strong>ข้อที่ {{ forloop.counter }}. {{ q.question_text }}</strong>
+              <span class="badge bg-secondary ms-1">{{ q.get_question_type_display }}</span>
+              <span class="small text-muted ms-1">(ตอบ {{ q_item.answer_count }} คน)</span>
+              {% if q_item.avg_rating %}
+                <span class="badge bg-warning text-dark ms-1">เฉลี่ย {{ q_item.avg_rating }} / 5.00</span>
+              {% endif %}
+            </div>
+            <form method="post" onsubmit="return confirm('ลบคำถามข้อนี้?');">
+              {% csrf_token %}
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="action" value="delete_question">
+              <input type="hidden" name="question_id" value="{{ q.pk }}">
+              <button class="btn btn-sm btn-link text-danger p-0"><i class="bi bi-x-circle"></i></button>
+            </form>
+          </div>
+
+          {% if q_item.option_stats %}
+            {% for opt in q_item.option_stats %}
+            <div class="mb-1">
+              <div class="d-flex justify-content-between small">
+                <span>{{ opt.option }}</span>
+                <span class="fw-semibold">{{ opt.count }} คน ({{ opt.percent }}%)</span>
+              </div>
+              <div class="progress" style="height:8px;">
+                <div class="progress-bar bg-primary" style="width:{{ opt.percent }}%;"></div>
+              </div>
+            </div>
+            {% endfor %}
+          {% elif q_item.text_answers %}
+            <ul class="small mb-0 ps-3">
+              {% for ta in q_item.text_answers %}
+                <li><span class="code">{{ ta.user.camp1_code }}</span>: {{ ta.text }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="small text-muted">ยังไม่มีผู้ตอบคำถามข้อนี้</div>
+          {% endif %}
+        </div>
+        {% endwith %}
+        {% endfor %}
+
+        <!-- เพิ่มคำถามใหม่ในแบบสอบถามนี้ -->
+        <form method="post" class="row g-2 align-items-end mt-2 pt-2 border-top">
+          {% csrf_token %}
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="action" value="add_question">
+          <input type="hidden" name="survey_id" value="{{ s.pk }}">
+          <div class="col-md-5">
+            <label class="form-label small mb-1">เพิ่มคำถามใหม่</label>
+            <input type="text" name="question_text" class="form-control form-control-sm" placeholder="พิมพ์คำถาม..." required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">ประเภท</label>
+            <select name="question_type" class="form-select form-select-sm">
+              {% for k, v in type_choices %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">ตัวเลือก (คั่นด้วย ,)</label>
+            <input type="text" name="choices_text" class="form-control form-control-sm" placeholder="ตัวเลือก 1, ตัวเลือก 2">
+          </div>
+          <div class="col-md-1">
+            <input type="hidden" name="is_required" value="1">
+            <button type="submit" class="btn btn-outline-primary btn-sm w-100">+</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="card">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-clipboard2-data fs-1 d-block mb-2"></i>
+        ยังไม่มีแบบสอบถามในปีการศึกษา {{ year }}<br>
+        ท่านสามารถสร้างแบบสอบถามทางด้านซ้าย หรือกดปุ่ม <strong>"+ สร้างแบบสอบถามสำรวจการสั่งอาหารมาตรฐาน (1 คลิก)"</strong> ด้านบนได้ทันที
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

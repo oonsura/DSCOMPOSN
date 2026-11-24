@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}คัดลอกรายการอาหาร{% endblock %}
+{% block breadcrumb %}<a href="{% url 'food:orders' %}">รายการอาหาร</a> / คัดลอกรายการ{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="page-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <div>
+        <h4 class="mb-0">
+          <i class="bi bi-copy me-2 text-primary"></i>คัดลอกเป็นรายการอาหารใหม่
+          {% info_tip "ต้นฉบับ: " original.restaurant_name " (" original.food_date|date_thai ") · เมนูทั้งหมด " original.menus.count " รายการพร้อมรูปภาพจะถูกคัดลอกไปยังรายการใหม่โดยอัตโนมัติ" %}
+        </h4>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'food:orders' %}"><i class="bi bi-arrow-left me-1"></i>กลับหน้ารายการอาหาร</a>
+    </div>
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2 small">{{ form.non_field_errors.0 }}</div>
+          {% endif %}
+          <div class="row g-3">
+            {% for f in form %}
+              {% if f.name == 'allow_current_students' %}
+              <div class="col-12">
+                <label class="form-label fw-semibold d-block mb-1">กลุ่มผู้มีสิทธิ์เลือกอาหาร <span class="text-danger">*</span></label>
+                <div class="border rounded p-2 px-3 bg-light d-flex flex-wrap gap-4 align-items-center">
+                  <div class="form-check mb-0">
+                    {{ form.allow_current_students }}
+                    <label class="form-check-label fw-semibold text-primary" for="{{ form.allow_current_students.id_for_label }}">
+                      <i class="bi bi-person-fill me-1"></i>นักเรียนปัจจุบัน
+                    </label>
+                  </div>
+                  <div class="form-check mb-0">
+                    {{ form.allow_rights_students }}
+                    <label class="form-check-label fw-semibold text-success" for="{{ form.allow_rights_students.id_for_label }}">
+                      <i class="bi bi-patch-check-fill me-1"></i>นักเรียนใช้สิทธิ์
+                    </label>
+                  </div>
+                </div>
+              </div>
+              {% elif f.name == 'allow_rights_students' %}
+              {# แสดงร่วมกับ allow_current_students ด้านบนแล้ว #}
+              {% else %}
+              <div class="{% if f.name in 'additional_detail,overall_image' %}col-12{% else %}col-md-6{% endif %}">
+                {% if f.name == 'edit_toggle_open' %}
+                <div class="form-check mt-2">
+                  {{ f }}
+                  <label class="form-check-label fw-semibold" for="{{ f.id_for_label }}">{{ f.label }}</label>
+                </div>
+                {% else %}
+                <label class="form-label fw-semibold">{{ f.label }}</label>
+                {{ f }}
+                {% endif %}
+                {% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-primary px-4"><i class="bi bi-copy me-1"></i>คัดลอกและสร้างรายการใหม่</button>
+            <a class="btn btn-outline-secondary" href="{% url 'food:orders' %}">ยกเลิก</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

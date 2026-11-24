@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load composn_tags %}
+{% block title %}ตั้งค่าการใช้สิทธิ์{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h4 class="mb-0">
+      <i class="bi bi-sliders me-2 text-primary"></i>ตั้งค่าการใช้สิทธิ์
+      {% info_tip "กำหนดจำนวนครั้งการใช้สิทธิ์สูงสุด ข้อความแจ้งเตือน และวันสอบค่าย 1 / ค่าย 2" %}
+    </h4>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'composn:admin_rounds' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-toggle-on me-1"></i>ตั้งค่าการใช้สิทธิ์
+    </a>
+    <a href="{% url 'composn:admin_use_records' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-list-check me-1"></i>แสดงรายชื่อผู้ใช้สิทธิ์
+    </a>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-award me-2 text-primary"></i>การตั้งค่าหน้าการใช้สิทธิ์และหน้าแสดงผล</div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">จำนวนครั้งใช้สิทธิ์สูงสุดตลอดชีวิต</label>
+              <input type="number" min="1" max="10" name="max_rights" class="form-control" value="{{ setting.max_rights }}">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">หัวข้อหน้าแสดงผล (/display)</label>
+              <input type="text" name="display_title" class="form-control" value="{{ setting.display_title }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">ข้อความแจ้งเตือนบนหน้าการใช้สิทธิ์ของนักเรียน</label>
+              <input type="text" name="rights_warning_text" class="form-control" value="{{ setting.rights_warning_text }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">ข้อความวันสอบท้ายค่าย 1</label>
+              <input type="text" name="exam_date_camp1" class="form-control" value="{{ setting.exam_date_camp1 }}" placeholder="เช่น สอบท้ายค่าย 1: 15 ส.ค. 2569">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">ข้อความวันสอบท้ายค่าย 2</label>
+              <input type="text" name="exam_date_camp2" class="form-control" value="{{ setting.exam_date_camp2 }}" placeholder="เช่น สอบท้ายค่าย 2: 20 ก.ย. 2569">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary mt-4">
+            <i class="bi bi-check2-circle me-1"></i>บันทึกการตั้งค่าหน้าการใช้สิทธิ์
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

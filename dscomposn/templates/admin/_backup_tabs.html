@@ -1,0 +1,24 @@
+{% with cur_url=request.resolver_match.url_name %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'admin_backups' %}active{% endif %}" href="{% url 'composn:admin_backups' %}">
+      <i class="bi bi-hdd-stack me-1 text-info"></i>บันทึกสำรอง
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'admin_exports' %}active{% endif %}" href="{% url 'composn:admin_exports' %}">
+      <i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i>Export ข้อมูล
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'admin_audit_logs' %}active{% endif %}" href="{% url 'composn:admin_audit_logs' %}">
+      <i class="bi bi-clock-history me-1 text-warning"></i>Audit Log
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link fw-semibold {% if cur_url == 'admin_trash' %}active{% endif %}" href="{% url 'composn:admin_trash' %}">
+      <i class="bi bi-trash3 me-1 text-danger"></i>ถังขยะ
+    </a>
+  </li>
+</ul>
+{% endwith %}
