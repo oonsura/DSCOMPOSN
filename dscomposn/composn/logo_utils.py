@@ -204,17 +204,18 @@ def remove_logo_background(pil_image):
     if w <= 2 and h <= 2:
         return rgba
 
+    max_logo_dim = 400
+    if max(w, h) > max_logo_dim:
+        resampling = getattr(Image, 'Resampling', Image).LANCZOS
+        scale = float(max_logo_dim) / float(max(w, h))
+        new_size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+        rgba = rgba.resize(new_size, resampling)
+
     if _has_transparent_border(rgba):
         return rgba
 
     if _is_monochrome_black_on_white(rgba):
         return _monochrome_luminance_to_alpha(rgba)
-
-    if max(w, h) > 1200:
-        resampling = getattr(Image, 'Resampling', Image).LANCZOS
-        scale = 1200.0 / float(max(w, h))
-        new_size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
-        rgba = rgba.resize(new_size, resampling)
 
     bg_rgb = _uniform_corner_bg(rgba)
     if bg_rgb is None:
@@ -229,8 +230,24 @@ def _stem_from_filename(name, default_stem='logo'):
     return stem or default_stem
 
 
-def process_logo_upload(uploaded_file):
-    """แปลงไฟล์รูปตราที่อัปโหลดให้เป็นไฟล์ PNG พื้นหลังโปร่งใส (ContentFile)"""
+def _encode_compact_rgba_png(rgba_img, max_dim=400):
+    """ย่อขนาดและบีบอัด PNG พื้นหลังโปร่งใส (โหมด RGBA) ให้มีขนาดกะทัดรัดโดยคงค่าสีและขอบโปร่งใสครบถ้วน"""
+    if rgba_img.mode != 'RGBA':
+        rgba_img = rgba_img.convert('RGBA')
+    w, h = rgba_img.size
+    if max(w, h) > max_dim:
+        resampling = getattr(Image, 'Resampling', Image).LANCZOS
+        scale = float(max_dim) / float(max(w, h))
+        new_size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
+        rgba_img = rgba_img.resize(new_size, resampling)
+
+    buf_rgba = io.BytesIO()
+    rgba_img.save(buf_rgba, format='PNG', optimize=True, compress_level=9)
+    return buf_rgba.getvalue()
+
+
+def process_logo_upload(uploaded_file, is_favicon=False):
+    """แปลงไฟล์รูปตราที่อัปโหลดให้เป็นไฟล์ PNG พื้นหลังโปร่งใสขนาดกะทัดรัด (ContentFile)"""
     if not uploaded_file:
         return uploaded_file
     try:
@@ -239,10 +256,12 @@ def process_logo_upload(uploaded_file):
         with Image.open(uploaded_file) as img:
             img.load()
             out_rgba = remove_logo_background(img)
-        buf = io.BytesIO()
-        out_rgba.save(buf, format='PNG', optimize=True)
+        max_dim = 64 if is_favicon else 400
+        png_bytes = _encode_compact_rgba_png(out_rgba, max_dim=max_dim)
         stem = _stem_from_filename(getattr(uploaded_file, 'name', 'logo.png'))
-        return ContentFile(buf.getvalue(), name=f'{stem}.png')
+        cf = ContentFile(png_bytes, name=f'{stem}.png')
+        cf._already_compressed = True
+        return cf
     except Exception:
         try:
             if hasattr(uploaded_file, 'seek'):
@@ -253,7 +272,7 @@ def process_logo_upload(uploaded_file):
 
 
 def convert_existing_setting_logos_to_transparent(setting):
-    """แปลงรูปตราสัญลักษณ์ทั้งหมดที่บันทึกอยู่ใน SystemSetting ให้เป็น PNG พื้นหลังโปร่งใส"""
+    """แปลงและย่อขนาดรูปตราสัญลักษณ์ทั้งหมดที่บันทึกอยู่ใน SystemSetting ให้เป็น PNG พื้นหลังโปร่งใสขนาดกะทัดรัด"""
     converted = []
     for field_name in LOGO_FIELD_NAMES:
         fld = getattr(setting, field_name, None)
@@ -265,15 +284,19 @@ def convert_existing_setting_logos_to_transparent(setting):
             continue
         if not old_path or not os.path.exists(old_path):
             continue
+        max_dim = 64 if field_name == 'site_favicon' else 400
         try:
             with Image.open(old_path) as im:
                 im.load()
                 orig_mode = im.mode
+                orig_w, orig_h = im.size
                 rgba_check = im.convert('RGBA')
                 needs_conv = (
                     (not fld.name.lower().endswith('.png'))
                     or (orig_mode != 'RGBA')
                     or (not _has_transparent_border(rgba_check))
+                    or (max(orig_w, orig_h) > max_dim)
+                    or (os.path.getsize(old_path) > (20_000 if field_name == 'site_favicon' else 80_000))
                 )
                 if not needs_conv:
                     continue
@@ -281,10 +304,9 @@ def convert_existing_setting_logos_to_transparent(setting):
         except Exception:
             continue
 
-        buf = io.BytesIO()
-        out_rgba.save(buf, format='PNG', optimize=True)
+        png_bytes = _encode_compact_rgba_png(out_rgba, max_dim=max_dim)
         stem = _stem_from_filename(fld.name, default_stem=field_name)
-        fld.save(f'{stem}.png', ContentFile(buf.getvalue()), save=False)
+        fld.save(f'{stem}.png', ContentFile(png_bytes), save=False)
         try:
             new_path = fld.path
             if old_path != new_path and os.path.exists(old_path):

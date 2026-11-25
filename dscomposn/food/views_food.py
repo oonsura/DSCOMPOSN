@@ -18,6 +18,12 @@ from composn.audit import log_action
 from composn.decorators import admin_required, member_required, staff_perm_required
 from composn.excel import build_workbook, workbook_response
 from composn.forms import BootstrapMixin
+from composn.image_utils import (
+    ImageUploadError,
+    compress_food_menu_image,
+    compress_food_order_image,
+    delete_file_if_unreferenced,
+)
 from composn.models import SystemSetting, User
 from composn.templatetags.composn_tags import format_date_thai_full, get_thai_day_name
 
@@ -73,7 +79,22 @@ class FoodOrderForm(BootstrapMixin, forms.ModelForm):
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
+        if self.instance and self.instance.pk and self.instance.overall_image:
+            self._orig_overall_name = self.instance.overall_image.name
+            self._orig_overall_storage = self.instance.overall_image.storage
+        else:
+            self._orig_overall_name = ''
+            self._orig_overall_storage = None
         self._bootstrap()
+
+    def clean_overall_image(self):
+        val = self.cleaned_data.get('overall_image')
+        if 'overall_image' in self.files and val:
+            try:
+                return compress_food_order_image(val)
+            except ImageUploadError as exc:
+                raise forms.ValidationError(str(exc))
+        return val
 
     def clean_max_selection_count(self):
         v = self.cleaned_data['max_selection_count']
@@ -87,6 +108,19 @@ class FoodOrderForm(BootstrapMixin, forms.ModelForm):
             raise forms.ValidationError('กรุณาเลือกกลุ่มผู้มีสิทธิ์สั่งอาหารอย่างน้อย 1 กลุ่ม (นักเรียนปัจจุบัน หรือ นักเรียนใช้สิทธิ์)')
         return cleaned
 
+    def save(self, commit=True):
+        obj = super().save(commit=commit)
+        if commit and self._orig_overall_name and self._orig_overall_storage:
+            cur_name = obj.overall_image.name if obj.overall_image else ''
+            if cur_name != self._orig_overall_name:
+                if not FoodOrder.objects.filter(overall_image=self._orig_overall_name).exists():
+                    try:
+                        if self._orig_overall_storage.exists(self._orig_overall_name):
+                            self._orig_overall_storage.delete(self._orig_overall_name)
+                    except Exception:
+                        pass
+        return obj
+
 
 class FoodMenuForm(BootstrapMixin, forms.ModelForm):
     class Meta:
@@ -97,6 +131,15 @@ class FoodMenuForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self._bootstrap()
+
+    def clean_menu_image(self):
+        val = self.cleaned_data.get('menu_image')
+        if 'menu_image' in self.files and val:
+            try:
+                return compress_food_menu_image(val)
+            except ImageUploadError as exc:
+                raise forms.ValidationError(str(exc))
+        return val
 
 
 def _decorate_order(o, setting=None):
@@ -274,7 +317,11 @@ def order_detail(request, pk):
             m = FoodMenu(food_order=o, menu_name=m_name, menu_description=m_desc, sort_order=m_sort)
             img_file = request.FILES.get('m-menu_image') or request.FILES.get('menu_image')
             if img_file:
-                m.menu_image = img_file
+                try:
+                    m.menu_image = compress_food_menu_image(img_file)
+                except ImageUploadError as exc:
+                    messages.error(request, str(exc))
+                    return redirect(request.path)
             m.save()
             log_action(request.user, 'food_order', target=o,
                        new_value={'action': 'add_menu', 'menu': m.menu_name}, request=request)
@@ -381,24 +428,51 @@ def order_action(request, pk):
             m.sort_order = int(request.POST.get('sort_order', m.sort_order))
         except ValueError:
             pass
+        old_menu_name = m.menu_image.name if m.menu_image else ''
+        old_menu_storage = m.menu_image.storage if m.menu_image else None
+        replaced_or_cleared = False
         if 'menu_image' in request.FILES:
-            m.menu_image = request.FILES['menu_image']
+            try:
+                m.menu_image = compress_food_menu_image(request.FILES['menu_image'])
+            except ImageUploadError as exc:
+                messages.error(request, str(exc))
+                return redirect('food:order_detail', pk=o.pk)
+            replaced_or_cleared = True
         elif request.POST.get('clear_menu_image'):
             m.menu_image = None
+            replaced_or_cleared = True
         m.save()
+        if replaced_or_cleared and old_menu_name:
+            cur_name = m.menu_image.name if m.menu_image else ''
+            if cur_name != old_menu_name:
+                delete_file_if_unreferenced(old_menu_name, FoodMenu, 'menu_image', storage=old_menu_storage)
         log_action(request.user, 'food_order', target=o,
                    new_value={'action': 'edit_menu', 'menu': m.menu_name}, request=request)
         messages.success(request, f'แก้ไขเมนู "{m.menu_name}" เรียบร้อย')
     elif action == 'delete_menu':
         m = get_object_or_404(FoodMenu, pk=request.POST.get('menu_id'), food_order=o)
+        old_menu_name = m.menu_image.name if m.menu_image else ''
+        old_menu_storage = m.menu_image.storage if m.menu_image else None
         m.delete()
+        if old_menu_name:
+            delete_file_if_unreferenced(old_menu_name, FoodMenu, 'menu_image', storage=old_menu_storage)
         log_action(request.user, 'food_order', target=o, new_value={'action': 'delete_menu', 'menu': m.menu_name},
                    request=request)
         messages.success(request, 'ลบเมนูแล้ว')
     elif action == 'delete':
+        old_overall_name = o.overall_image.name if o.overall_image else ''
+        old_overall_storage = o.overall_image.storage if o.overall_image else None
+        old_menus = [
+            (mn.menu_image.name, mn.menu_image.storage)
+            for mn in o.menus.all() if mn.menu_image and mn.menu_image.name
+        ]
         log_action(request.user, 'food_order', target=o, old_value={'action': 'delete', 'name': str(o)},
                    request=request)
         o.delete()
+        if old_overall_name:
+            delete_file_if_unreferenced(old_overall_name, FoodOrder, 'overall_image', storage=old_overall_storage)
+        for m_name, m_storage in old_menus:
+            delete_file_if_unreferenced(m_name, FoodMenu, 'menu_image', storage=m_storage)
         messages.success(request, 'ลบรายการอาหารแล้ว')
         return redirect('food:orders')
     return redirect('food:order_detail', pk=o.pk)

@@ -262,6 +262,9 @@ class User(AbstractBaseUser, PermissionsMixin):
             self.camp1_code = self.camp1_code.strip().upper()
         if self.school_name:
             self.school_name = normalize_school_name(self.school_name)
+        if self.profile_photo and not getattr(self.profile_photo, '_committed', True):
+            from .image_utils import compress_profile_fallback_image, ensure_compressed_field
+            ensure_compressed_field(self, 'profile_photo', compress_profile_fallback_image)
         super().save(*args, **kwargs)
 
     def check_password(self, raw_password):
@@ -585,6 +588,15 @@ class SystemSetting(models.Model):
 
     def save(self, *args, **kwargs):
         self.pk = 1
+        from .image_utils import ensure_compressed_field
+        from .logo_utils import LOGO_FIELD_NAMES, process_logo_upload
+        for fname in LOGO_FIELD_NAMES:
+            fld = getattr(self, fname, None)
+            if fld and not getattr(fld, '_committed', True):
+                ensure_compressed_field(
+                    self, fname,
+                    lambda f, is_fav=(fname == 'site_favicon'): process_logo_upload(f, is_favicon=is_fav),
+                )
         super().save(*args, **kwargs)
         cache.delete_many([self.CACHE_KEY, 'dscomposn:academic_year_choices'])
 

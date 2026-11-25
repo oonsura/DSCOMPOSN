@@ -181,13 +181,13 @@ def _load_background_reader(cert_setting):
             img = bg.convert('RGB')
         elif img.mode != 'RGB':
             img = img.convert('RGB')
-        # ย่อรูปที่ความละเอียดเกินความจำเป็น (2480 px สำหรับ A4 แนวนอน) เพื่อความเร็วในการสร้าง Batch PDF
-        max_w = 2480
+        # ย่อรูปที่ความละเอียดเกินความจำเป็น (2000 px สำหรับ A4 แนวนอน) เพื่อคุมขนาดไฟล์ PDF และความเร็ว Batch
+        max_w = 2000
         if img.width > max_w:
             new_h = max(1, int(round(img.height * (max_w / float(img.width)))))
             img = img.resize((max_w, new_h), Image.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format='JPEG', quality=92)
+        img.save(buf, format='JPEG', quality=85, optimize=True)
         buf.seek(0)
         return ImageReader(buf)
     except Exception:

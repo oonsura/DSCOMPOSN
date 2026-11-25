@@ -887,6 +887,12 @@ class FoodOrder(models.Model):
     def __str__(self):
         return f'{self.food_date} - {self.restaurant_name}'
 
+    def save(self, *args, **kwargs):
+        if self.overall_image and not getattr(self.overall_image, '_committed', True):
+            from composn.image_utils import compress_food_order_image, ensure_compressed_field
+            ensure_compressed_field(self, 'overall_image', compress_food_order_image)
+        super().save(*args, **kwargs)
+
     def get_status(self):
         today = timezone.localdate()
         if self.food_date < today:
@@ -944,6 +950,12 @@ class FoodMenu(models.Model):
 
     def __str__(self):
         return self.menu_name
+
+    def save(self, *args, **kwargs):
+        if self.menu_image and not getattr(self.menu_image, '_committed', True):
+            from composn.image_utils import compress_food_menu_image, ensure_compressed_field
+            ensure_compressed_field(self, 'menu_image', compress_food_menu_image)
+        super().save(*args, **kwargs)
 
     def total_selected(self):
         return self.selections.aggregate(t=Sum('quantity'))['t'] or 0
@@ -1226,6 +1238,12 @@ class CertificateSetting(models.Model):
 
     def __str__(self):
         return 'การตั้งค่าเกียรติบัตร'
+
+    def save(self, *args, **kwargs):
+        if self.background_image and not getattr(self.background_image, '_committed', True):
+            from composn.image_utils import compress_certificate_bg_image, ensure_compressed_field
+            ensure_compressed_field(self, 'background_image', compress_certificate_bg_image)
+        super().save(*args, **kwargs)
 
     @classmethod
     def get(cls):

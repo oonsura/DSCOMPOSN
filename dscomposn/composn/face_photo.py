@@ -15,8 +15,8 @@ from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
 
 MAX_RAW_UPLOAD_BYTES = 15 * 1024 * 1024   # 15 MB สูงสุดก่อนประมวลผล
-MAX_OUTPUT_BYTES = 1_000_000              # ไม่เกิน 1 MB หลังปรับขนาด/บีบอัด
-TARGET_SIZE = 600                         # ขนาดด้านกว้าง/สูงมาตรฐาน (600x600 px)
+MAX_OUTPUT_BYTES = 100_000                # ไม่เกิน ~100 KB หลังปรับขนาด/บีบอัด (เพียงพอต่อรูปติดบัตรและ Lightbox)
+TARGET_SIZE = 420                         # ขนาดด้านกว้าง/สูงมาตรฐาน (420x420 px)
 
 _CASCADES = {}
 
@@ -399,13 +399,13 @@ def process_and_validate_profile_photo(uploaded_file, user_code='user'):
     if cropped.width > TARGET_SIZE or cropped.height > TARGET_SIZE:
         cropped = cropped.resize((TARGET_SIZE, TARGET_SIZE), Image.Resampling.LANCZOS)
 
-    # 4. บีบอัดเป็น JPEG ขนาดไม่เกิน 1 MB (<= 1,000,000 bytes)
+    # 4. บีบอัดเป็น JPEG ขนาดกะทัดรัด (<= 100 KB) เพื่อประหยัดพื้นที่สูงสุด
     out_bytes = None
     cur_img = cropped
-    for target_dim in (TARGET_SIZE, 480, 360):
+    for target_dim in (TARGET_SIZE, 360, 300):
         if cur_img.width > target_dim:
             cur_img = cur_img.resize((target_dim, target_dim), Image.Resampling.LANCZOS)
-        for q in (88, 82, 75, 68, 60, 50):
+        for q in (82, 75, 68, 60, 52, 44):
             buf = io.BytesIO()
             cur_img.save(buf, format='JPEG', quality=q, optimize=True, progressive=True)
             data = buf.getvalue()
@@ -416,10 +416,11 @@ def process_and_validate_profile_photo(uploaded_file, user_code='user'):
             break
 
     if out_bytes is None:
-        raise FacePhotoError('ไม่สามารถบีบอัดรูปภาพให้มีขนาดไม่เกิน 1 MB ได้ กรุณาใช้รูปอื่น')
+        raise FacePhotoError('ไม่สามารถบีบอัดรูปภาพให้มีขนาดกะทัดรัดได้ กรุณาใช้รูปอื่น')
 
     safe_code = re.sub(r'[^a-zA-Z0-9_-]', '_', str(user_code or 'user'))[:30]
     content_file = ContentFile(out_bytes, name=f'face_{safe_code}.jpg')
+    content_file._already_compressed = True
     return content_file, {
         'size_bytes': len(out_bytes),
         'width': cur_img.width,

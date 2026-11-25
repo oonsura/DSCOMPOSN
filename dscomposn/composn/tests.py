@@ -5536,6 +5536,236 @@ class SchoolNameNormalizationTests(TestCase):
         self.assertEqual(cs.format_student_school('เทพศิรินทร์'), 'โรงเรียนเทพศิรินทร์ กรุงเทพมหานคร')
 
 
+class ImageCompressionOptimizationTests(TestCase):
+    """ตรวจสอบการย่อขนาดและบีบอัดรูปภาพในทุกส่วนของระบบเพื่อประหยัดพื้นที่จัดเก็บสูงสุด"""
+
+    def _make_big_image_bytes(self, width, height, fmt='PNG', rgba=False):
+        import io
+        import numpy as np
+        from PIL import Image
+
+        rng = np.random.default_rng(42)
+        # สร้างภาพไล่เฉดสีผสมรายละเอียดเล็กน้อยเหมือนภาพถ่ายจริง
+        x = np.linspace(20, 235, width, dtype=np.uint8)
+        y = np.linspace(30, 220, height, dtype=np.uint8)
+        xv, yv = np.meshgrid(x, y)
+        noise = rng.integers(0, 25, size=(height, width), dtype=np.uint8)
+        r = np.clip(xv + noise, 0, 255).astype(np.uint8)
+        g = np.clip(yv + noise, 0, 255).astype(np.uint8)
+        b = np.clip(((xv.astype(np.uint16) + yv.astype(np.uint16)) // 2) + noise, 0, 255).astype(np.uint8)
+        if rgba:
+            a = np.full((height, width), 255, dtype=np.uint8)
+            a[0, :] = 0
+            a[-1, :] = 0
+            a[:, 0] = 0
+            a[:, -1] = 0
+            arr = np.dstack([r, g, b, a])
+            img = Image.fromarray(arr, mode='RGBA')
+        else:
+            arr = np.dstack([r, g, b])
+            img = Image.fromarray(arr, mode='RGB')
+        buf = io.BytesIO()
+        img.save(buf, format=fmt)
+        return buf.getvalue()
+
+    def test_food_images_compressed_and_orphans_cleaned_safely(self):
+        import os
+        import tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from PIL import Image
+        from .image_utils import FOOD_MENU_MAX_BYTES, FOOD_MENU_MAX_DIM, FOOD_ORDER_MAX_BYTES, FOOD_ORDER_MAX_DIM
+        from food.models import FoodMenu, FoodOrder
+
+        admin_u = User.objects.get(camp1_code='admin')
+        admin_u.is_first_login = False
+        admin_u.save()
+        ac = Client()
+        ac.force_login(admin_u)
+
+        big_order_png = self._make_big_image_bytes(2400, 1800, fmt='PNG')
+        big_menu_png = self._make_big_image_bytes(2000, 2000, fmt='PNG')
+        self.assertGreater(len(big_order_png), 500_000)
+        self.assertGreater(len(big_menu_png), 500_000)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=tmpdir):
+                # 1. สร้างรายการอาหารพร้อมรูปภาพรวมขนาดใหญ่
+                resp = ac.post(reverse('food:order_create'), {
+                    'food_date': '2026-10-10',
+                    'restaurant_name': 'ร้านทดสอบประหยัดพื้นที่',
+                    'max_selection_count': 1,
+                    'selection_mode': 'unique',
+                    'allow_current_students': True,
+                    'edit_toggle_open': True,
+                    'overall_image': SimpleUploadedFile('big_banner.png', big_order_png, content_type='image/png'),
+                })
+                self.assertEqual(resp.status_code, 302)
+                order = FoodOrder.objects.get(restaurant_name='ร้านทดสอบประหยัดพื้นที่')
+                self.assertTrue(order.overall_image.name.endswith('.jpg'))
+                self.assertLessEqual(order.overall_image.size, FOOD_ORDER_MAX_BYTES)
+                with Image.open(order.overall_image.path) as im:
+                    self.assertLessEqual(max(im.size), FOOD_ORDER_MAX_DIM)
+
+                # 2. เพิ่มเมนูพร้อมรูปขนาดใหญ่
+                resp_m = ac.post(reverse('food:order_detail', args=[order.pk]), {
+                    'action': 'add_menu',
+                    'm-menu_name': 'กะเพราไก่ไข่ดาว',
+                    'm-sort_order': 1,
+                    'm-menu_image': SimpleUploadedFile('big_menu.png', big_menu_png, content_type='image/png'),
+                })
+                self.assertEqual(resp_m.status_code, 302)
+                menu = FoodMenu.objects.get(food_order=order)
+                self.assertTrue(menu.menu_image.name.endswith('.jpg'))
+                self.assertLessEqual(menu.menu_image.size, FOOD_MENU_MAX_BYTES)
+                with Image.open(menu.menu_image.path) as im:
+                    self.assertLessEqual(max(im.size), FOOD_MENU_MAX_DIM)
+
+                shared_menu_path = menu.menu_image.path
+                self.assertTrue(os.path.exists(shared_menu_path))
+
+                # 3. คัดลอกรายการอาหาร -> ใช้ไฟล์รูปร่วมกัน เมื่อลบเมนูของต้นฉบับ ไฟล์ต้องยังอยู่สำหรับรายการที่คัดลอก
+                resp_cp = ac.post(reverse('food:order_copy', args=[order.pk]), {
+                    'food_date': '2026-10-11',
+                    'restaurant_name': 'ร้านคัดลอก',
+                    'max_selection_count': 1,
+                    'selection_mode': 'unique',
+                    'allow_current_students': True,
+                    'edit_toggle_open': True,
+                })
+                self.assertEqual(resp_cp.status_code, 302)
+                copied_order = FoodOrder.objects.get(restaurant_name='ร้านคัดลอก')
+
+                ac.post(reverse('food:order_action', args=[order.pk]), {
+                    'action': 'delete_menu',
+                    'menu_id': menu.pk,
+                })
+                self.assertTrue(os.path.exists(shared_menu_path))
+
+                # เมื่อลบรายการที่คัดลอกด้วย ไม่มีใครอ้างอิงแล้ว -> ลบไฟล์ออกจากดิสก์ทันที
+                ac.post(reverse('food:order_action', args=[copied_order.pk]), {'action': 'delete'})
+                self.assertFalse(os.path.exists(shared_menu_path))
+
+    def test_logos_favicon_and_cert_bg_compressed(self):
+        import io
+        import os
+        import tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from PIL import Image
+        from .image_utils import CERT_BG_MAX_BYTES, CERT_BG_MAX_DIM
+        from .logo_utils import process_logo_upload
+        from food.models import CertificateSetting
+
+        # 1. โลโก้ PNG พื้นหลังโปร่งใส 1600x1600 -> ย่อเหลือ <= 400 px, Favicon -> <= 64 px
+        big_rgba = self._make_big_image_bytes(1600, 1600, fmt='PNG', rgba=True)
+        logo_cf = process_logo_upload(SimpleUploadedFile('emblem.png', big_rgba, content_type='image/png'))
+        with Image.open(io.BytesIO(logo_cf.read())) as im:
+            self.assertLessEqual(max(im.size), 400)
+
+        fav_cf = process_logo_upload(
+            SimpleUploadedFile('fav.png', big_rgba, content_type='image/png'), is_favicon=True
+        )
+        with Image.open(io.BytesIO(fav_cf.read())) as im:
+            self.assertLessEqual(max(im.size), 64)
+
+        # 2. รูปพื้นหลังเกียรติบัตร 3508x2480 -> ย่อเหลือ <= 2000 px และ <= 350 KB พร้อมลบไฟล์เก่าเมื่ออัปโหลดทับ
+        admin_u = User.objects.get(camp1_code='admin')
+        admin_u.is_first_login = False
+        admin_u.save()
+        ac = Client()
+        ac.force_login(admin_u)
+
+        big_cert = self._make_big_image_bytes(3508, 2480, fmt='PNG')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=tmpdir):
+                ac.post(reverse('food:admin_certificates') + '?year=2569&tab=settings', {
+                    'action': 'save_settings',
+                    'tab': 'settings',
+                    'year': 2569,
+                    'background_image': SimpleUploadedFile('cert1.png', big_cert, content_type='image/png'),
+                })
+                cs = CertificateSetting.get()
+                first_path = cs.background_image.path
+                self.assertTrue(os.path.exists(first_path))
+                self.assertLessEqual(cs.background_image.size, CERT_BG_MAX_BYTES)
+                with Image.open(first_path) as im:
+                    self.assertLessEqual(max(im.size), CERT_BG_MAX_DIM)
+
+                ac.post(reverse('food:admin_certificates') + '?year=2569&tab=settings', {
+                    'action': 'save_settings',
+                    'tab': 'settings',
+                    'year': 2569,
+                    'background_image': SimpleUploadedFile('cert2.png', big_cert, content_type='image/png'),
+                })
+                cs.refresh_from_db()
+                self.assertFalse(os.path.exists(first_path))
+                self.assertTrue(os.path.exists(cs.background_image.path))
+
+    def test_direct_model_save_auto_compresses_all_uploads(self):
+        """แม้บันทึกผ่าน Model.save() / Django Admin โดยตรง ต้องย่อและบีบอัดรูปอัตโนมัติทุกครั้ง"""
+        import tempfile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from PIL import Image
+        from .image_utils import (
+            CERT_BG_MAX_BYTES, CERT_BG_MAX_DIM,
+            FOOD_MENU_MAX_BYTES, FOOD_MENU_MAX_DIM,
+            FOOD_ORDER_MAX_BYTES, FOOD_ORDER_MAX_DIM,
+        )
+        from food.models import CertificateSetting, FoodMenu, FoodOrder
+
+        big_rgb = self._make_big_image_bytes(2200, 1600, fmt='PNG')
+        big_rgba = self._make_big_image_bytes(1500, 1500, fmt='PNG', rgba=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(MEDIA_ROOT=tmpdir):
+            fo = FoodOrder.objects.create(
+                academic_year=2569,
+                food_date='2026-10-15',
+                restaurant_name='ร้านทดสอบเซฟตรง',
+                overall_image=SimpleUploadedFile('raw_order.png', big_rgb, content_type='image/png'),
+            )
+            self.assertLessEqual(fo.overall_image.size, FOOD_ORDER_MAX_BYTES)
+            with Image.open(fo.overall_image.path) as im:
+                self.assertLessEqual(max(im.size), FOOD_ORDER_MAX_DIM)
+
+            fm = FoodMenu.objects.create(
+                food_order=fo,
+                menu_name='เมนูเซฟตรง',
+                menu_image=SimpleUploadedFile('raw_menu.png', big_rgb, content_type='image/png'),
+            )
+            self.assertLessEqual(fm.menu_image.size, FOOD_MENU_MAX_BYTES)
+            with Image.open(fm.menu_image.path) as im:
+                self.assertLessEqual(max(im.size), FOOD_MENU_MAX_DIM)
+
+            cs = CertificateSetting.get()
+            cs.background_image = SimpleUploadedFile('raw_cert.png', big_rgb, content_type='image/png')
+            cs.save()
+            self.assertLessEqual(cs.background_image.size, CERT_BG_MAX_BYTES)
+            with Image.open(cs.background_image.path) as im:
+                self.assertLessEqual(max(im.size), CERT_BG_MAX_DIM)
+
+            st = SystemSetting.get()
+            st.logo_school = SimpleUploadedFile('raw_logo.png', big_rgba, content_type='image/png')
+            st.site_favicon = SimpleUploadedFile('raw_fav.png', big_rgba, content_type='image/png')
+            st.save()
+            with Image.open(st.logo_school.path) as im:
+                self.assertEqual(im.mode, 'RGBA')
+                self.assertLessEqual(max(im.size), 400)
+            with Image.open(st.site_favicon.path) as im:
+                self.assertEqual(im.mode, 'RGBA')
+                self.assertLessEqual(max(im.size), 64)
+
+            stu = make_member('69DS95', year=2569, level='ม.4')
+            stu.profile_photo = SimpleUploadedFile('raw_prof.png', big_rgb, content_type='image/png')
+            stu.save()
+            self.assertLessEqual(stu.profile_photo.size, 100_000)
+            with Image.open(stu.profile_photo.path) as im:
+                self.assertLessEqual(max(im.size), 420)
+
+
+
+
 
 
 

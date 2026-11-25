@@ -1655,11 +1655,18 @@ def admin_certificates(request):
             if not request.user.is_admin_role:
                 return HttpResponseForbidden('เฉพาะผู้ดูแลระบบเท่านั้น')
             if 'background_image' in request.FILES:
-                img_file, img_err = _validated_image_upload(request.FILES['background_image'])
-                if img_err:
-                    messages.error(request, img_err)
+                from composn.image_utils import ImageUploadError, compress_certificate_bg_image
+                try:
+                    compressed_bg = compress_certificate_bg_image(request.FILES['background_image'])
+                except ImageUploadError as img_err:
+                    messages.error(request, str(img_err))
                     return redirect(reverse('food:admin_certificates') + f'?year={year}&tab=settings')
-                cert_setting.background_image = img_file
+                if cert_setting.background_image:
+                    try:
+                        cert_setting.background_image.delete(save=False)
+                    except Exception:
+                        pass
+                cert_setting.background_image = compressed_bg
             elif request.POST.get('clear_background_image') == '1':
                 if cert_setting.background_image:
                     try:

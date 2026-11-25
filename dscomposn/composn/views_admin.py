@@ -1833,6 +1833,10 @@ def system_settings(request):
                 pass
         if 'editable_fields' in request.POST:
             setting.set_editable_fields(request.POST.getlist('editable_fields'))
+        logo_fields_list = (
+            'login_logo', 'logo_school', 'logo_posn', 'logo_center',
+            'logo_obec', 'logo_garuda', 'site_favicon',
+        )
         for img_field, clear_key in (
             ('login_logo', 'clear_login_logo'),
             ('logo_school', 'clear_logo_school'),
@@ -1842,10 +1846,26 @@ def system_settings(request):
             ('logo_garuda', 'clear_logo_garuda'),
             ('site_favicon', 'clear_site_favicon'),
         ):
-            if img_field in request.FILES:
-                setattr(setting, img_field, process_logo_upload(request.FILES[img_field]))
-            elif request.POST.get(clear_key):
-                setattr(setting, img_field, None)
+            if img_field in request.FILES or request.POST.get(clear_key):
+                old_fld = getattr(setting, img_field, None)
+                old_name = getattr(old_fld, 'name', '') if old_fld else ''
+                if old_name:
+                    still_used = any(
+                        f != img_field and getattr(getattr(setting, f, None), 'name', '') == old_name
+                        for f in logo_fields_list
+                    )
+                    if not still_used:
+                        try:
+                            old_fld.storage.delete(old_name)
+                        except Exception:
+                            pass
+                if img_field in request.FILES:
+                    setattr(
+                        setting, img_field,
+                        process_logo_upload(request.FILES[img_field], is_favicon=(img_field == 'site_favicon')),
+                    )
+                else:
+                    setattr(setting, img_field, None)
         if current_year_approved and int(setting.current_academic_year) == int(old_year):
             if int(setting.max_absences) != int(old_max_abs) or int(setting.max_qualified_count) != int(old_max_qual):
                 setting.max_absences = old_max_abs
@@ -1887,6 +1907,10 @@ def system_settings(request):
         for f in color_fields:
             if f in request.POST:
                 setattr(setting, f, request.POST.get(f, '').strip())
+        logo_fields_list = (
+            'login_logo', 'logo_school', 'logo_posn', 'logo_center',
+            'logo_obec', 'logo_garuda', 'site_favicon',
+        )
         for img_field, clear_key in (
             ('login_logo', 'clear_login_logo'),
             ('logo_school', 'clear_logo_school'),
@@ -1896,10 +1920,26 @@ def system_settings(request):
             ('logo_garuda', 'clear_logo_garuda'),
             ('site_favicon', 'clear_site_favicon'),
         ):
-            if img_field in request.FILES:
-                setattr(setting, img_field, process_logo_upload(request.FILES[img_field]))
-            elif request.POST.get(clear_key):
-                setattr(setting, img_field, None)
+            if img_field in request.FILES or request.POST.get(clear_key):
+                old_fld = getattr(setting, img_field, None)
+                old_name = getattr(old_fld, 'name', '') if old_fld else ''
+                if old_name:
+                    still_used = any(
+                        f != img_field and getattr(getattr(setting, f, None), 'name', '') == old_name
+                        for f in logo_fields_list
+                    )
+                    if not still_used:
+                        try:
+                            old_fld.storage.delete(old_name)
+                        except Exception:
+                            pass
+                if img_field in request.FILES:
+                    setattr(
+                        setting, img_field,
+                        process_logo_upload(request.FILES[img_field], is_favicon=(img_field == 'site_favicon')),
+                    )
+                else:
+                    setattr(setting, img_field, None)
         setting.save()
         log_action(request.user, 'update_settings', target=setting, new_value='อัปเดตโทนสีและหน้า Login',
                    request=request)
