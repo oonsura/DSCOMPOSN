@@ -25,6 +25,6 @@
   {% for f in files %}<tr><td>{{ f.name }}</td><td>{{ f.size|filesizeformat }}</td><td>{{ f.modified|date:"d/m/Y H:i" }}</td>
     <td class="text-nowrap"><a class="btn btn-sm btn-outline-primary" href="{% url 'composn:admin_backup_download' f.name %}">ดาวน์โหลด</a>
     <form class="d-inline" method="post" onsubmit="return confirm('ลบไฟล์ {{ f.name }}?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="name" value="{{ f.name }}"><button class="btn btn-sm btn-outline-danger">ลบ</button></form></td></tr>
-  {% empty %}<tr><td colspan="4" class="text-center text-muted py-4">ยังไม่มีไฟล์สำรอง</td></tr>{% endfor %}
+  {% empty %}<tr><td colspan="4" class="text-center text-muted py-4">ยังไม่มีบันทึกสำรอง</td></tr>{% endfor %}
 </table></div></div></div>
 {% endblock %}

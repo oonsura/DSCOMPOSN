@@ -53,19 +53,12 @@
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <input type="hidden" name="action" value="add_menu">
-          <input type="hidden" name="ai_image_url" id="selectedAiImageUrl" value="">
 
           <div class="mb-2">
             <label class="form-label fw-semibold small">
               ชื่อเมนู <span class="text-danger">*</span>
-              {% info_tip "พิมพ์ชื่อเมนูแล้วกด \"AI ค้นหารูป\" เพื่อเลือกรูปประกอบ" %}
             </label>
-            <div class="input-group input-group-sm">
-              <input type="text" name="m-menu_name" id="addMenuNameInput" class="form-control" required placeholder="เช่น ข้าวกะเพราหมูกรอบ">
-              <button type="button" class="btn btn-outline-primary text-nowrap" onclick="fetchAiImages('add')">
-                <i class="bi bi-magic me-1"></i>AI ค้นหารูป
-              </button>
-            </div>
+            <input type="text" name="m-menu_name" id="addMenuNameInput" class="form-control form-control-sm" required placeholder="เช่น ข้าวกะเพราหมูกรอบ">
           </div>
 
           <div class="mb-2">
@@ -78,30 +71,9 @@
             <input type="number" name="m-sort_order" class="form-control form-control-sm" value="{{ summary|length|add:1 }}" min="0">
           </div>
 
-          <!-- AI Image Selection Box -->
-          <div id="aiImageSelectionBox" class="border rounded p-2 mb-2 bg-light d-none">
-            <div class="d-flex justify-content-between align-items-center mb-1">
-              <span class="small fw-bold text-primary"><i class="bi bi-stars me-1"></i>รูปภาพที่แนะนำ:</span>
-              <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="clearSelectedAiImage('add')">ยกเลิก</button>
-            </div>
-            <div id="aiImagesContainer" class="d-flex gap-2 overflow-auto py-1"></div>
-            <div id="aiImageLoading" class="text-center py-2 text-muted small d-none">
-              <span class="spinner-border spinner-border-sm me-1"></span> กำลังค้นหารูปภาพ...
-            </div>
-          </div>
-
-          <!-- Selected AI Preview -->
-          <div id="selectedAiPreviewBox" class="border rounded p-2 mb-2 text-center bg-white d-none position-relative">
-            <span class="badge bg-success mb-1">ใช้รูปนี้</span>
-            <div><img id="selectedAiPreviewImg" src="" class="rounded" style="max-height:95px; object-fit:cover;"></div>
-            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 mt-1" style="font-size:0.75rem;" onclick="clearSelectedAiImage('add')">
-              นำรูปออก
-            </button>
-          </div>
-
           <div class="mb-3">
-            <label class="form-label fw-semibold small">หรืออัปโหลดรูปภาพจากเครื่อง</label>
-            <input type="file" name="m-menu_image" id="addMenuFileInput" class="form-control form-control-sm" accept="image/*" onchange="clearSelectedAiImage('add')">
+            <label class="form-label fw-semibold small">อัปโหลดรูปภาพ</label>
+            <input type="file" name="m-menu_image" id="addMenuFileInput" class="form-control form-control-sm" accept="image/*">
           </div>
 
           <button type="submit" class="btn btn-success btn-sm w-100">
@@ -193,16 +165,10 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="edit_menu">
         <input type="hidden" name="menu_id" id="editMenuId">
-        <input type="hidden" name="edit_ai_image_url" id="editSelectedAiImageUrl" value="">
         <div class="modal-body">
           <div class="mb-2">
             <label class="form-label fw-semibold small">ชื่อเมนู <span class="text-danger">*</span></label>
-            <div class="input-group input-group-sm">
-              <input type="text" name="menu_name" id="editMenuName" class="form-control" required>
-              <button type="button" class="btn btn-outline-primary text-nowrap" onclick="fetchAiImages('edit')">
-                <i class="bi bi-magic me-1"></i>AI ค้นหารูป
-              </button>
-            </div>
+            <input type="text" name="menu_name" id="editMenuName" class="form-control form-control-sm" required>
           </div>
           <div class="mb-2">
             <label class="form-label fw-semibold small">รายละเอียด</label>
@@ -211,13 +177,6 @@
           <div class="mb-2">
             <label class="form-label fw-semibold small">ลำดับ</label>
             <input type="number" name="sort_order" id="editMenuSort" class="form-control form-control-sm" min="0">
-          </div>
-          <div id="editAiImageSelectionBox" class="border rounded p-2 mb-2 bg-light d-none">
-            <div id="editAiImagesContainer" class="d-flex gap-2 overflow-auto py-1"></div>
-            <div id="editAiImageLoading" class="text-center py-2 text-muted small d-none">กำลังค้นหารูปภาพ...</div>
-          </div>
-          <div id="editSelectedAiPreviewBox" class="border rounded p-2 mb-2 text-center bg-white d-none">
-            <img id="editSelectedAiPreviewImg" src="" class="rounded" style="max-height:85px;">
           </div>
           <div id="currentMenuImagePreview" class="mb-2"></div>
           <div class="mb-2">
@@ -237,71 +196,11 @@
 
 {% block extra_js %}
 <script>
-function fetchAiImages(type) {
-  const nameInput = (type === 'add') ? document.getElementById('addMenuNameInput') : document.getElementById('editMenuName');
-  const descInput = (type === 'add') ? document.getElementById('addMenuDescInput') : document.getElementById('editMenuDesc');
-  const query = nameInput ? nameInput.value.trim() : '';
-  const desc = descInput ? descInput.value.trim() : '';
-  if (!query) { alert('กรุณากรอกชื่อเมนูก่อนกดค้นหารูป'); return; }
-
-  const box = (type === 'add') ? document.getElementById('aiImageSelectionBox') : document.getElementById('editAiImageSelectionBox');
-  const container = (type === 'add') ? document.getElementById('aiImagesContainer') : document.getElementById('editAiImagesContainer');
-  const loading = (type === 'add') ? document.getElementById('aiImageLoading') : document.getElementById('editAiImageLoading');
-
-  box.classList.remove('d-none');
-  container.innerHTML = '';
-  loading.classList.remove('d-none');
-
-  fetch(`{% url 'food:api_ai_food_images' %}?name=${encodeURIComponent(query)}&desc=${encodeURIComponent(desc)}`)
-    .then(r => r.json())
-    .then(data => {
-      loading.classList.add('d-none');
-      (data.images || []).forEach(img => {
-        const div = document.createElement('div');
-        div.className = 'text-center flex-shrink-0';
-        div.style.width = '100px';
-        div.style.cursor = 'pointer';
-        div.innerHTML = `
-          <div class="border rounded p-1 bg-white" onclick="selectAiImage('${type}', '${img.url}')">
-            <img src="${img.url}" class="rounded w-100" style="height:68px;object-fit:cover;">
-            <small class="d-block text-truncate text-muted mt-1" style="font-size:0.65rem;">${img.title}</small>
-          </div>`;
-        container.appendChild(div);
-      });
-    })
-    .catch(() => { loading.classList.add('d-none'); });
-}
-
-function selectAiImage(type, url) {
-  if (type === 'add') {
-    document.getElementById('selectedAiImageUrl').value = url;
-    document.getElementById('selectedAiPreviewImg').src = url;
-    document.getElementById('selectedAiPreviewBox').classList.remove('d-none');
-  } else {
-    document.getElementById('editSelectedAiImageUrl').value = url;
-    document.getElementById('editSelectedAiPreviewImg').src = url;
-    document.getElementById('editSelectedAiPreviewBox').classList.remove('d-none');
-  }
-}
-
-function clearSelectedAiImage(type) {
-  if (type === 'add') {
-    document.getElementById('selectedAiImageUrl').value = '';
-    document.getElementById('selectedAiPreviewBox').classList.add('d-none');
-    document.getElementById('aiImageSelectionBox').classList.add('d-none');
-  } else {
-    document.getElementById('editSelectedAiImageUrl').value = '';
-    document.getElementById('editSelectedAiPreviewBox').classList.add('d-none');
-    document.getElementById('editAiImageSelectionBox').classList.add('d-none');
-  }
-}
-
 function openEditMenu(id, name, desc, sort, imgUrl) {
   document.getElementById('editMenuId').value = id;
   document.getElementById('editMenuName').value = name;
   document.getElementById('editMenuDesc').value = desc;
   document.getElementById('editMenuSort').value = sort;
-  clearSelectedAiImage('edit');
   const preview = document.getElementById('currentMenuImagePreview');
   if (imgUrl) {
     preview.innerHTML = `<img src="${imgUrl}" class="rounded border mb-1" style="max-height:70px;">

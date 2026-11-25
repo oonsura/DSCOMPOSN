@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from . import levels
-from .models import CAMP_CODE_REGEX, ArchiveRecord, UseRecord, User
+from .models import CAMP_CODE_REGEX, ArchiveRecord, UseRecord, User, normalize_school_name
 
 STUDENT_COLUMNS = [
     'camp1_code', 'full_name', 'nickname', 'school_name', 'birth_date',
@@ -286,7 +286,7 @@ def students_template_workbook(lang='th'):
         ['A', 'รหัสค่าย 1', 'camp1_code', 'รหัสประจำตัวค่าย 1 (เลขปี 2 หลัก + DS หรือ KM + เลข 2 หลัก) ใช้เป็น Username และรหัสผ่านเริ่มต้น (บังคับ)', '69DS01'],
         ['B', 'ชื่อ-นามสกุล', 'full_name', 'ชื่อและนามสกุลในช่องเดียวกัน หรือแยกเป็นคอลัมน์ "ชื่อ" และ "นามสกุล" ก็ได้ (บังคับ)', 'ด.ช.สมชาย ใจดี'],
         ['C', 'ชื่อเล่น', 'nickname', 'ชื่อเล่นของนักเรียน (เว้นว่างได้)', 'ต้น'],
-        ['D', 'โรงเรียน', 'school_name', 'ชื่อโรงเรียนปัจจุบัน (เว้นว่างได้)', 'โรงเรียนเทพศิรินทร์'],
+        ['D', 'โรงเรียน', 'school_name', 'ชื่อโรงเรียนปัจจุบัน (เว้นว่างได้ — หากไม่มีคำว่า "โรงเรียน" นำหน้า ระบบจะเติมให้อัตโนมัติ)', 'โรงเรียนเทพศิรินทร์'],
         ['E', 'วันเกิด', 'birth_date', 'วัน/เดือน/ปีเกิด (พ.ศ. หรือ ค.ศ.) เช่น 15/03/2555 (เว้นว่างได้)', '15/03/2555'],
         ['F', 'ปีการศึกษา', 'academic_year', 'ปีการศึกษา พ.ศ. 4 หลัก (หากเว้นว่าง ระบบจะคำนวณจาก 2 หลักแรกของรหัสค่าย 1)', '2569'],
         ['G', 'ระดับชั้นปัจจุบัน', 'current_level', 'รองรับ ป.1-ป.6, ม.1-ม.6, ปวช.1-ปวช.3 (ระบบคำนวณชั้นปี +1 ถึง +5 ให้อัตโนมัติ)', 'ม.1'],
@@ -745,7 +745,7 @@ def _parse_student_row(rownum, d, seen, existing_camp2):
     code = _clean(d.get('camp1_code')).upper()
     fname, lname = _extract_names(d)
     nickname = _clean_optional_text(d.get('nickname'))[:60]
-    school = _clean(d.get('school_name'))[:255]
+    school = normalize_school_name(_clean(d.get('school_name')))
     center = _clean(d.get('camp_center')).upper() or (code[2:4] if len(code) >= 4 else '')
     year_raw = _clean(d.get('academic_year'))
     level_raw = _clean(d.get('current_level'))
@@ -835,7 +835,7 @@ def _save_student_row(r, present_fields=None, recalc_levels=True):
         'first_name': r['first_name'],
         'last_name': r['last_name'],
         'nickname': r.get('nickname', ''),
-        'school_name': r.get('school_name', ''),
+        'school_name': normalize_school_name(r.get('school_name', '')),
         'birth_date': birth,
         'camp_center': r.get('camp_center', ''),
         'academic_year': year,

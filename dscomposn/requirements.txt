@@ -6,4 +6,6 @@ reportlab>=4.0
 python-docx>=1.0
 numpy>=1.24,<2.0
 opencv-python-headless>=4.8,<5.0
+waitress>=3.0
+whitenoise>=6.6
 # Production (PostgreSQL): psycopg2-binary>=2.9

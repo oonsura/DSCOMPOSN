@@ -295,8 +295,9 @@ class LoginTests(TestCase):
         self.assertIn('/login/', r['Location'])
 
     def test_auto_logout_setting(self):
-        self.assertEqual(settings.SESSION_COOKIE_AGE, 300)
-        self.assertTrue(settings.SESSION_SAVE_EVERY_REQUEST)
+        self.assertEqual(settings.SESSION_COOKIE_AGE, 900)
+        self.assertFalse(settings.SESSION_SAVE_EVERY_REQUEST)
+        self.assertEqual(settings.SESSION_ENGINE, 'django.contrib.sessions.backends.cached_db')
 
     def test_admin_reset_password(self):
         admin = Client()
@@ -385,7 +386,7 @@ class ImportTests(TestCase):
         res = import_students(f)
         self.assertEqual((res['created'], res['updated']), (0, 1))
         u.refresh_from_db()
-        self.assertEqual((u.first_name, u.school_name, u.year_plus_1), ('A2', 'S2', 'ม.6'))
+        self.assertEqual((u.first_name, u.school_name, u.year_plus_1), ('A2', 'โรงเรียนS2', 'ม.6'))
         self.assertEqual(User.objects.filter(camp1_code='69DS01').count(), 1)
 
     def test_bad_format_rows_reported(self):
@@ -646,7 +647,7 @@ class SchoolRequestTests(TestCase):
         req = m.school_requests.first()
         admin.post(reverse('composn:admin_school_requests'), {'id': req.pk, 'action': 'approve'})
         m.refresh_from_db()
-        self.assertEqual(m.school_name, 'ใหม่1')
+        self.assertEqual(m.school_name, 'โรงเรียนใหม่1')
         admin.post(reverse('composn:admin_school_requests'), {'id': req.pk, 'action': 'clear'})
         c.post(reverse('composn:school_request'), {'new_school_name': 'ใหม่2'})
         self.assertEqual(m.school_requests.count(), 2)
@@ -686,7 +687,6 @@ class SmokeTests(TestCase):
             reverse('food:order_detail', args=[o.pk]), reverse('food:order_edit', args=[o.pk]),
             reverse('food:order_copy', args=[o.pk]), reverse('food:order_report', args=[o.pk]),
             reverse('food:order_print', args=[o.pk]), reverse('food:order_export', args=[o.pk]),
-            reverse('food:api_ai_food_images') + '?name=กะเพรา',
             reverse('composn:admin_exports') + '?kind=students', reverse('composn:admin_exports') + '?kind=all_history',
             reverse('composn:admin_exports') + '?kind=history&code=69DS01',
             reverse('composn:admin_exports') + '?kind=absence_monthly&month=2026-07',
@@ -708,8 +708,9 @@ class SmokeTests(TestCase):
         c = Client()
         c.force_login(m)
         for url in (reverse('composn:profile'), reverse('food:my_food'), reverse('food:my_food_detail', args=[o.pk]),
-                    reverse('food:my_selections'), reverse('composn:my_history_export')):
+                    reverse('composn:my_history_export')):
             self.assertEqual(c.get(url).status_code, 200, url)
+        self.assertRedirects(c.get(reverse('food:my_selections')), reverse('food:my_food'))
         # ลงเวลาผ่าน API
         c = Client()
         c.force_login(staff)
@@ -1970,11 +1971,11 @@ class SmokeTests(TestCase):
             self.assertIn(reverse('food:orders'), sub_html)
         for url in [
             reverse('food:my_food_detail', args=[o_early.pk]),
-            reverse('food:my_selections'),
         ]:
             sub_html = mc.get(url).content.decode('utf-8')
             self.assertIn('กลับหน้ารายการอาหาร', sub_html)
             self.assertIn(reverse('food:my_food'), sub_html)
+        self.assertRedirects(mc.get(reverse('food:my_selections')), reverse('food:my_food'))
 
         # 2. กรอกคะแนน: นำช่อง "ครั้งที่สอบ" ออกจาก UI แล้ว
         ScoreCategory.objects.create(academic_year=2569, name='ทฤษฎี', default_max_score=100)
@@ -3003,7 +3004,7 @@ class SmokeTests(TestCase):
 
                 r_sys = ac.get(reverse('composn:admin_settings'))
                 self.assertEqual(r_sys.status_code, 200)
-                self.assertIn('tab=settings', r_sys.content.decode('utf-8'))
+                self.assertIn(reverse('food:admin_certificates'), r_sys.content.decode('utf-8'))
 
     def test_batch10_transfer_certificate_recipients_from_previous_year(self):
         """
@@ -3444,12 +3445,12 @@ class SmokeTests(TestCase):
             reverse('composn:profile'),
             reverse('composn:training_scores_year', args=[2569]),
             reverse('food:my_food'),
-            reverse('food:my_selections'),
             reverse('food:member_surveys'),
         ):
             r_m = mc.get(m_url)
             self.assertEqual(r_m.status_code, 200, m_url)
             self.assertIn('info-tip-icon', r_m.content.decode('utf-8'), m_url)
+        self.assertRedirects(mc.get(reverse('food:my_selections')), reverse('food:my_food'))
 
     def test_member_sidebar_training_submenus_exam_status_certificate_and_food_merge(self):
         """
@@ -5445,6 +5446,95 @@ class SmokeTests(TestCase):
         m_sel_back = _re.search(r'<select[^>]*name="current_academic_year"[^>]*>(.*?)</select>', html_back, _re.S)
         self.assertIsNotNone(m_sel_back)
         self.assertIn('value="2570"', m_sel_back.group(1))
+
+
+class SchoolNameNormalizationTests(TestCase):
+    """ตรวจสอบการเติมคำว่า 'โรงเรียน' นำหน้าชื่อโรงเรียนอัตโนมัติ"""
+
+    def test_normalize_school_name_helper(self):
+        from .models import normalize_school_name
+
+        cases = [
+            ('เทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('สวนกุหลาบวิทยาลัย', 'โรงเรียนสวนกุหลาบวิทยาลัย'),
+            ('กรุงเทพคริสเตียนวิทยาลัย', 'โรงเรียนกรุงเทพคริสเตียนวิทยาลัย'),
+            ('สาธิตจุฬาลงกรณ์มหาวิทยาลัย (ฝ่ายมัธยม)', 'โรงเรียนสาธิตจุฬาลงกรณ์มหาวิทยาลัย (ฝ่ายมัธยม)'),
+            ('โรงเรียนเทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('โรงเรียน  เทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('รร.เทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('ร.ร. สวนกุหลาบวิทยาลัย', 'โรงเรียนสวนกุหลาบวิทยาลัย'),
+            ('รร เทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('รร. โรงเรียนเทพศิรินทร์', 'โรงเรียนเทพศิรินทร์'),
+            ('สถาบันโคเซ็น สจล.', 'สถาบันโคเซ็น สจล.'),
+            ('ศูนย์การเรียนนิวตัน', 'ศูนย์การเรียนนิวตัน'),
+            ('วิทยาลัยเทคนิคกรุงเทพ', 'วิทยาลัยเทคนิคกรุงเทพ'),
+            ('มหาวิทยาลัยธรรมศาสตร์', 'มหาวิทยาลัยธรรมศาสตร์'),
+            ('', ''),
+            (None, ''),
+            ('   ', ''),
+            ('-', ''),
+            ('—', ''),
+        ]
+        for raw, expected in cases:
+            with self.subTest(raw=raw):
+                self.assertEqual(normalize_school_name(raw), expected)
+
+    def test_excel_preview_and_import_auto_prefix(self):
+        from .excel import import_students_from_preview, preview_students
+
+        headers = ['รหัสค่าย 1', 'ชื่อ-นามสกุล', 'โรงเรียน']
+        rows = [
+            ['69DS11', 'ด.ช.หนึ่ง ทดสอบ', 'เทพศิรินทร์'],
+            ['69DS12', 'ด.ช.สอง ทดสอบ', 'รร. สวนกุหลาบวิทยาลัย'],
+            ['69DS13', 'ด.ช.สาม ทดสอบ', 'โรงเรียนเตรียมอุดมศึกษา'],
+            ['69DS14', 'ด.ช.สี่ ทดสอบ', 'สถาบันโคเซ็น สจล.'],
+            ['69DS15', 'ด.ช.ห้า ทดสอบ', '-'],
+        ]
+        f = make_xlsx(headers, rows)
+        pv = preview_students(f)
+        schools_pv = {r['camp1_code']: r['school_name'] for r in pv['rows']}
+        self.assertEqual(schools_pv['69DS11'], 'โรงเรียนเทพศิรินทร์')
+        self.assertEqual(schools_pv['69DS12'], 'โรงเรียนสวนกุหลาบวิทยาลัย')
+        self.assertEqual(schools_pv['69DS13'], 'โรงเรียนเตรียมอุดมศึกษา')
+        self.assertEqual(schools_pv['69DS14'], 'สถาบันโคเซ็น สจล.')
+        self.assertEqual(schools_pv['69DS15'], '')
+
+        res = import_students_from_preview(pv)
+        self.assertEqual(res['created'], 5)
+        self.assertEqual(User.objects.get(camp1_code='69DS11').school_name, 'โรงเรียนเทพศิรินทร์')
+        self.assertEqual(User.objects.get(camp1_code='69DS12').school_name, 'โรงเรียนสวนกุหลาบวิทยาลัย')
+        self.assertEqual(User.objects.get(camp1_code='69DS14').school_name, 'สถาบันโคเซ็น สจล.')
+        self.assertEqual(User.objects.get(camp1_code='69DS15').school_name, '')
+
+        f2 = make_xlsx(headers, [['69DS16', 'ด.ช.หก ทดสอบ', 'สามเสนวิทยาลัย']])
+        res2 = import_students(f2)
+        self.assertEqual(res2['created'], 1)
+        self.assertEqual(User.objects.get(camp1_code='69DS16').school_name, 'โรงเรียนสามเสนวิทยาลัย')
+
+    def test_forms_and_certificate_school_formatting(self):
+        from .forms import SchoolRequestForm, UserForm
+        from food.models import CertificateSetting
+
+        uf = UserForm(data={
+            'camp1_code': '69DS21',
+            'full_name': 'ด.ช.เจ็ด ทดสอบ',
+            'school_name': 'บดินทรเดชา (สิงห์ สิงหเสนี)',
+            'role': User.ROLE_MEMBER,
+            'is_active': True,
+        })
+        self.assertTrue(uf.is_valid(), uf.errors)
+        self.assertEqual(uf.cleaned_data['school_name'], 'โรงเรียนบดินทรเดชา (สิงห์ สิงหเสนี)')
+
+        sf_ok = SchoolRequestForm(data={'new_school_name': 'ร.ร.หอวัง'})
+        self.assertTrue(sf_ok.is_valid(), sf_ok.errors)
+        self.assertEqual(sf_ok.cleaned_data['new_school_name'], 'โรงเรียนหอวัง')
+
+        sf_bad = SchoolRequestForm(data={'new_school_name': '-'})
+        self.assertFalse(sf_bad.is_valid())
+
+        cs = CertificateSetting.get()
+        self.assertEqual(cs.format_student_school('เทพศิรินทร์'), 'โรงเรียนเทพศิรินทร์ กรุงเทพมหานคร')
+
 
 
 

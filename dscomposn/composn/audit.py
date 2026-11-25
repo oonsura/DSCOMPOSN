@@ -3,11 +3,14 @@ Audit Log helper — บันทึกการกระทำสำคัญ�
 """
 import json
 import logging
+import threading
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+_AUDIT_FILE_LOCK = threading.Lock()
 
 ACTION_LABELS = {
     'login': 'เข้าสู่ระบบ',
@@ -24,8 +27,10 @@ ACTION_LABELS = {
     'delete_user': 'ลบผู้ใช้',
     'toggle_user': 'เปิด/ปิดการใช้งานผู้ใช้',
     'update_profile': 'แก้ไขโปรไฟล์ตนเอง',
+    'import': 'Import ข้อมูล',
     'import_students': 'Import ข้อมูลนักเรียน',
     'import_camp2': 'Import รหัสค่าย 2',
+    'import_scores': 'Import คะแนน',
     'delete_camp2': 'ลบรหัสค่าย 2',
     'calculate_level': 'คำนวณระดับชั้น',
     'confirm_rights': 'ยืนยันใช้สิทธิ์',
@@ -52,16 +57,29 @@ ACTION_LABELS = {
     'food_order': 'จัดการรายการอาหาร',
     'food_select': 'เลือกอาหาร',
     'toggle_cert_publish': 'เปิด/ปิดการแสดงเกียรติบัตร',
+    'exam_room_create': 'สร้างห้องสอบ',
+    'exam_room_delete': 'ลบห้องสอบ',
+    'exam_plan_toggle': 'เปิด/ปิดแสดงที่นั่งสอบ',
+    'exam_plan_clear': 'ล้างการจัดที่นั่งสอบ',
+    'exam_plan_delete': 'ลบรอบจัดที่นั่งสอบ',
+    'exam_room_plan_toggle': 'เปิด/ปิดห้องสอบในวันสอบ',
+    'exam_auto_assign_multi': 'จัดที่นั่งสอบแบบหลายห้อง',
+    'exam_clear_room': 'ล้างที่นั่งสอบในห้อง',
+    'exam_seat_assign': 'จัดผู้เข้าสอบลงที่นั่ง',
+    'exam_seat_cancel': 'ยกเลิกที่นั่งสอบ',
 }
 
 
 def get_client_ip(request):
     if request is None:
         return ''
-    xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '') or ''
+    remote_addr = request.META.get('REMOTE_ADDR', '') or ''
+    trusted = set(getattr(settings, 'TRUSTED_PROXY_IPS', []) or [])
+    if remote_addr in trusted:
+        xff = request.META.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            return xff.split(',')[0].strip()
+    return remote_addr
 
 
 def _to_text(value):
@@ -94,6 +112,8 @@ def log_action(user, action, target=None, target_model='', target_id=None,
     except Exception:  # pragma: no cover
         logger.exception('ไม่สามารถบันทึก AuditLog')
         return None
+    if action in ('login', 'login_failed', 'login_unlock'):
+        cache.delete('dscomposn:auth_lockout_scan')
     _write_file(entry)
     return entry
 
@@ -114,8 +134,9 @@ def _write_file(entry):
             '=>',
             (entry.new_value or '').replace('\n', ' ')[:500],
         ])
-        with open(path, 'a', encoding='utf-8') as fh:
-            fh.write(line + '\n')
+        with _AUDIT_FILE_LOCK:
+            with open(path, 'a', encoding='utf-8') as fh:
+                fh.write(line + '\n')
     except Exception:  # pragma: no cover
         logger.exception('ไม่สามารถเขียนไฟล์ audit log')
 

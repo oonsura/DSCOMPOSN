@@ -5,16 +5,11 @@ Views ระบบสั่งอาหาร (รวมจากระบบ fo
 - Member: เลือกเมนูตามเงื่อนไข (จำนวนสูงสุด, ไม่ซ้ำ/ซ้ำได้, ขอบเขตศูนย์), ดูรายการที่ตนเองเลือก
 """
 import datetime as dt
-import ssl
-import urllib.parse
-import urllib.request
 
 from django import forms
 from django.contrib import messages
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Count, Q, Sum
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -102,26 +97,6 @@ class FoodMenuForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self._bootstrap()
-
-
-def _download_image_from_url(url, timeout=15):
-    if not url:
-        return None
-    try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        req = urllib.request.Request(
-            url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-            },
-        )
-        with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-            return resp.read()
-    except Exception:
-        return None
 
 
 def _decorate_order(o, setting=None):
@@ -298,14 +273,8 @@ def order_detail(request, pk):
         else:
             m = FoodMenu(food_order=o, menu_name=m_name, menu_description=m_desc, sort_order=m_sort)
             img_file = request.FILES.get('m-menu_image') or request.FILES.get('menu_image')
-            ai_url = (request.POST.get('ai_image_url') or '').strip()
             if img_file:
                 m.menu_image = img_file
-            elif ai_url:
-                data = _download_image_from_url(ai_url)
-                if data:
-                    m.menu_image.save(f'ai_menu_{o.pk}_{int(timezone.now().timestamp())}.jpg',
-                                      ContentFile(data), save=False)
             m.save()
             log_action(request.user, 'food_order', target=o,
                        new_value={'action': 'add_menu', 'menu': m.menu_name}, request=request)
@@ -414,11 +383,6 @@ def order_action(request, pk):
             pass
         if 'menu_image' in request.FILES:
             m.menu_image = request.FILES['menu_image']
-        elif request.POST.get('edit_ai_image_url'):
-            data = _download_image_from_url(request.POST.get('edit_ai_image_url').strip())
-            if data:
-                m.menu_image.save(f'ai_menu_{o.pk}_{int(timezone.now().timestamp())}.jpg',
-                                  ContentFile(data), save=False)
         elif request.POST.get('clear_menu_image'):
             m.menu_image = None
         m.save()
@@ -453,66 +417,21 @@ def order_export(request, pk):
     return workbook_response(wb, f'อาหาร_{o.food_date}_{o.restaurant_name}.xlsx')
 
 
-@staff_perm_required('staff_can_manage_food')
-def api_generate_food_images(request):
-    """API: คืนค่ารายการรูปภาพตัวอย่าง/AI ให้เลือกสำหรับเมนูอาหาร"""
-    menu_name = request.GET.get('name', '').strip()
-    menu_desc = request.GET.get('desc', '').strip()
-    if not menu_name and not menu_desc:
-        return JsonResponse({'images': []})
-    combined_text = f'{menu_name} {menu_desc}'.strip()
-    food_keywords = [
-        ('กะเพรา', 'thai basil stir fry pad kra pao', '1562967914-608f82629710', '1540420773420-3366772f4999'),
-        ('กระเพรา', 'thai basil stir fry pad kra pao', '1562967914-608f82629710', '1540420773420-3366772f4999'),
-        ('ข้าวผัด', 'thai fried rice', '1603133872878-684f208fb84b', '1512058564366-18510be2db19'),
-        ('ต้มยำ', 'tom yum spicy soup', '1548943487-a2e4e43b4853', '1569718212165-3a8278d5f624'),
-        ('ส้มตำ', 'som tum thai papaya salad', '1559847844-5315695dadae', '1540420773420-3366772f4999'),
-        ('ไก่ทอด', 'crispy golden fried chicken', '1626082927389-6cd097cdc6ec', '1562967914-608f82629710'),
-        ('ไก่ย่าง', 'thai grilled chicken', '1598515214211-89d3c73ae83b', '1626082927389-6cd097cdc6ec'),
-        ('หมูทอด', 'crispy deep fried pork', '1604908176997-125f25cc6f3d', '1544025162-d76694265947'),
-        ('หมูกรอบ', 'crispy pork belly', '1544025162-d76694265947', '1604908176997-125f25cc6f3d'),
-        ('ข้าวมันไก่', 'hainanese chicken rice with soup', '1512058564366-18510be2db19', '1626082927389-6cd097cdc6ec'),
-        ('ข้าวขาหมู', 'thai braised pork leg with rice', '1544025162-d76694265947', '1604908176997-125f25cc6f3d'),
-        ('ผัดไทย', 'authentic pad thai noodles', '1559314809-0d155014e29e', '1569718212165-3a8278d5f624'),
-        ('แกงเขียวหวาน', 'thai green curry with chicken', '1455619452474-d2be8b1e70cd', '1540420773420-3366772f4999'),
-        ('ก๋วยเตี๋ยว', 'thai noodle soup bowl', '1569718212165-3a8278d5f624', '1552611052-33e04de081de'),
-        ('บะหมี่', 'egg noodle soup bowl', '1569718212165-3a8278d5f624', '1552611052-33e04de081de'),
-        ('ผัดซีอิ๊ว', 'stir fried flat rice noodles with egg', '1585032226651-759b368d7246', '1559314809-0d155014e29e'),
-        ('ไข่เจียว', 'fluffy thai omelette over rice', '1525351484163-7529414344d8', '1562967914-608f82629710'),
-    ]
-    matched_kw = f'delicious thai food dish {combined_text}'
-    photo_id_1 = '1546069901-ba9599a7e63c'
-    photo_id_2 = '1565299624946-b28f40a0ae38'
-    for th_word, en_kw, p1, p2 in food_keywords:
-        if th_word in combined_text:
-            matched_kw, photo_id_1, photo_id_2 = en_kw, p1, p2
-            break
-    p1_enc = urllib.parse.quote(f'gourmet {matched_kw}, thai food: {combined_text}, close up culinary photography')
-    p2_enc = urllib.parse.quote(f'delicious fresh {matched_kw}, appetizing presentation, photorealistic')
-    images = [
-        {'id': 1, 'title': 'แบบที่ 1 (ภาพถ่ายจัดจาน)',
-         'url': f'https://images.unsplash.com/photo-{photo_id_1}?auto=format&fit=crop&w=512&h=512&q=80'},
-        {'id': 2, 'title': 'แบบที่ 2 (ภาพถ่ายมุมมองทางเลือก)',
-         'url': f'https://images.unsplash.com/photo-{photo_id_2}?auto=format&fit=crop&w=512&h=512&q=80'},
-        {'id': 3, 'title': 'แบบที่ 3 (AI สร้างตามชื่อ 1)',
-         'url': f'https://image.pollinations.ai/prompt/{p1_enc}?width=512&height=512&nologo=true&seed=42'},
-        {'id': 4, 'title': 'แบบที่ 4 (AI สร้างตามชื่อ 2)',
-         'url': f'https://image.pollinations.ai/prompt/{p2_enc}?width=512&height=512&nologo=true&seed=99'},
-    ]
-    return JsonResponse({'images': images})
-
-
 # --------------------------------- Member ------------------------------------
 @member_required
 def my_food(request):
-    setting = SystemSetting.get()
-    year = setting.current_academic_year
+    setting = getattr(request, '_site_setting', None) or SystemSetting.get()
+    year = int(setting.current_academic_year)
     today = timezone.localdate()
     flt = request.GET.get('status', 'all')
-    from composn.models import UseRecord
-    is_rights_user = UseRecord.objects.filter(
-        user=request.user, academic_year=year, is_used=True
-    ).exists()
+    site_rights = getattr(request, '_site_is_rights_cur', None)
+    if site_rights is not None and site_rights[0] == year:
+        is_rights_user = site_rights[1]
+    else:
+        from composn.models import UseRecord
+        is_rights_user = UseRecord.objects.filter(
+            user=request.user, academic_year=year, is_used=True
+        ).exists()
     all_visible = [
         _decorate_order(o, setting)
         for o in FoodOrder.objects.prefetch_related('menus').filter(
@@ -556,13 +475,8 @@ def my_food(request):
 
 @member_required
 def my_selections(request):
-    """หน้ารายการอาหารทั้งหมดที่สมาชิกเคยเลือกไว้ในปีการศึกษาปัจจุบัน"""
-    year = SystemSetting.get().current_academic_year
-    sels = FoodSelection.objects.filter(
-        user=request.user,
-        food_order__academic_year=year,
-    ).select_related('food_order', 'food_menu').order_by('food_order__food_date', 'food_menu__sort_order')
-    return render(request, 'food/my_selections.html', {'selections': sels, 'year': year})
+    """รวมอยู่ในหน้ารายการอาหารแล้ว (Redirect เพื่อรองรับลิงก์/บุ๊กมาร์กเดิม)"""
+    return redirect('food:my_food')
 
 
 @member_required
@@ -584,49 +498,55 @@ def my_food_detail(request, pk):
             return redirect(request.path)
 
         action = request.POST.get('action', '')
-        # รองรับปุ่มกดเลือก/ยกเลิก/เพิ่ม-ลดจำนวนทีละเมนู (รูปแบบระบบ food เดิม)
+        # รองรับปุ่มกดเลือก/ยกเลิก/เพิ่ม-ลดจำนวนทีละเมนู ภายใต้ transaction.atomic() ป้องกันกดซ้ำพร้อมกันเกินโควตา
         if action in ('select', 'remove', 'update_quantity'):
-            if action == 'select':
-                menu = get_object_or_404(FoodMenu, pk=request.POST.get('menu_id'), food_order=o)
-                if total_selected >= o.max_selection_count:
-                    messages.error(request, f'เลือกได้สูงสุด {o.max_selection_count} อย่าง')
-                else:
-                    sel, created = FoodSelection.objects.get_or_create(
-                        food_order=o, food_menu=menu, user=request.user, defaults={'quantity': 1}
-                    )
-                    if not created and o.selection_mode == FoodOrder.MODE_REPEAT:
-                        sel.quantity += 1
-                        sel.save(update_fields=['quantity', 'updated_at'])
-                    log_action(request.user, 'food_select', target=o,
-                               new_value={'select': menu.menu_name}, request=request)
-                    messages.success(request, f'เลือกเมนู "{menu.menu_name}" เรียบร้อย')
-            elif action == 'remove':
-                sel = FoodSelection.objects.filter(pk=request.POST.get('selection_id'),
-                                                   food_order=o, user=request.user).first()
-                if sel:
-                    mname = sel.food_menu.menu_name
-                    sel.delete()
-                    log_action(request.user, 'food_select', target=o,
-                               new_value={'remove': mname}, request=request)
-                    messages.success(request, f'ยกเลิกเมนู "{mname}" แล้ว')
-            elif action == 'update_quantity':
-                sel = FoodSelection.objects.filter(pk=request.POST.get('selection_id'),
-                                                   food_order=o, user=request.user).first()
-                if sel:
-                    try:
-                        new_q = int(request.POST.get('quantity') or 0)
-                    except ValueError:
-                        new_q = sel.quantity
-                    other_total = total_selected - sel.quantity
-                    if new_q <= 0:
-                        sel.delete()
-                        messages.success(request, 'นำรายการออกแล้ว')
-                    elif other_total + new_q > o.max_selection_count:
+            with transaction.atomic():
+                FoodOrder.objects.select_for_update().filter(pk=o.pk).first()
+                live_sels = list(
+                    FoodSelection.objects.select_for_update()
+                    .filter(food_order=o, user=request.user)
+                    .select_related('food_menu')
+                )
+                live_total = sum(s.quantity for s in live_sels)
+                if action == 'select':
+                    menu = get_object_or_404(FoodMenu, pk=request.POST.get('menu_id'), food_order=o)
+                    if live_total >= o.max_selection_count:
                         messages.error(request, f'เลือกได้สูงสุด {o.max_selection_count} อย่าง')
                     else:
-                        sel.quantity = new_q
-                        sel.save(update_fields=['quantity', 'updated_at'])
-                        messages.success(request, 'อัปเดตจำนวนเรียบร้อย')
+                        sel, created = FoodSelection.objects.get_or_create(
+                            food_order=o, food_menu=menu, user=request.user, defaults={'quantity': 1}
+                        )
+                        if not created and o.selection_mode == FoodOrder.MODE_REPEAT:
+                            sel.quantity += 1
+                            sel.save(update_fields=['quantity', 'updated_at'])
+                        log_action(request.user, 'food_select', target=o,
+                                   new_value={'select': menu.menu_name}, request=request)
+                        messages.success(request, f'เลือกเมนู "{menu.menu_name}" เรียบร้อย')
+                elif action == 'remove':
+                    sel = next((s for s in live_sels if str(s.pk) == str(request.POST.get('selection_id'))), None)
+                    if sel:
+                        mname = sel.food_menu.menu_name
+                        sel.delete()
+                        log_action(request.user, 'food_select', target=o,
+                                   new_value={'remove': mname}, request=request)
+                        messages.success(request, f'ยกเลิกเมนู "{mname}" แล้ว')
+                elif action == 'update_quantity':
+                    sel = next((s for s in live_sels if str(s.pk) == str(request.POST.get('selection_id'))), None)
+                    if sel:
+                        try:
+                            new_q = int(request.POST.get('quantity') or 0)
+                        except ValueError:
+                            new_q = sel.quantity
+                        other_total = live_total - sel.quantity
+                        if new_q <= 0:
+                            sel.delete()
+                            messages.success(request, 'นำรายการออกแล้ว')
+                        elif other_total + new_q > o.max_selection_count:
+                            messages.error(request, f'เลือกได้สูงสุด {o.max_selection_count} อย่าง')
+                        else:
+                            sel.quantity = new_q
+                            sel.save(update_fields=['quantity', 'updated_at'])
+                            messages.success(request, 'อัปเดตจำนวนเรียบร้อย')
             return redirect(request.path)
 
         # รองรับการส่งแบบฟอร์มรวม qty_<id> (คงความเข้ากันได้กับชุดทดสอบอัตโนมัติ)

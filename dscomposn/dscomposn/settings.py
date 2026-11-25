@@ -2,10 +2,14 @@
 Django settings for dscomposn
 รวมระบบ COMPOSN (สิทธิ์ค่าย) + Food (เวลาเรียน / คะแนน / สั่งอาหาร)
 """
+import importlib.util
 import os
+import sys
+import tempfile
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = 'test' in sys.argv
 
 # โหลดค่าจาก .env (ถ้ามี)
 try:
@@ -41,6 +45,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    *(
+        ['whitenoise.middleware.WhiteNoiseMiddleware']
+        if importlib.util.find_spec('whitenoise') is not None else []
+    ),
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -75,7 +83,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'dscomposn.wsgi.application'
 
-# ฐานข้อมูล: SQLite (พัฒนา) / PostgreSQL (Production ตั้งค่า DATABASE_ENGINE=postgresql)
+# ฐานข้อมูล: SQLite WAL (พัฒนา/ขนาดกลาง) / PostgreSQL (Production ตั้งค่า DATABASE_ENGINE=postgresql)
 if os.environ.get('DATABASE_ENGINE', 'sqlite').lower().startswith('postgres'):
     DATABASES = {
         'default': {
@@ -85,6 +93,7 @@ if os.environ.get('DATABASE_ENGINE', 'sqlite').lower().startswith('postgres'):
             'PASSWORD': os.environ.get('DATABASE_PASSWORD', ''),
             'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
             'PORT': os.environ.get('DATABASE_PORT', '5432'),
+            'CONN_MAX_AGE': 60,
         }
     }
 else:
@@ -92,7 +101,24 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {'timeout': 20},
+            'OPTIONS': {'timeout': 30},
+        }
+    }
+
+# แคชในหน่วยความจำเพื่อลดการ Query ซ้ำเมื่อมีผู้ใช้พร้อมกันจำนวนมาก (ระหว่างรัน Test ใช้ DummyCache)
+if TESTING:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'dscomposn-cache',
+            'TIMEOUT': 300,
+            'OPTIONS': {'MAX_ENTRIES': 5000},
         }
     }
 
@@ -108,10 +134,11 @@ LOGIN_URL = 'composn:login'
 LOGIN_REDIRECT_URL = 'composn:home'
 LOGOUT_REDIRECT_URL = 'composn:login'
 
-# Session: Auto Logout หลังไม่มีการทำงาน 5 นาที
-AUTO_LOGOUT_SECONDS = int(os.environ.get('AUTO_LOGOUT_SECONDS', 300))
+# Session: Auto Logout หลังไม่มีการทำงาน (รองรับ cached_db และไม่เขียน DB ทุก GET)
+AUTO_LOGOUT_SECONDS = int(os.environ.get('AUTO_LOGOUT_SECONDS', 900))
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 SESSION_COOKIE_AGE = AUTO_LOGOUT_SECONDS
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_SAVE_EVERY_REQUEST = False
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -121,11 +148,13 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 SESSION_COOKIE_SECURE = env_bool('DJANGO_SECURE_COOKIES', False)
 CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
-# การป้องกันการเดารหัสผ่านซ้ำ (Brute-force Lockout)
+# การป้องกันการเดารหัสผ่านซ้ำ (Brute-force Lockout) — IP limit รองรับเครือข่ายโรงเรียน (NAT)
 LOGIN_MAX_FAILURES_PER_USER = int(os.environ.get('LOGIN_MAX_FAILURES_PER_USER', 5))
-LOGIN_MAX_FAILURES_PER_IP = int(os.environ.get('LOGIN_MAX_FAILURES_PER_IP', 15))
+LOGIN_MAX_FAILURES_PER_IP = int(os.environ.get('LOGIN_MAX_FAILURES_PER_IP', 200))
 LOGIN_LOCKOUT_WINDOW_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_WINDOW_MINUTES', 15))
 LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', 15))
+TRUSTED_PROXY_IPS = [ip.strip() for ip in os.environ.get('DJANGO_TRUSTED_PROXY_IPS', '').split(',') if ip.strip()]
+SERVE_MEDIA = env_bool('DJANGO_SERVE_MEDIA', True)
 
 LANGUAGE_CODE = 'th'
 TIME_ZONE = 'Asia/Bangkok'
@@ -138,8 +167,12 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-BACKUP_DIR = BASE_DIR / 'backups'
-AUDIT_LOG_DIR = BASE_DIR / 'audit_logs'
+if TESTING:
+    BACKUP_DIR = Path(tempfile.gettempdir()) / 'dscomposn_test_backups'
+    AUDIT_LOG_DIR = Path(tempfile.gettempdir()) / 'dscomposn_test_audit_logs'
+else:
+    BACKUP_DIR = BASE_DIR / 'backups'
+    AUDIT_LOG_DIR = BASE_DIR / 'audit_logs'
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024

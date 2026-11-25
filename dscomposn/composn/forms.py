@@ -2,7 +2,10 @@ from django import forms
 from django.contrib.auth import password_validation
 from django.contrib.auth.forms import AuthenticationForm
 
-from .models import CAMP_LEVEL_CHOICES, DEFAULT_ACADEMIC_YEARS, PROFILE_EDITABLE_CHOICES, SystemSetting, User
+from .models import (
+    CAMP_LEVEL_CHOICES, DEFAULT_ACADEMIC_YEARS, PROFILE_EDITABLE_CHOICES,
+    SystemSetting, User, normalize_school_name,
+)
 
 
 def _get_dynamic_academic_years(setting_obj=None, extra_year=None):
@@ -188,6 +191,8 @@ class UserForm(BootstrapMixin, forms.ModelForm):
             self.fields['full_name'].initial = self.instance.get_full_name()
         self.fields['camp1_code'].help_text = 'Member: รูปแบบ 69DS01 (ใช้เป็น Username ตลอดไป)'
         self.fields['camp2_code'].required = False
+        self.fields['school_name'].widget.attrs.setdefault('placeholder', 'เช่น โรงเรียนเทพศิรินทร์')
+        self.fields['school_name'].help_text = 'หากไม่ระบุคำว่า "โรงเรียน" นำหน้า ระบบจะเติมให้อัตโนมัติ'
         self._bootstrap()
 
     def clean_camp1_code(self):
@@ -195,6 +200,9 @@ class UserForm(BootstrapMixin, forms.ModelForm):
 
     def clean_camp2_code(self):
         return (self.cleaned_data.get('camp2_code') or '').strip().upper() or None
+
+    def clean_school_name(self):
+        return normalize_school_name(self.cleaned_data.get('school_name'))
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -258,12 +266,22 @@ class ProfileForm(BootstrapMixin, forms.ModelForm):
 
 
 class SchoolRequestForm(BootstrapMixin, forms.Form):
-    new_school_name = forms.CharField(label='ชื่อโรงเรียนใหม่', max_length=255)
+    new_school_name = forms.CharField(
+        label='ชื่อโรงเรียนใหม่', max_length=255,
+        help_text='หากไม่ระบุคำว่า "โรงเรียน" นำหน้า ระบบจะเติมให้อัตโนมัติ',
+        widget=forms.TextInput(attrs={'placeholder': 'เช่น โรงเรียนเทพศิรินทร์'}),
+    )
     reason = forms.CharField(label='เหตุผล', required=False, widget=forms.Textarea(attrs={'rows': 2}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._bootstrap()
+
+    def clean_new_school_name(self):
+        val = normalize_school_name(self.cleaned_data.get('new_school_name'))
+        if not val:
+            raise forms.ValidationError('กรุณากรอกชื่อโรงเรียนใหม่ให้ถูกต้อง')
+        return val
 
 
 class SystemSettingForm(BootstrapMixin, forms.ModelForm):

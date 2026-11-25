@@ -1242,7 +1242,8 @@ class CertificateSetting(models.Model):
 
     def format_student_school(self, school_name):
         """จัดรูปแบบชื่อโรงเรียน + จังหวัดต่อท้ายสำหรับนักเรียน"""
-        school = (school_name or '').strip()
+        from composn.models import normalize_school_name
+        school = normalize_school_name(school_name)
         prov = (self.student_default_province or '').strip()
         if school and prov and prov not in school:
             return f'{school} {prov}'

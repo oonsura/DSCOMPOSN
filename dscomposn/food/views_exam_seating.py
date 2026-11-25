@@ -919,6 +919,8 @@ def exam_seating_export_xlsx(request, plan_id):
 # =============================================================================
 @member_required
 def member_exam_seating(request):
+    from django.core.cache import cache
+
     user = request.user
     assignments = list(
         ExamSeatAssignment.objects.filter(
@@ -927,14 +929,23 @@ def member_exam_seating(request):
             plan__is_open=True,
             plan_room__is_open=True,
         ).select_related('plan__training_date', 'plan_room__room', 'seat')
+        .prefetch_related('plan_room__proctors')
         .order_by('plan__training_date__date', 'plan__session_period')
     )
 
     items = []
+    examinees_by_year = {}
     for asgn in assignments:
         pr = asgn.plan_room
         plan = asgn.plan
-        examinees = get_exam_examinees(plan.academic_year)
+        if plan.academic_year not in examinees_by_year:
+            ex_cache_key = f'dscomposn:exam_examinees:{plan.academic_year}'
+            cached_ex = cache.get(ex_cache_key)
+            if cached_ex is None:
+                cached_ex = get_exam_examinees(plan.academic_year)
+                cache.set(ex_cache_key, cached_ex, 30)
+            examinees_by_year[plan.academic_year] = cached_ex
+        examinees = examinees_by_year[plan.academic_year]
         code_by_user_id = {ex['user_id']: ex['display_code'] for ex in examinees}
         rights_user_ids = {ex['user_id'] for ex in examinees if ex['is_rights']}
         asgn_by_seat = {
@@ -947,7 +958,7 @@ def member_exam_seating(request):
             code_by_user_id=code_by_user_id,
             rights_user_ids=rights_user_ids,
         )
-        proctors = list(pr.proctors.all().order_by('sort_order', 'id'))
+        proctors = sorted(pr.proctors.all(), key=lambda p: (p.sort_order, p.id))
         items.append({
             'assignment': asgn,
             'plan': plan,

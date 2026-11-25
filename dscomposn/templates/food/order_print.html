@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -9,7 +9,7 @@
   <link rel="shortcut icon" href="{{ site_setting.site_favicon.url }}">
   <link rel="apple-touch-icon" href="{{ site_setting.site_favicon.url }}">
   {% endif %}
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="{% static 'vendor/fonts/sarabun.css' %}" rel="stylesheet">
   <style>
     * {
       font-family: 'Sarabun', sans-serif;

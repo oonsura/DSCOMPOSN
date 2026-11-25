@@ -408,11 +408,32 @@
         </div>
       </div>
 
-      <!-- แถว 3: รายการอาหาร · แบบสอบถาม · หัวข้อคะแนน -->
-      <div class="row g-3">
-        <!-- รายการอาหาร -->
-        <div class="col-lg-4">
-          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-food-order-toggles">
+      <!-- แถว 3: รายการอาหาร · แบบสอบถาม · หัวข้อคะแนน (แท็บประหยัดพื้นที่) -->
+      <div class="border rounded p-2 p-md-3 bg-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 pb-2 border-bottom">
+          <ul class="nav nav-pills nav-sm gap-1" id="dashQuickSubTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active py-1 px-2 small fw-semibold" id="dq-tab-food-btn" data-bs-toggle="pill" data-bs-target="#dash-food-order-toggles" type="button" role="tab">
+                <i class="bi bi-bowl-hot me-1"></i>รายการอาหาร ({{ quick_toggles.food_order_items|length }})
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link py-1 px-2 small fw-semibold" id="dq-tab-survey-btn" data-bs-toggle="pill" data-bs-target="#dash-survey-toggles" type="button" role="tab">
+                <i class="bi bi-clipboard2-pulse me-1"></i>แบบสอบถาม ({{ quick_toggles.survey_items|length }})
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link py-1 px-2 small fw-semibold" id="dq-tab-scorecat-btn" data-bs-toggle="pill" data-bs-target="#dash-score-cat-toggles" type="button" role="tab">
+                <i class="bi bi-sliders me-1"></i>หัวข้อคะแนน ({{ quick_toggles.score_cat_items|length }})
+              </button>
+            </li>
+          </ul>
+          <span class="small text-muted">คลิกสลับหมวดเพื่อเปิด/ปิดรายการย่อย</span>
+        </div>
+
+        <div class="tab-content">
+          <!-- รายการอาหาร -->
+          <div class="tab-pane fade show active" id="dash-food-order-toggles" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="fw-bold small text-dark"><i class="bi bi-bowl-hot me-1 text-primary"></i>รายการอาหาร</span>
               <a href="{% url 'food:orders' %}?year={{ year }}" class="small text-decoration-none">ดูทั้งหมด &rarr;</a>
@@ -442,11 +463,9 @@
               <div class="text-center py-2 text-muted small">ยังไม่มีรายการอาหาร</div>
             {% endfor %}
           </div>
-        </div>
 
-        <!-- แบบสอบถาม -->
-        <div class="col-lg-4">
-          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-survey-toggles">
+          <!-- แบบสอบถาม -->
+          <div class="tab-pane fade" id="dash-survey-toggles" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="fw-bold small text-dark"><i class="bi bi-clipboard2-pulse me-1 text-danger"></i>แบบสอบถาม</span>
               <a href="{% url 'food:surveys_manage' %}?year={{ year }}" class="small text-decoration-none">จัดการ &rarr;</a>
@@ -475,11 +494,9 @@
               <div class="text-center py-2 text-muted small">ยังไม่มีแบบสอบถาม</div>
             {% endfor %}
           </div>
-        </div>
 
-        <!-- หัวข้อคะแนน -->
-        <div class="col-lg-4">
-          <div class="border rounded p-2 p-md-3 h-100 bg-white" id="dash-score-cat-toggles">
+          <!-- หัวข้อคะแนน -->
+          <div class="tab-pane fade" id="dash-score-cat-toggles" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="fw-bold small text-dark"><i class="bi bi-sliders me-1 text-warning"></i>หัวข้อคะแนน</span>
               <a href="{% url 'food:score_categories' %}?year={{ year }}" class="small text-decoration-none">ตั้งค่า &rarr;</a>
@@ -663,7 +680,7 @@
       <span><i class="bi bi-bar-chart-fill me-2 text-info"></i>สรุปคะแนน การคัดเลือก และเกียรติบัตร (ปีการศึกษา {{ year }})</span>
       <div class="d-flex gap-2 flex-wrap">
         <a href="{% url 'food:score_summary' %}?year={{ year }}" class="btn btn-sm btn-outline-info">สรุปคะแนนรวม</a>
-        <a href="{% url 'food:score_announcement' %}?year={{ year }}" class="btn btn-sm btn-outline-warning text-dark">เอกสารประกาศผล</a>
+        <a href="{% url 'food:score_announcement' %}?year={{ year }}" class="btn btn-sm btn-outline-warning text-dark">การประกาศผล</a>
         <a href="{% url 'food:admin_certificates' %}?year={{ year }}" class="btn btn-sm btn-outline-success">เกียรติบัตร</a>
       </div>
     </div>
@@ -883,7 +900,7 @@
             <small class="text-muted">{{ l.created_at|datetime_thai }}</small>
           </div>
           <small class="text-primary">
-            {% for k, v in action_labels.items %}{% if k == l.action %}{{ v }}{% endif %}{% endfor %}
+            {{ action_labels|get_item:l.action|default:l.action }}
           </small>
           {% if l.new_value %}<small class="d-block text-muted text-truncate" style="font-size:0.75rem;">{{ l.new_value }}</small>{% endif %}
         </div>

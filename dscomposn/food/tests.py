@@ -645,7 +645,6 @@ class MobileTemplatesRenderingTests(FoodBaseTestCase):
             reverse('composn:profile'),
             reverse('composn:training_scores'),
             reverse('food:my_food'),
-            reverse('food:my_selections'),
             reverse('food:member_surveys'),
             reverse('composn:change_password'),
         ]:
@@ -654,6 +653,7 @@ class MobileTemplatesRenderingTests(FoodBaseTestCase):
             m_html = resp.content.decode('utf-8')
             self.assertIn('id="mobileBottomNav"', m_html)
             self.assertIn('sidebar-close-btn', m_html)
+        self.assertRedirects(self.client.get(reverse('food:my_selections')), reverse('food:my_food'))
         self.assertIn(self.client.get(reverse('food:my_certificate')).status_code, (200, 302))
 
         # 4. Public / unauthenticated pages (login & certificate verification)
@@ -742,6 +742,8 @@ class LoginSecurityAndLockoutTests(FoodBaseTestCase):
     def test_strict_single_session_across_all_roles(self):
         from django.contrib.sessions.models import Session
 
+        self.client.logout()
+        Session.objects.all().delete()
         staff = make_staff('staff_s1')
         accounts = [
             ('admin', '1234', reverse('composn:admin_dashboard')),
@@ -1767,6 +1769,131 @@ class DashboardQuickTogglesTests(FoodBaseTestCase):
         sc.force_login(staff)
         self.assertEqual(sc.get(dash_url).status_code, 403)
         self.assertEqual(sc.post(dash_url, {'action': 'dash_toggle_cert_publish', 'year': '2569'}).status_code, 403)
+
+
+class ConcurrencySecurityAndCleanupTests(FoodBaseTestCase):
+    def test_settings_caching_and_invalidation(self):
+        from django.core.cache import cache
+        from django.test import override_settings
+
+        with override_settings(CACHES={
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'test-sys-setting-cache',
+            }
+        }):
+            cache.clear()
+            s1 = SystemSetting.get()
+            with self.assertNumQueries(0):
+                s2 = SystemSetting.get()
+            self.assertEqual(s1.pk, s2.pk)
+
+            s2.site_title = 'DS-COMPOSN CACHED'
+            s2.save()
+            s3 = SystemSetting.get()
+            self.assertEqual(s3.site_title, 'DS-COMPOSN CACHED')
+            cache.clear()
+
+    def test_session_ping_active_vs_idle_timeout(self):
+        import time
+
+        self.setting.auto_logout_minutes = 1
+        self.setting.save()
+
+        mc = Client()
+        mc.post(reverse('composn:login'), {'username': '69DS01', 'password': '69DS01'})
+        self.assertEqual(mc.get(reverse('composn:profile')).status_code, 200)
+
+        # Idle ping (ไม่มี ?active=1) ต้องไม่ต่ออายุ _last_activity และจะหมดอายุเมื่อเกินเวลา
+        old_ts = time.time() - 50
+        sess = mc.session
+        sess['_last_activity'] = old_ts
+        sess.save()
+
+        r_idle = mc.get(reverse('composn:session_ping'), HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r_idle.status_code, 200)
+        self.assertAlmostEqual(float(mc.session['_last_activity']), old_ts, places=1)
+
+        expired_ts = time.time() - 75
+        sess = mc.session
+        sess['_last_activity'] = expired_ts
+        sess.save()
+        r_exp = mc.get(reverse('composn:session_ping'), HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r_exp.status_code, 401)
+
+        # Active ping (?active=1 เมื่อผู้ใช้กำลังกรอกข้อมูล) ต้องต่ออายุ _last_activity
+        mc.post(reverse('composn:login'), {'username': '69DS01', 'password': '69DS01'})
+        before_ping = time.time()
+        sess = mc.session
+        sess['_last_activity'] = before_ping - 50
+        sess.save()
+        r_act = mc.get(reverse('composn:session_ping') + '?active=1', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r_act.status_code, 200)
+        self.assertGreater(float(mc.session['_last_activity']), before_ping - 5)
+
+    def test_all_audit_actions_have_thai_labels(self):
+        import pathlib
+        from composn.audit import ACTION_LABELS
+
+        root = pathlib.Path(__file__).resolve().parent.parent
+        used = set()
+        for p in root.rglob('*.py'):
+            if 'tests.py' in p.name or 'migrations' in str(p):
+                continue
+            txt = p.read_text(encoding='utf-8')
+            used.update(re.findall(r"log_action\([^,\n]+,\s*'([a-z0-9_]+)'", txt))
+        self.assertEqual(sorted(used - set(ACTION_LABELS.keys())), [])
+
+    def test_food_atomic_selection_and_removed_legacy_routes(self):
+        from food.models import FoodMenu, FoodOrder, FoodSelection
+
+        order = FoodOrder.objects.create(
+            academic_year=2569,
+            food_date=timezone.localdate() + dt.timedelta(days=2),
+            restaurant_name='ร้านป้องกันซ้ำ',
+            max_selection_count=1,
+            edit_toggle_open=True,
+        )
+        m_a = FoodMenu.objects.create(food_order=order, menu_name='เมนู A', sort_order=1)
+        m_b = FoodMenu.objects.create(food_order=order, menu_name='เมนู B', sort_order=2)
+
+        mc = Client()
+        mc.force_login(self.m1)
+        url = reverse('food:my_food_detail', args=[order.pk])
+        mc.post(url, {'action': 'select', 'menu_id': str(m_a.pk)})
+        mc.post(url, {'action': 'select', 'menu_id': str(m_b.pk)})
+        sels = list(FoodSelection.objects.filter(food_order=order, user=self.m1))
+        self.assertEqual(len(sels), 1)
+        self.assertEqual(sels[0].food_menu_id, m_a.pk)
+
+        self.assertEqual(self.client.get('/admin/reasons/').status_code, 404)
+        self.assertEqual(self.client.get('/api/ai-food-images/').status_code, 404)
+
+    def test_deduplicated_ui_local_vendor_assets_and_concurrency_settings(self):
+        from django.conf import settings
+
+        self.assertFalse(settings.SESSION_SAVE_EVERY_REQUEST)
+        self.assertEqual(settings.SESSION_ENGINE, 'django.contrib.sessions.backends.cached_db')
+        self.assertGreaterEqual(settings.LOGIN_MAX_FAILURES_PER_IP, 100)
+        self.assertGreaterEqual(settings.AUTO_LOGOUT_SECONDS, 900)
+
+        ann_html = self.client.get(reverse('food:score_announcement') + '?year=2569').content.decode('utf-8')
+        self.assertNotIn('id="announcementCustomizeCollapse"', ann_html)
+        self.assertIn('id="tab-qual-btn"', ann_html)
+
+        dash_html = self.client.get(reverse('composn:admin_dashboard')).content.decode('utf-8')
+        self.assertIn('/static/vendor/bootstrap/bootstrap.min.css', dash_html)
+        self.assertIn('/static/vendor/bootstrap/bootstrap.bundle.min.js', dash_html)
+        self.assertNotIn('cdn.jsdelivr.net', dash_html)
+        self.assertNotIn('fonts.googleapis.com', dash_html)
+
+        self.client.logout()
+        for pub_url in (reverse('composn:login'), reverse('food:certificate_verify_index')):
+            pub_html = self.client.get(pub_url).content.decode('utf-8')
+            self.assertIn('/static/vendor/bootstrap/bootstrap.min.css', pub_html)
+            self.assertNotIn('cdn.jsdelivr.net', pub_html)
+            self.assertNotIn('fonts.googleapis.com', pub_html)
+
 
 
 

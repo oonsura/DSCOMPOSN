@@ -2526,8 +2526,20 @@ def my_certificate(request):
     if not elig['is_eligible']:
         messages.warning(request, f'ท่านยังไม่ได้รับเกียรติบัตรในปีการศึกษา {year}: {elig["reason"]}')
         return redirect('composn:profile')
+    from django.core.cache import cache
+    cert_setting = CertificateSetting.get()
     verify_base_url = request.build_absolute_uri('/').rstrip('/')
-    pdf_bytes = build_certificate_pdf([request.user], year, setting, verify_base_url=verify_base_url)
+    cache_key = (
+        f'dscomposn:cert_pdf:{request.user.pk}:{year}:'
+        f'{int(cert_setting.updated_at.timestamp())}:'
+        f'{int(setting.updated_at.timestamp())}:'
+        f'{int(request.user.updated_at.timestamp())}:'
+        f'{request.get_host()}'
+    )
+    pdf_bytes = cache.get(cache_key)
+    if pdf_bytes is None:
+        pdf_bytes = build_certificate_pdf([request.user], year, setting, verify_base_url=verify_base_url)
+        cache.set(cache_key, pdf_bytes, 600)
     resp = HttpResponse(pdf_bytes, content_type='application/pdf')
     resp['Content-Disposition'] = f'inline; filename="certificate_{year}_{request.user.camp1_code}.pdf"'
     return resp
@@ -2976,32 +2988,6 @@ def score_categories(request):
                 mc.default_max_score = sub_sum
                 ScoreCategory.objects.filter(pk=mc.pk).update(default_max_score=sub_sum)
 
-    from .announcement_pdf import (
-        format_default_announcement_date,
-        format_default_announcement_p1,
-        format_default_announcement_p2,
-        format_default_announcement_p2_template,
-        to_arabic_num,
-    )
-    total_col_w = (
-        (setting.announcement_col_w_no or 14.0) +
-        (setting.announcement_col_w_camp2 or 24.0) +
-        (setting.announcement_col_w_rights or 24.0) +
-        (setting.announcement_col_w_name or 50.0) +
-        (setting.announcement_col_w_school or 54.0) +
-        (setting.announcement_col_w_grade or 14.0)
-    )
-    if total_col_w <= 0:
-        total_col_w = 176.0
-    col_w_pct = {
-        'no': round(((setting.announcement_col_w_no or 14.0) / total_col_w) * 100, 2),
-        'camp2': round(((setting.announcement_col_w_camp2 or 24.0) / total_col_w) * 100, 2),
-        'rights': round(((setting.announcement_col_w_rights or 24.0) / total_col_w) * 100, 2),
-        'name': round(((setting.announcement_col_w_name or 50.0) / total_col_w) * 100, 2),
-        'school': round(((setting.announcement_col_w_school or 54.0) / total_col_w) * 100, 2),
-        'grade': round(((setting.announcement_col_w_grade or 14.0) / total_col_w) * 100, 2),
-    }
-
     training_dates = list(TrainingDate.objects.filter(academic_year=year))
     date_counts = {
         'training': sum(1 for t in training_dates if t.event_type == TrainingDate.TYPE_TRAINING),
@@ -3024,18 +3010,6 @@ def score_categories(request):
         'total_weight': total_weight,
         'total_max_score': total_max_score,
         'setting': setting,
-        'col_w_pct': col_w_pct,
-        'total_col_w': total_col_w,
-        'default_announcement_date': format_default_announcement_date(),
-        'default_announcement_list_title': f'ประกาศรายชื่อผู้ที่ผ่านการคัดเลือกเข้า สอวน.คอมพิวเตอร์ ค่ายที่ 2 ปีการศึกษา {year}',
-        'default_announcement_p1': format_default_announcement_p1(setting),
-        'default_announcement_p2': format_default_announcement_p2(setting.max_qualified_count or 30),
-        'default_announcement_p2_template': format_default_announcement_p2_template(),
-        'edit_announcement_body_p1': to_arabic_num(setting.announcement_body_p1) or format_default_announcement_p1(setting),
-        'edit_announcement_body_p2': to_arabic_num(setting.announcement_body_p2) or format_default_announcement_p2_template(),
-        'edit_announcement_date_text': to_arabic_num(setting.announcement_date_text) or format_default_announcement_date(),
-        'edit_announcement_list_title': to_arabic_num(setting.announcement_list_title) or f'ประกาศรายชื่อผู้ที่ผ่านการคัดเลือกเข้า สอวน.คอมพิวเตอร์ ค่ายที่ 2 ปีการศึกษา {year}',
-        'edit_announcement_director_position': to_arabic_num(setting.announcement_director_position),
         'training_dates': training_dates,
         'exam_period_choices': TrainingDate.EXAM_PERIOD_CHOICES,
         'exam_type_choices': TrainingDate.EXAM_TYPE_CHOICES,
@@ -3049,41 +3023,6 @@ def score_categories(request):
         'next_academic_year': min(MAX_ACADEMIC_YEAR, max_academic_year + 1),
         'current_year_approved': ScoreApproval.is_year_approved(setting.current_academic_year),
     })
-
-
-@admin_required
-@require_POST
-def reasons_manage(request):
-    action = request.POST.get('action')
-    name = request.POST.get('name', '').strip()
-    try:
-        if action == 'create':
-            if not name:
-                raise FoodError('กรุณาระบุเหตุผล')
-            if AbsenceReason.objects.filter(name=name).exists():
-                raise FoodError('มีเหตุผลนี้อยู่แล้ว')
-            r = AbsenceReason.objects.create(name=name, order=AbsenceReason.objects.count() + 1)
-        elif action == 'update':
-            r = get_object_or_404(AbsenceReason, pk=request.POST.get('id'))
-            if not name:
-                raise FoodError('กรุณาระบุเหตุผล')
-            if AbsenceReason.objects.filter(name=name).exclude(pk=r.pk).exists():
-                raise FoodError('มีเหตุผลนี้อยู่แล้ว')
-            r.name = name
-            r.order = int(request.POST.get('order') or r.order)
-            r.is_active = bool(request.POST.get('is_active'))
-            r.save()
-        elif action == 'delete':
-            r = get_object_or_404(AbsenceReason, pk=request.POST.get('id'))
-            r.delete()
-        else:
-            raise FoodError('คำสั่งไม่ถูกต้อง')
-        log_action(request.user, 'update_settings', target_model='AbsenceReason',
-                   new_value={'action': action, 'name': name}, request=request)
-        messages.success(request, 'บันทึกเหตุผลการขาดเรียนแล้ว')
-    except (FoodError, ValueError) as e:
-        messages.error(request, str(e))
-    return redirect('composn:admin_settings')
 
 
 @admin_required

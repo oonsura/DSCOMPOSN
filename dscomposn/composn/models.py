@@ -12,6 +12,7 @@ import re
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
@@ -25,6 +26,44 @@ camp_code_validator = RegexValidator(
 )
 
 EXPIRED_TEXT = 'หมดสิทธิ์'
+
+SCHOOL_INSTITUTION_PREFIXES = (
+    'โรงเรียน',
+    'สถาบัน',
+    'ศูนย์การเรียน',
+    'วิทยาลัย',
+    'มหาวิทยาลัย',
+)
+_SCHOOL_ABBREV_RE = re.compile(r'^(?:ร\.\s*ร\.?|รร\.|รร\s+)\s*(.*)$')
+_SCHOOL_DASH_ONLY_RE = re.compile(r'^[-–—\s]+$')
+
+
+def normalize_school_name(value, max_length=255):
+    """ปรับชื่อโรงเรียนให้มีคำว่า 'โรงเรียน' นำหน้าโดยอัตโนมัติ
+    - ค่าว่างหรือมีเฉพาะขีด (-) -> คืนค่าว่าง ''
+    - คำย่อ รร. / ร.ร. -> แปลงเป็น 'โรงเรียน'
+    - 'โรงเรียน   ...' -> ลบช่องว่างเกินหลังคำว่า 'โรงเรียน'
+    - สถานศึกษาที่ขึ้นต้นด้วย สถาบัน / ศูนย์การเรียน / วิทยาลัย / มหาวิทยาลัย -> คงไว้ตามเดิม
+    - กรณีอื่น ๆ ที่ยังไม่มีคำว่า 'โรงเรียน' นำหน้า -> เติม 'โรงเรียน' นำหน้าอัตโนมัติ
+    """
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if not text or _SCHOOL_DASH_ONLY_RE.match(text):
+        return ''
+    text = re.sub(r'\s+', ' ', text)
+    m = _SCHOOL_ABBREV_RE.match(text)
+    if m:
+        rest = re.sub(r'^โรงเรียน\s*', '', m.group(1).strip())
+        if not rest:
+            return ''
+        return f'โรงเรียน{rest}'[:max_length]
+    if text.startswith('โรงเรียน'):
+        rest = text[len('โรงเรียน'):].lstrip()
+        return (f'โรงเรียน{rest}' if rest else 'โรงเรียน')[:max_length]
+    if any(text.startswith(p) for p in SCHOOL_INSTITUTION_PREFIXES):
+        return text[:max_length]
+    return f'โรงเรียน{text}'[:max_length]
 
 
 # =============================================================================
@@ -171,7 +210,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     staff_can_attendance = models.BooleanField('บันทึกเวลาเรียน', default=True)
     staff_can_signin_sheet = models.BooleanField('แบบลงชื่อ', default=True)
     staff_can_manage_food = models.BooleanField('รายการอาหาร / แบบสอบถาม', default=True)
-    staff_can_scores = models.BooleanField('บันทึกคะแนน / เอกสารประกาศผล', default=True)
+    staff_can_scores = models.BooleanField('บันทึกคะแนน / การประกาศผล', default=True)
     staff_can_exam_seating = models.BooleanField('จัดที่นั่งสอบ', default=False)
     note = models.TextField('หมายเหตุ', blank=True)
     current_session_key = models.CharField(max_length=64, blank=True, editable=False)
@@ -221,6 +260,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.camp2_code = (self.camp2_code or '').strip().upper() or None
         if self.role == self.ROLE_MEMBER and self.camp1_code:
             self.camp1_code = self.camp1_code.strip().upper()
+        if self.school_name:
+            self.school_name = normalize_school_name(self.school_name)
         super().save(*args, **kwargs)
 
     def check_password(self, raw_password):
@@ -540,13 +581,23 @@ class SystemSetting(models.Model):
     def __str__(self):
         return 'ตั้งค่าระบบ'
 
+    CACHE_KEY = 'dscomposn:system_setting'
+
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+        cache.delete_many([self.CACHE_KEY, 'dscomposn:academic_year_choices'])
+
+    def delete(self, *args, **kwargs):
+        cache.delete_many([self.CACHE_KEY, 'dscomposn:academic_year_choices'])
+        return super().delete(*args, **kwargs)
 
     @classmethod
     def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+        obj = cache.get(cls.CACHE_KEY)
+        if obj is None:
+            obj, _ = cls.objects.get_or_create(pk=1)
+            cache.set(cls.CACHE_KEY, obj, 60)
         return obj
 
     def get_editable_fields(self):
@@ -765,6 +816,11 @@ class UseRecord(SoftDeleteModel):
     def status_text(self):
         return 'ใช้สิทธิ์' if self.is_used else 'สละสิทธิ์'
 
+    def save(self, *args, **kwargs):
+        if self.school_snapshot:
+            self.school_snapshot = normalize_school_name(self.school_snapshot)
+        super().save(*args, **kwargs)
+
 
 class ArchiveRecord(SoftDeleteModel):
     """ARCHIVE_RECORD — ประวัติการใช้สิทธิ์ถาวร ใช้นับจำนวนครั้ง (สูงสุด 5 ครั้งตลอดชีวิต)"""
@@ -819,6 +875,13 @@ class SchoolChangeRequest(models.Model):
 
     def __str__(self):
         return f'{self.user} : {self.new_school_name} ({self.get_status_display()})'
+
+    def save(self, *args, **kwargs):
+        if self.old_school_name:
+            self.old_school_name = normalize_school_name(self.old_school_name)
+        if self.new_school_name:
+            self.new_school_name = normalize_school_name(self.new_school_name)
+        super().save(*args, **kwargs)
 
 
 # =============================================================================

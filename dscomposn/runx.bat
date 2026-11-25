@@ -13,21 +13,32 @@ echo [Python] Using %PY%
 %PY% --version
 
 :: Check requirements
-%PY% -c "import django, openpyxl, PIL, cv2" >nul 2>&1
+%PY% -c "import django, openpyxl, PIL, cv2, waitress, whitenoise" >nul 2>&1
 if errorlevel 1 (
-    echo [1/3] Installing requirements...
+    echo [1/4] Installing requirements...
     %PY% -m pip install -q -r requirements.txt
 ) else (
-    echo [1/3] Requirements already satisfied.
+    echo [1/4] Requirements already satisfied.
 )
 
-echo [2/3] Applying migrations...
+echo [2/4] Applying migrations...
 %PY% manage.py migrate
 
-echo [3/3] Starting server at http://127.0.0.1:8000/ (Ctrl+C to stop)
-echo Login: admin / 1234
-start "" http://127.0.0.1:8000/
-%PY% manage.py runserver 0.0.0.0:8000
+echo [3/4] Collecting static files...
+%PY% manage.py collectstatic --noinput >nul
+
+if /i "%~1"=="--dev" (
+    echo [4/4] Starting DEVELOPMENT server at http://127.0.0.1:8000/ (Ctrl+C to stop)
+    start "" http://127.0.0.1:8000/
+    %PY% manage.py runserver 0.0.0.0:8000
+) else (
+    if "%DJANGO_DEBUG%"=="" set DJANGO_DEBUG=0
+    if "%DJANGO_SERVE_MEDIA%"=="" set DJANGO_SERVE_MEDIA=1
+    echo [4/4] Starting PRODUCTION server (Waitress 24 threads) at http://127.0.0.1:8000/ (Ctrl+C to stop)
+    echo Login: admin / 1234
+    start "" http://127.0.0.1:8000/
+    %PY% -m waitress --host=0.0.0.0 --port=8000 --threads=24 dscomposn.wsgi:application
+)
 pause
 exit /b
 

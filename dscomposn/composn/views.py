@@ -69,14 +69,6 @@ def login_view(request):
                 kicked_old = bool(old_key and old_key != new_key)
                 if kicked_old:
                     Session.objects.filter(session_key=old_key).delete()
-                # ลบ session อื่นทั้งหมดของผู้ใช้คนนี้ที่อาจค้างอยู่ ให้เหลือได้เพียง 1 session เท่านั้น
-                for sess in Session.objects.filter(expire_date__gte=timezone.now()).exclude(session_key=new_key):
-                    try:
-                        if str(sess.get_decoded().get('_auth_user_id', '')) == str(user.pk):
-                            sess.delete()
-                            kicked_old = True
-                    except Exception:
-                        pass
                 User.objects.filter(pk=user.pk).update(current_session_key=new_key)
             user.current_session_key = new_key
             log_action(user, 'login', target=user, request=request,

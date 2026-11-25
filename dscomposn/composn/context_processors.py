@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.cache import cache
 
 from .models import (
     DEFAULT_ACADEMIC_YEARS, MAX_ACADEMIC_YEAR, MIN_ACADEMIC_YEAR,
@@ -20,6 +21,18 @@ def _add_valid_years(target_set, values):
 
 def get_academic_year_choices(cur_year=2569, setting=None):
     """รวบรวมปีการศึกษาที่เปิดใช้งานในระบบ (เริ่ม 2566) และปีที่มีข้อมูลจริงในระบบ พร้อมปีปัจจุบัน"""
+    cache_key = 'dscomposn:academic_year_choices'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        years = set(cached)
+        _add_valid_years(years, [cur_year])
+        if setting is not None:
+            try:
+                _add_valid_years(years, setting.get_academic_years())
+            except Exception:
+                pass
+        return sorted(years, reverse=True)
+
     years = set(DEFAULT_ACADEMIC_YEARS)
     try:
         setting_obj = setting if setting is not None else SystemSetting.get()
@@ -41,7 +54,9 @@ def get_academic_year_choices(cur_year=2569, setting=None):
             )
     except Exception:
         pass
-    return sorted(years, reverse=True)
+    result = sorted(years, reverse=True)
+    cache.set(cache_key, result, 120)
+    return list(result)
 
 
 def site_context(request):
@@ -55,19 +70,23 @@ def site_context(request):
         'pending_surveys_count': 0,
         'member_training_years': [],
         'member_open_exam_seats_count': 0,
+        'academic_year_choices': [],
     }
+    user = getattr(request, 'user', None)
     setting = None
     try:
         setting = SystemSetting.get()
+        request._site_setting = setting
         ctx['site_setting'] = setting
-        mins = max(0, int(getattr(setting, 'auto_logout_minutes', 5)))
+        mins = max(0, int(getattr(setting, 'auto_logout_minutes', 15)))
         ctx['AUTO_LOGOUT_MINUTES'] = mins
         ctx['AUTO_LOGOUT_SECONDS'] = mins * 60
-        ctx['academic_year_choices'] = get_academic_year_choices(setting.current_academic_year, setting=setting)
+        if user is not None and user.is_authenticated and user.role in (User.ROLE_ADMIN, User.ROLE_STAFF):
+            ctx['academic_year_choices'] = get_academic_year_choices(setting.current_academic_year, setting=setting)
     except Exception:  # ตารางยังไม่ถูกสร้าง (ก่อน migrate)
         ctx['site_setting'] = None
-        ctx['academic_year_choices'] = sorted(DEFAULT_ACADEMIC_YEARS, reverse=True)
-    user = getattr(request, 'user', None)
+        if user is not None and user.is_authenticated and user.role in (User.ROLE_ADMIN, User.ROLE_STAFF):
+            ctx['academic_year_choices'] = sorted(DEFAULT_ACADEMIC_YEARS, reverse=True)
     if user is not None and user.is_authenticated:
         if user.is_admin_role:
             try:
@@ -76,6 +95,7 @@ def site_context(request):
             except Exception:
                 ctx['pending_school_requests'] = 0
         elif user.role == User.ROLE_MEMBER:
+            used_map = {}
             if setting:
                 base_y = user.base_academic_year
                 ctx['is_current_member'] = bool(base_y and int(base_y) >= int(setting.current_academic_year))
@@ -98,10 +118,12 @@ def site_context(request):
                 ]
             except Exception:
                 ctx['member_training_years'] = []
+            cur_year = int(setting.current_academic_year) if setting else None
+            is_rights_cur = bool(cur_year is not None and cur_year in used_map)
+            request._site_is_rights_cur = (cur_year, is_rights_cur)
             if setting and setting.food_system_open:
                 try:
                     from food.models import FoodOrder, FoodSelection
-                    cur_year = int(setting.current_academic_year)
                     today = timezone.localdate()
                     open_orders = list(
                         FoodOrder.objects.filter(
@@ -111,10 +133,7 @@ def site_context(request):
                         ).order_by('food_date', 'id')
                     )
                     if open_orders:
-                        is_rights = UseRecord.objects.filter(
-                            user=user, academic_year=cur_year, is_used=True
-                        ).exists()
-                        visible = [o for o in open_orders if o.is_visible_to(user, year=cur_year, is_rights_user=is_rights)]
+                        visible = [o for o in open_orders if o.is_visible_to(user, year=cur_year, is_rights_user=is_rights_cur)]
                         if visible:
                             chosen_ids = set(
                                 FoodSelection.objects.filter(user=user, food_order__in=visible)
@@ -128,15 +147,11 @@ def site_context(request):
             if setting:
                 try:
                     from food.models import CampSurvey, CampSurveyAnswer
-                    cur_year = int(setting.current_academic_year)
                     open_surveys = list(CampSurvey.objects.filter(academic_year=cur_year, is_open=True))
                     if open_surveys:
-                        is_rights_sv = UseRecord.objects.filter(
-                            user=user, academic_year=cur_year, is_used=True
-                        ).exists()
                         visible_surveys = [
                             s for s in open_surveys
-                            if s.is_visible_to(user, year=cur_year, is_rights_user=is_rights_sv)
+                            if s.is_visible_to(user, year=cur_year, is_rights_user=is_rights_cur)
                         ]
                         if visible_surveys:
                             answered_ids = set(

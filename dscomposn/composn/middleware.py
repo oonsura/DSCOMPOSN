@@ -31,8 +31,10 @@ class SingleSessionMiddleware:
             try:
                 import time
                 from .models import SystemSetting
-                mins = max(0, int(getattr(SystemSetting.get(), 'auto_logout_minutes', 5)))
+                setting = getattr(request, '_site_setting', None) or SystemSetting.get()
+                mins = max(0, int(getattr(setting, 'auto_logout_minutes', 5)))
                 is_ping = (request.path == reverse('composn:session_ping'))
+                ping_active = (is_ping and request.GET.get('active') == '1')
                 now_ts = time.time()
                 if mins > 0:
                     timeout_sec = mins * 60
@@ -46,12 +48,14 @@ class SingleSessionMiddleware:
                             from django.http import JsonResponse
                             return JsonResponse({'ok': False, 'error': 'session_timeout'}, status=401)
                         return redirect('/login/?timeout=1')
-                    if not is_ping:
+                    if (not is_ping or ping_active) and (last_ts is None or (now_ts - float(last_ts)) >= 25):
                         request.session['_last_activity'] = now_ts
                         request.session.set_expiry(max(timeout_sec + 60, 300))
-                elif not is_ping:
-                    request.session['_last_activity'] = now_ts
-                    request.session.set_expiry(86400)
+                elif not is_ping or ping_active:
+                    last_ts = request.session.get('_last_activity')
+                    if last_ts is None or (now_ts - float(last_ts)) >= 60:
+                        request.session['_last_activity'] = now_ts
+                        request.session.set_expiry(86400)
             except Exception:
                 pass
         return self.get_response(request)

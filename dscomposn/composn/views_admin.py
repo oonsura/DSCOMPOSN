@@ -97,15 +97,6 @@ def _handle_dashboard_post(request, setting, year_int, dash_url):
         messages.success(request, 'คืนค่าเริ่มต้นการแสดงผลแดชบอร์ดแล้ว')
         return redirect(dash_url)
 
-    if post_action == 'save_dashboard_summary':
-        selected_dash = request.POST.getlist('dashboard_summary_fields')
-        setting.set_dashboard_summary_fields(selected_dash)
-        setting.save(update_fields=['dashboard_summary_fields', 'updated_at'])
-        log_action(request.user, 'update_settings', target=setting,
-                   new_value={'dashboard_summary_fields': selected_dash}, request=request)
-        messages.success(request, 'บันทึกการตั้งค่าการแสดงผลสรุปข้อมูลนักเรียนบน Dashboard เรียบร้อย')
-        return redirect(dash_url)
-
     if post_action == 'dash_toggle_cert_publish':
         cert_status, _ = CertificateYearStatus.objects.get_or_create(academic_year=year_int)
         old_pub = cert_status.is_published
@@ -1157,6 +1148,7 @@ def import_students_view(request):
             'รองรับทั้งคอลัมน์ "ชื่อ-นามสกุล" ช่องเดียว และแบบแยก "ชื่อ" + "นามสกุล" รวมถึงไฟล์จากระบบเดิมที่ไม่มีแถวหัวตาราง',
             'หากรหัสค่าย 1 ซ้ำกับผู้ใช้เดิม ระบบจะอัปเดตเฉพาะคอลัมน์ที่มีอยู่ในไฟล์ (คอลัมน์ที่ไม่ได้ใส่มาจะคงค่าเดิมไว้) · หากเป็นรหัสใหม่จะสร้างผู้ใช้ใหม่ (รหัสผ่านเริ่มต้น = รหัสค่าย 1)',
             'ระบบคำนวณระดับชั้น +1 ถึง +5 ให้อัตโนมัติ และรองรับวันเกิดรูปแบบ วว/ดด/ปปปป (พ.ศ./ค.ศ.) หรือวันที่ของ Excel',
+            'ชื่อโรงเรียนจะเติมคำว่า "โรงเรียน" นำหน้าให้อัตโนมัติหากยังไม่มี (ยกเว้นสถานศึกษาที่ขึ้นต้นด้วย สถาบัน / ศูนย์การเรียน / วิทยาลัย / มหาวิทยาลัย)',
         ],
     })
 

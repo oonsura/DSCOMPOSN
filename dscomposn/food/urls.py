@@ -7,7 +7,6 @@ app_name = 'food'
 urlpatterns = [
     # 3. เวลาเรียน / คะแนน
     path('admin/score-categories/', views.score_categories, name='score_categories'),
-    path('admin/reasons/', views.reasons_manage, name='reasons_manage'),
     path('admin/colors/', views.colors_manage, name='colors_manage'),
     path('staff/scores/', views.staff_scores, name='staff_scores'),
     path('staff/scores/summary/', views.score_summary, name='score_summary'),
@@ -54,7 +53,6 @@ urlpatterns = [
     path('staff/food/<int:pk>/print/', vf.order_print, name='order_print'),
     path('staff/food/<int:pk>/action/', vf.order_action, name='order_action'),
     path('staff/food/<int:pk>/export/', vf.order_export, name='order_export'),
-    path('api/ai-food-images/', vf.api_generate_food_images, name='api_ai_food_images'),
 
     # อาหาร & แบบสอบถามในค่าย (Member)
     path('food/', vf.my_food, name='my_food'),

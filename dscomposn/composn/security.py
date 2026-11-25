@@ -7,6 +7,7 @@ import json
 import math
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 from .audit import log_action
@@ -36,15 +37,24 @@ def _parse_json(raw):
 def _scan_recent_auth_events(now=None):
     from .models import AuditLog
 
+    use_cache = now is None
     now = now or timezone.now()
     window_mins = _cfg('LOGIN_LOCKOUT_WINDOW_MINUTES', 15)
     lock_mins = _cfg('LOGIN_LOCKOUT_MINUTES', 15)
+
+    if use_cache:
+        cached = cache.get('dscomposn:auth_lockout_scan')
+        if cached is not None:
+            user_fails, ip_fails = cached
+            return now, dt.timedelta(minutes=window_mins), dt.timedelta(minutes=lock_mins), user_fails, ip_fails
+
     cutoff = now - dt.timedelta(minutes=max(window_mins, lock_mins))
 
     events = (
         AuditLog.objects
         .filter(action__in=('login_failed', 'login', 'login_unlock'), created_at__gte=cutoff)
         .select_related('user')
+        .only('action', 'created_at', 'ip_address', 'new_value', 'user__camp1_code', 'user__camp2_code')
         .order_by('created_at')
     )
 
@@ -73,6 +83,9 @@ def _scan_recent_auth_events(now=None):
             ip = (ev.ip_address or '').strip()
             if ip:
                 ip_fails.setdefault(ip, []).append(ev.created_at)
+
+    if use_cache:
+        cache.set('dscomposn:auth_lockout_scan', (user_fails, ip_fails), 15)
 
     return now, dt.timedelta(minutes=window_mins), dt.timedelta(minutes=lock_mins), user_fails, ip_fails
 
